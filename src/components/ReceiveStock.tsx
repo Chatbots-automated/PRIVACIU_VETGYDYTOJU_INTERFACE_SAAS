@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { Product, Supplier, InseminationProduct } from '../lib/types';
 import { normalizeNumberInput } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
 
 export function ReceiveStock() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [products, setProducts] = useState<Product[]>([]);
   const [inseminationProducts, setInseminationProducts] = useState<InseminationProduct[]>([]);
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
@@ -78,7 +80,7 @@ export function ReceiveStock() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'products',
@@ -91,10 +93,12 @@ export function ReceiveStock() {
   });
 
   const loadData = async () => {
+    if (!selectedFarm) return;
+
     const [productsRes, inseminationProductsRes, suppliersRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
-      supabase.from('insemination_products').select('*').eq('is_active', true).order('name'),
-      supabase.from('suppliers').select('*').order('name'),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+      supabase.from('insemination_products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('*').eq('farm_id', selectedFarm.id).order('name'),
     ]);
 
     if (productsRes.data) setProducts(productsRes.data);
@@ -336,7 +340,13 @@ export function ReceiveStock() {
 
       // Automatically create a batch if we have package/quantity data from invoice
       if (creatingProduct && (newProductForm.package_count || newProductForm.total_quantity)) {
+        if (!selectedFarm) {
+          alert('Pasirinkite ūkį');
+          return;
+        }
+
         const batchData: any = {
+          farm_id: selectedFarm.id,
           product_id: newProduct.id,
           lot: creatingProduct.batch || null,
           expiry_date: creatingProduct.expiry || null,
@@ -473,6 +483,7 @@ export function ReceiveStock() {
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
+          farm_id: selectedFarm.id,
           invoice_number: invoiceData.invoice.number,
           invoice_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
           doc_title: 'Invoice',
@@ -659,7 +670,13 @@ export function ReceiveStock() {
           receivedQty = parseFloat(formData.received_qty);
         }
 
+        if (!selectedFarm) {
+          alert('Pasirinkite ūkį');
+          return;
+        }
+
         const inventoryData = {
+          farm_id: selectedFarm.id,
           product_id: actualProductId,
           quantity: receivedQty,
           batch_number: formData.lot || null,
@@ -683,7 +700,13 @@ export function ReceiveStock() {
           }
         );
       } else {
+        if (!selectedFarm) {
+          alert('Pasirinkite ūkį');
+          return;
+        }
+
         const batchData: any = {
+          farm_id: selectedFarm.id,
           product_id: productId,
           lot: formData.lot || null,
           mfg_date: formData.mfg_date || null,

@@ -2,6 +2,7 @@ import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, AlertCircle, Package, Edit2, Save, X, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { translateCategory, sortByLithuanian } from '../lib/helpers';
 import * as XLSX from 'xlsx';
@@ -33,6 +34,7 @@ interface EditingData {
 
 export function Inventory() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [inventory, setInventory] = useState<StockItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -42,10 +44,12 @@ export function Inventory() {
 
   useEffect(() => {
     loadInventory();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'batches',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(() => {
       loadInventory();
     }, []),
@@ -69,6 +73,12 @@ export function Inventory() {
 
   const loadInventory = async () => {
     try {
+      if (!selectedFarm) {
+        setInventory([]);
+        setLoading(false);
+        return;
+      }
+
       // Get batches with their products
       const { data: batchesData, error: batchesError } = await supabase
         .from('batches')
@@ -88,7 +98,8 @@ export function Inventory() {
             primary_pack_unit,
             primary_pack_size
           )
-        `);
+        `)
+        .eq('farm_id', selectedFarm.id);
 
       if (batchesError) throw batchesError;
 

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useFarm } from '../contexts/FarmContext';
 import { Activity, Calendar, FileText, Pill, Syringe, AlertCircle, ChevronDown, ChevronUp, Filter, Search } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 import { Animal } from '../lib/types';
@@ -43,6 +44,7 @@ interface TreatmentGroup {
 }
 
 export function TreatmentHistory() {
+  const { selectedFarm } = useFarm();
   const [treatments, setTreatments] = useState<TreatmentHistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedTreatments, setExpandedTreatments] = useState<Set<string>>(new Set());
@@ -53,13 +55,20 @@ export function TreatmentHistory() {
 
   useEffect(() => {
     loadTreatments();
-  }, []);
+  }, [selectedFarm]);
 
   const loadTreatments = async () => {
     try {
+      if (!selectedFarm) {
+        setTreatments([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('treatment_history_view')
         .select('*')
+        .eq('farm_id', selectedFarm.id)
         .order('reg_date', { ascending: false });
 
       if (error) throw error;

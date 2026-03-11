@@ -2,10 +2,12 @@ import { useEffect, useState } from 'react';
 import { Users, UserPlus, Trash2, Edit2, Shield, Eye, Stethoscope, Wrench, Mail, Calendar, Check, X, Snowflake, Play, Activity, Tractor, Warehouse, Settings, Lock, Unlock } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth, UserRole, User } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { formatDateLT } from '../lib/formatters';
 
 export function UserManagement() {
   const { isAdmin, user: currentUser } = useAuth();
+  const { selectedFarm } = useFarm();
   const [users, setUsers] = useState<User[]>([]);
   const [loading, setLoading] = useState(true);
   const [editingUser, setEditingUser] = useState<string | null>(null);
@@ -101,49 +103,20 @@ export function UserManagement() {
     setError('');
 
     try {
-      let newUserId: string | null = null;
-
-      if (newUserRequiresLogin) {
-        // Create user with auth
-        const { data, error: createError } = await supabase.rpc('create_user', {
-          p_email: newUserEmail,
-          p_password: newUserPassword,
-          p_role: newUserRole
-        });
-
-        if (createError) throw createError;
-        newUserId = data;
-      } else {
-        // Create user without auth (just in users table)
-        const { data, error: insertError } = await supabase
-          .from('users')
-          .insert({
-            full_name: newUserFullName,
-            role: newUserRole,
-            requires_login: false
-          })
-          .select('id')
-          .single();
-
-        if (insertError) throw insertError;
-        newUserId = data?.id;
+      if (!selectedFarm) {
+        throw new Error('Pasirinkite ūkį');
       }
 
-      if (newUserId) {
-        const updateData: any = { full_name: newUserFullName, requires_login: newUserRequiresLogin };
+      // Create user with auth
+      const { data: newUserId, error: createError } = await supabase.rpc('create_user', {
+        p_email: newUserEmail,
+        p_password: newUserPassword,
+        p_role: newUserRole,
+        p_farm_id: selectedFarm.id,
+        p_full_name: newUserFullName
+      });
 
-        // Add work_location for worker roles
-        if (newUserRole === 'farm_worker' || newUserRole === 'warehouse_worker') {
-          updateData.work_location = newUserWorkLocation;
-        }
-
-        const { error: updateError } = await supabase
-          .from('users')
-          .update(updateData)
-          .eq('id', newUserId);
-
-        if (updateError) throw updateError;
-      }
+      if (createError) throw createError;
 
       setSuccess('User added successfully');
       setShowAddUser(false);
@@ -503,51 +476,31 @@ export function UserManagement() {
                   required
                 />
               </div>
-              <div className="col-span-2">
-                <label className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={!newUserRequiresLogin}
-                    onChange={(e) => setNewUserRequiresLogin(!e.target.checked)}
-                    className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
-                  />
-                  <span className="text-sm font-medium text-gray-700">
-                    Šis vartotojas neprisijungs (tik grafikams)
-                  </span>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  El. paštas
                 </label>
-                <p className="text-xs text-gray-500 mt-1 ml-6">
-                  Pažymėkite, jei darbuotojas bus naudojamas tik darbo grafikuose ir nereikės prisijungimo
-                </p>
+                <input
+                  type="email"
+                  value={newUserEmail}
+                  onChange={(e) => setNewUserEmail(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  required
+                />
               </div>
-              {newUserRequiresLogin && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      El. paštas
-                    </label>
-                    <input
-                      type="email"
-                      value={newUserEmail}
-                      onChange={(e) => setNewUserEmail(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      required
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Slaptažodis
-                    </label>
-                    <input
-                      type="password"
-                      value={newUserPassword}
-                      onChange={(e) => setNewUserPassword(e.target.value)}
-                      className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                      required
-                      minLength={6}
-                    />
-                  </div>
-                </>
-              )}
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Slaptažodis
+                </label>
+                <input
+                  type="password"
+                  value={newUserPassword}
+                  onChange={(e) => setNewUserPassword(e.target.value)}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  required
+                  minLength={6}
+                />
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">
                   Rolė
@@ -557,39 +510,13 @@ export function UserManagement() {
                   onChange={(e) => setNewUserRole(e.target.value as UserRole)}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                 >
-                  <optgroup label="Veterinarijos modulis">
-                    <option value="viewer">Stebėtojas (View Only)</option>
-                    <option value="tech">Technikas (Limited Access)</option>
-                    <option value="vet">Veterinaras (Full Access)</option>
-                    <option value="admin">Administratorius (All Access)</option>
-                  </optgroup>
-                  <optgroup label="Technikos modulis">
-                    <option value="farm_worker">Fermos darbuotojas</option>
-                    <option value="warehouse_worker">Technikos kiemo darbuotojas</option>
-                  </optgroup>
-                  <optgroup label="Pasirinktinė prieiga">
-                    <option value="custom">Pasirinktinė prieiga (Custom Permissions)</option>
-                  </optgroup>
+                  <option value="viewer">Stebėtojas (View Only)</option>
+                  <option value="tech">Technikas (Limited Access)</option>
+                  <option value="vet">Veterinaras (Full Access)</option>
+                  <option value="admin">Administratorius (All Access)</option>
+                  <option value="custom">Pasirinktinė prieiga (Custom Permissions)</option>
                 </select>
               </div>
-              {(newUserRole === 'farm_worker' || newUserRole === 'warehouse_worker') && (
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Darbo vieta
-                  </label>
-                  <select
-                    value={newUserWorkLocation}
-                    onChange={(e) => setNewUserWorkLocation(e.target.value)}
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
-                  >
-                    <option value="farm">Ferma</option>
-                    <option value="warehouse">Technikos kiemas</option>
-                  </select>
-                  <p className="text-xs text-gray-500 mt-1">
-                    Automatiškai nustatyta pagal rolę, bet galite pakeisti jei reikia
-                  </p>
-                </div>
-              )}
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
@@ -666,30 +593,12 @@ export function UserManagement() {
                             onChange={(e) => setEditRole(e.target.value as UserRole)}
                             className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
                           >
-                            <optgroup label="Veterinarijos modulis">
-                              <option value="viewer">Stebėtojas</option>
-                              <option value="tech">Technikas</option>
-                              <option value="vet">Veterinaras</option>
-                              <option value="admin">Administratorius</option>
-                            </optgroup>
-                            <optgroup label="Technikos modulis">
-                              <option value="farm_worker">Fermos darbuotojas</option>
-                              <option value="warehouse_worker">Technikos kiemo darbuotojas</option>
-                            </optgroup>
-                            <optgroup label="Pasirinktinė prieiga">
-                              <option value="custom">Pasirinktinė prieiga</option>
-                            </optgroup>
+                            <option value="viewer">Stebėtojas</option>
+                            <option value="tech">Technikas</option>
+                            <option value="vet">Veterinaras</option>
+                            <option value="admin">Administratorius</option>
+                            <option value="custom">Pasirinktinė prieiga</option>
                           </select>
-                          {(editRole === 'farm_worker' || editRole === 'warehouse_worker') && (
-                            <select
-                              value={editWorkLocation}
-                              onChange={(e) => setEditWorkLocation(e.target.value)}
-                              className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent text-xs"
-                            >
-                              <option value="farm">Ferma</option>
-                              <option value="warehouse">Technikos kiemas</option>
-                            </select>
-                          )}
                         </div>
                       ) : (
                         <div className="space-y-1">

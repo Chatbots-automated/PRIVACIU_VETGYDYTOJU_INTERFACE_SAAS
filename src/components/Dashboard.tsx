@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
+import { useFarm } from '../contexts/FarmContext';
 import {
   AlertTriangle,
   Package,
@@ -83,6 +84,7 @@ interface MonthlyTrend {
 }
 
 export function Dashboard() {
+  const { selectedFarm } = useFarm();
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     lowStock: 0,
@@ -123,11 +125,15 @@ export function Dashboard() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    loadDashboardData();
-  }, []);
+    if (selectedFarm) {
+      loadDashboardData();
+    }
+  }, [selectedFarm]);
 
   const loadDashboardData = async () => {
     try {
+      if (!selectedFarm) return;
+      
       const now = new Date();
 
       // Calculate "today" starting at 12:00 GMT+3
@@ -147,7 +153,7 @@ export function Dashboard() {
       const thirtyDaysFromNow = new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString();
       const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString();
 
-      const ownerMedsQuery = supabase.from('owner_med_admin').select('id', { count: 'exact', head: true }).gte('first_admin_date', monthStart);
+      const ownerMedsQuery = supabase.from('owner_med_admin').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('first_admin_date', monthStart);
 
       const [
         stockData,
@@ -178,56 +184,56 @@ export function Dashboard() {
         activeSyncs,
         completedSyncs
       ] = await Promise.all([
-        supabase.from('stock_by_product').select('*'),
+        supabase.from('stock_by_product').select('*').eq('farm_id', selectedFarm.id),
         supabase.from('stock_by_batch').select(`
           *,
           products!inner(name)
-        `).gt('on_hand', 0).not('expiry_date', 'is', null),
-        supabase.from('treatments').select('id', { count: 'exact', head: true }).gte('reg_date', todayStart),
-        supabase.from('treatments').select('id', { count: 'exact', head: true }).gte('reg_date', weekStart),
-        supabase.from('treatments').select('id', { count: 'exact', head: true }).gte('reg_date', monthStart),
+        `).eq('farm_id', selectedFarm.id).gt('on_hand', 0).not('expiry_date', 'is', null),
+        supabase.from('treatments').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('reg_date', todayStart),
+        supabase.from('treatments').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('reg_date', weekStart),
+        supabase.from('treatments').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('reg_date', monthStart),
         supabase.from('treatments').select(`
           id,
           reg_date,
           animals(tag_no, species),
           diseases(name)
-        `).order('reg_date', { ascending: false }).limit(5),
+        `).eq('farm_id', selectedFarm.id).order('reg_date', { ascending: false }).limit(5),
         supabase.from('batches').select(`
           id,
           created_at,
           received_qty,
           lot,
           products!inner(name)
-        `).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(5),
-        supabase.from('stock_by_product').select('category, on_hand'),
-        supabase.from('batches').select('id, purchase_price, received_qty'),
-        supabase.from('animals').select('id', { count: 'exact', head: true }),
+        `).eq('farm_id', selectedFarm.id).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(5),
+        supabase.from('stock_by_product').select('category, on_hand').eq('farm_id', selectedFarm.id),
+        supabase.from('batches').select('id, purchase_price, received_qty').eq('farm_id', selectedFarm.id),
+        supabase.from('animals').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }),
-        supabase.from('biocide_usage').select('id', { count: 'exact', head: true }).gte('use_date', monthStart),
-        supabase.from('medical_waste').select('id', { count: 'exact', head: true }).gte('created_at', monthStart),
+        supabase.from('biocide_usage').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('use_date', monthStart),
+        supabase.from('medical_waste').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('created_at', monthStart),
         ownerMedsQuery.then(res => res.error && res.error.code === '404' ? { count: 0 } : res),
-        supabase.from('batches').select('id, created_at'),
+        supabase.from('batches').select('id, created_at').eq('farm_id', selectedFarm.id),
         supabase.from('usage_items').select(`
           qty,
           products!inner(id, name)
-        `).gte('created_at', monthStart),
-        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).gte('vaccination_date', todayStart),
-        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).gte('vaccination_date', weekStart),
-        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).gte('vaccination_date', monthStart),
-        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).gte('visit_datetime', todayStart),
-        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).gte('visit_datetime', weekStart),
-        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).gte('visit_datetime', monthStart),
-        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).gte('visit_datetime', now.toISOString()).eq('status', 'scheduled'),
-        supabase.from('treatments').select('id', { count: 'exact', head: true }).or(`withdrawal_until_milk.gte.${now.toISOString()},withdrawal_until_meat.gte.${now.toISOString()}`),
+        `).eq('farm_id', selectedFarm.id).gte('created_at', monthStart),
+        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('vaccination_date', todayStart),
+        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('vaccination_date', weekStart),
+        supabase.from('vaccinations').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('vaccination_date', monthStart),
+        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('visit_datetime', todayStart),
+        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('visit_datetime', weekStart),
+        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('visit_datetime', monthStart),
+        supabase.from('animal_visits').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('visit_datetime', now.toISOString()).eq('status', 'scheduled'),
+        supabase.from('treatments').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).or(`withdrawal_until_milk.gte.${now.toISOString()},withdrawal_until_meat.gte.${now.toISOString()}`),
         supabase.from('treatments').select(`
           id,
           withdrawal_until_milk,
           withdrawal_until_meat,
           reg_date,
           animals!inner(id, tag_no, species)
-        `).or(`withdrawal_until_milk.gte.${now.toISOString()},withdrawal_until_meat.gte.${now.toISOString()}`).order('withdrawal_until_milk', { ascending: true, nullsFirst: false }),
-        supabase.from('animal_synchronizations').select('id', { count: 'exact', head: true }).eq('status', 'Active'),
-        supabase.from('animal_synchronizations').select('id', { count: 'exact', head: true }).eq('status', 'Completed')
+        `).eq('farm_id', selectedFarm.id).or(`withdrawal_until_milk.gte.${now.toISOString()},withdrawal_until_meat.gte.${now.toISOString()}`).order('withdrawal_until_milk', { ascending: true, nullsFirst: false }),
+        supabase.from('animal_synchronizations').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).eq('status', 'Active'),
+        supabase.from('animal_synchronizations').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).eq('status', 'Completed')
       ]);
 
       const totalProducts = stockData.data?.length || 0;
@@ -261,7 +267,8 @@ export function Dashboard() {
       // Fetch batches with qty_left
       const { data: batchesWithStock } = await supabase
         .from('batches')
-        .select('id, qty_left, received_qty, purchase_price');
+        .select('id, qty_left, received_qty, purchase_price')
+        .eq('farm_id', selectedFarm.id);
 
       let totalValue = 0;
       if (batchesWithStock) {

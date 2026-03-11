@@ -3,12 +3,14 @@ import { supabase } from '../lib/supabase';
 import { Product, Unit } from '../lib/types';
 import { AlertTriangle, Check } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { sortByLithuanian } from '../lib/helpers';
 import { showNotification } from './NotificationToast';
 
 export function OwnerMeds() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [products, setProducts] = useState<Product[]>([]);
   const [records, setRecords] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
@@ -30,10 +32,12 @@ export function OwnerMeds() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'owner_med_admin',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(() => {
       loadData();
     }, []),
@@ -46,9 +50,11 @@ export function OwnerMeds() {
   });
 
   const loadData = async () => {
+    if (!selectedFarm) return;
+
     const [productsRes, recordsRes] = await Promise.all([
-      supabase.from('products').select('*').eq('category', 'medicines').eq('is_active', true),
-      supabase.from('owner_med_admin').select(`*, products(name)`).order('first_admin_date', { ascending: false }).limit(10),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('category', 'medicines').eq('is_active', true),
+      supabase.from('owner_med_admin').select(`*, products(name)`).eq('farm_id', selectedFarm.id).order('first_admin_date', { ascending: false }).limit(10),
     ]);
 
     if (productsRes.data) {

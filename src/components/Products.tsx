@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Product, ProductCategory, Unit } from '../lib/types';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Edit2, Save, X, Pill, AlertTriangle } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
@@ -10,6 +11,7 @@ import { showNotification } from './NotificationToast';
 
 export function Products() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -33,10 +35,12 @@ export function Products() {
 
   useEffect(() => {
     loadProducts();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'products',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback((payload) => {
       setProducts(prev => sortByLithuanian([...prev, payload.new], 'name'));
     }, []),
@@ -50,9 +54,16 @@ export function Products() {
 
   const loadProducts = async () => {
     try {
+      if (!selectedFarm) {
+        setProducts([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('products')
-        .select('*');
+        .select('*')
+        .eq('farm_id', selectedFarm.id);
 
       if (error) throw error;
       // Sort by Lithuanian alphabet
@@ -67,7 +78,13 @@ export function Products() {
 
   const handleSave = async () => {
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį');
+        return;
+      }
+
       const productData = {
+        farm_id: selectedFarm.id,
         name: formData.name,
         category: formData.category,
         subcategory: formData.subcategory || null,

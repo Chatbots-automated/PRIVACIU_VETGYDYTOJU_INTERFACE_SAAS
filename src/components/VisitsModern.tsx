@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllRows, formatAnimalDisplay, fetchLatestCollarNumbers } from '../lib/helpers';
+import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
 import { Animal, AnimalVisit, VisitStatus, VisitProcedure } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
-import { Calendar, Search, Filter, Thermometer, Clock, CheckCircle, XCircle, AlertCircle, Trash2, Download, Activity, ChevronDown, ChevronUp } from 'lucide-react';
+import { useFarm } from '../contexts/FarmContext';
+import { Calendar, Search, Filter, Thermometer, Clock, CheckCircle, XCircle, AlertCircle, Trash2, Download, ChevronDown, ChevronUp, Activity } from 'lucide-react';
 import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
 import { AnimalDetailSidebar } from './AnimalDetailSidebar';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
@@ -22,6 +23,7 @@ interface WithdrawalStatus {
 
 export function VisitsModern() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [visits, setVisits] = useState<VisitWithAnimal[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [withdrawalStatuses, setWithdrawalStatuses] = useState<Map<string, WithdrawalStatus>>(new Map());
@@ -38,11 +40,13 @@ export function VisitsModern() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   // Real-time subscription for animal_visits
   useRealtimeSubscription({
     table: 'animal_visits',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(async (payload) => {
       const newVisit = payload.new as AnimalVisit;
       // Fetch the animal data to ensure it's loaded
@@ -86,19 +90,23 @@ export function VisitsModern() {
 
   const loadData = async () => {
     try {
-      const [visitsRes, animalsData, collarMap, withdrawalData] = await Promise.all([
+      if (!selectedFarm) {
+        setLoading(false);
+        return;
+      }
+
+      const [visitsRes, animalsRes, withdrawalData] = await Promise.all([
         supabase
           .from('animal_visits')
           .select('*')
+          .eq('farm_id', selectedFarm.id)
           .order('visit_datetime', { ascending: false }),
-        fetchAllRows<Animal>('animals'),
-        fetchLatestCollarNumbers(),
-        supabase.from('vw_withdrawal_status').select('*'),
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('vw_withdrawal_status').select('*').eq('farm_id', selectedFarm.id),
       ]);
 
       console.log('📊 Loaded visits:', visitsRes.data?.length);
-      console.log('📊 Loaded animals:', animalsData.length);
-      console.log('📊 Loaded collar numbers:', collarMap.size);
+      console.log('📊 Loaded animals:', animalsRes.data?.length);
 
       // Create withdrawal status map
       const withdrawalMap = new Map<string, WithdrawalStatus>();
@@ -107,20 +115,10 @@ export function VisitsModern() {
       });
       setWithdrawalStatuses(withdrawalMap);
 
-      // Enrich animals with collar numbers from optimized view
-      // Neck number is the same as collar number
-      const enrichedAnimals = animalsData.map((animal: Animal) => {
-        const collarNo = collarMap.get(animal.id);
-        return {
-          ...animal,
-          collar_no: collarNo?.toString() || null,
-          neck_no: collarNo?.toString() || null,
-        };
-      });
-
+      const animalsData = animalsRes.data || [];
       const visitsWithAnimals = (visitsRes.data || []).map(visit => {
-        const animal = enrichedAnimals.find((a: Animal) => a.id === visit.animal_id);
-        console.log(`Visit ${visit.id} with animal_id ${visit.animal_id} -> Found animal:`, animal?.tag_no, 'Collar:', animal?.collar_no);
+        const animal = animalsData.find((a: Animal) => a.id === visit.animal_id);
+        console.log(`Visit ${visit.id} with animal_id ${visit.animal_id} -> Found animal:`, animal?.tag_no);
         return {
           ...visit,
           animal,
@@ -129,7 +127,7 @@ export function VisitsModern() {
 
       console.log('📊 Visits with animals:', visitsWithAnimals.filter(v => v.animal).length);
       setVisits(visitsWithAnimals);
-      setAnimals(enrichedAnimals);
+      setAnimals(animalsRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {

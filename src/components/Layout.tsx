@@ -25,6 +25,7 @@ import {
   StickyNote
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import Notepad from './Notepad';
 
 interface LayoutProps {
@@ -42,7 +43,6 @@ const menuItems = [
   { id: 'visits', label: 'Vizitai', icon: Calendar, permission: 'animals' },
   { id: 'synchronizations', label: 'Sinchronizacijos', icon: Repeat, permission: 'animals' },
   { id: 'insemination', label: 'Sėklinimas', icon: Heart, permission: 'animals' },
-  { id: 'pienas', label: 'Pienas', icon: Droplets, permission: 'animals' },
   { id: 'bulk-treatment', label: 'Masinis Gydymas', icon: Users, permission: 'treatment' },
   { id: 'treatment-history', label: 'Gydymų Istorija', icon: Activity, permission: 'view' },
   { id: 'treatment-costs', label: 'Gydymų Savikaina', icon: Euro, permission: 'view' },
@@ -56,6 +56,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [notepadOpen, setNotepadOpen] = useState(false);
   const { user, hasPermission, signOut, isFrozen, logAction } = useAuth();
+  const { selectedFarm, setSelectedFarm, farms } = useFarm();
 
   const handleSignOut = async () => {
     try {
@@ -80,8 +81,8 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
             <div className="flex items-center gap-2 xl:gap-4">
               <div className="flex-shrink-0">
                 <img
-                  src="https://rekvizitai.vz.lt/logos/berciunai-16440-447.jpg"
-                  alt="ŽŪB Berčiunai"
+                  src="https://rvac.lt/s/img/wp-content/uploads/RVAC_logo.png"
+                  alt="RVAC"
                   className="w-10 xl:w-16 h-10 xl:h-16 rounded-lg bg-white p-0.5 xl:p-1 shadow-lg object-contain"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';
@@ -89,8 +90,8 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                 />
               </div>
               <div>
-                <h1 className="font-bold text-sm xl:text-xl text-white leading-tight">ŽŪB Berčiunai</h1>
-                <p className="text-xs text-emerald-200 xl:mt-1">VetStock<span className="hidden xl:inline"> Sistema</span></p>
+                <h1 className="font-bold text-sm xl:text-xl text-white leading-tight">RVAC</h1>
+                <p className="text-xs text-emerald-200 xl:mt-1">Veterinarija<span className="hidden xl:inline"> Sistema</span></p>
               </div>
             </div>
           </div>
@@ -158,6 +159,22 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
               </div>
 
               <div className="flex items-center gap-1 xl:gap-3">
+                {selectedFarm && (
+                  <select
+                    value={selectedFarm.id}
+                    onChange={(e) => {
+                      const farm = farms.find(f => f.id === e.target.value);
+                      if (farm) setSelectedFarm(farm);
+                    }}
+                    className="px-2 xl:px-3 py-1.5 xl:py-2 text-xs xl:text-sm font-medium bg-white border-2 border-emerald-300 text-emerald-700 rounded-lg hover:border-emerald-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                  >
+                    {farms.map(farm => (
+                      <option key={farm.id} value={farm.id}>
+                        {farm.name} ({farm.code})
+                      </option>
+                    ))}
+                  </select>
+                )}
                 <button
                   onClick={onBackToModules}
                   className="hidden xl:flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 hover:border-emerald-300"

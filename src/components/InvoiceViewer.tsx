@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useFarm } from '../contexts/FarmContext';
 import { FileText, Package, Calendar, Building2, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 
@@ -38,6 +39,7 @@ interface InvoiceItem {
 }
 
 export function InvoiceViewer() {
+  const { selectedFarm } = useFarm();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
   const [invoiceItems, setInvoiceItems] = useState<InvoiceItem[]>([]);
@@ -45,14 +47,21 @@ export function InvoiceViewer() {
 
   useEffect(() => {
     loadInvoices();
-  }, []);
+  }, [selectedFarm]);
 
   const loadInvoices = async () => {
     setLoading(true);
     try {
+      if (!selectedFarm) {
+        setInvoices([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
+        .eq('farm_id', selectedFarm.id)
         .order('invoice_date', { ascending: false });
 
       if (error) throw error;

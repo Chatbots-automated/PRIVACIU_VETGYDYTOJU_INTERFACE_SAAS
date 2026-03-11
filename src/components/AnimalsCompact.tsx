@@ -2,49 +2,54 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Animal, AnimalVisitSummary } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { Plus, Edit2, Save, X, Search, RefreshCw, Calendar, Clock } from 'lucide-react';
 import { AnimalDetailSidebar } from './AnimalDetailSidebar';
 import { formatDateTimeLT } from '../lib/formatters';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
-import { fetchAllRows, formatAnimalDisplay, fetchLatestCollarNumbers } from '../lib/helpers';
-
-interface GeaCollarData {
-  animal_id: string;
-  collar_no: number;
-  snapshot_date: string;
-}
+import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
 
 export function AnimalsCompact() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [visitSummaries, setVisitSummaries] = useState<Map<string, AnimalVisitSummary>>(new Map());
-  const [geaCollars, setGeaCollars] = useState<Map<string, number>>(new Map());
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [editing, setEditing] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
-  const [neckNumberSearch, setNeckNumberSearch] = useState('');
 
-  const emptyAnimal = {
+  const [formData, setFormData] = useState({
     tag_no: '',
     species: 'bovine',
     sex: '',
     age_months: '',
     holder_name: '',
     holder_address: '',
-  };
+  });
 
-  const [formData, setFormData] = useState(emptyAnimal);
+  // Update holder info when farm changes
+  useEffect(() => {
+    if (selectedFarm && showAdd) {
+      setFormData(prev => ({
+        ...prev,
+        holder_name: selectedFarm.name,
+        holder_address: selectedFarm.address || '',
+      }));
+    }
+  }, [selectedFarm, showAdd]);
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   // Real-time subscription for animals
   useRealtimeSubscription({
     table: 'animals',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback((payload) => {
       setAnimals(prev => [...prev, payload.new as Animal].sort((a, b) =>
         (a.tag_no || '').localeCompare(b.tag_no || '')
@@ -68,31 +73,33 @@ export function AnimalsCompact() {
 
   const loadData = async () => {
     try {
-      // Fetch ALL animals using pagination helper
-      const allAnimals = await fetchAllRows<Animal>('animals', '*', 'tag_no');
+      if (!selectedFarm) {
+        setAnimals([]);
+        setVisitSummaries(new Map());
+        setLoading(false);
+        return;
+      }
 
-      // Fetch visit summaries
-      const summariesData = await fetchAllRows<AnimalVisitSummary>('animal_visit_summary');
+      // Fetch animals for the selected farm only
+      const { data: allAnimals, error: animalsError } = await supabase
+        .from('animals')
+        .select('*')
+        .eq('farm_id', selectedFarm.id)
+        .order('tag_no');
 
-      // Fetch latest collar numbers from optimized view
-      const collarMap = await fetchLatestCollarNumbers();
+      if (animalsError) throw animalsError;
 
-      console.log('🐄 Animals loaded:', allAnimals.length);
-      console.log('🏷️ Animals with collar numbers:', collarMap.size);
+      // Fetch visit summaries for the selected farm
+      const { data: summariesData, error: summariesError } = await supabase
+        .from('animal_visit_summary')
+        .select('*')
+        .eq('farm_id', selectedFarm.id);
 
-      setGeaCollars(collarMap);
+      if (summariesError) throw summariesError;
 
-      // Enrich animals with collar numbers
-      const enrichedAnimals = allAnimals.map((animal: Animal) => {
-        const collarNo = collarMap.has(animal.id) ? collarMap.get(animal.id)?.toString() : null;
-        return {
-          ...animal,
-          collar_no: collarNo,
-          neck_no: collarNo,
-        };
-      });
+      console.log('🐄 Animals loaded for farm:', selectedFarm.name, allAnimals?.length || 0);
 
-      setAnimals(enrichedAnimals);
+      setAnimals(allAnimals || []);
 
       const summaryMap = new Map<string, AnimalVisitSummary>();
       (summariesData || []).forEach((summary: AnimalVisitSummary) => {
@@ -134,9 +141,15 @@ export function AnimalsCompact() {
 
   const handleAdd = async () => {
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('animals')
         .insert({
+          farm_id: selectedFarm.id,
           tag_no: formData.tag_no || null,
           species: formData.species,
           sex: formData.sex || null,
@@ -151,7 +164,14 @@ export function AnimalsCompact() {
 
       await logAction('create_animal', 'animals', data.id);
       setShowAdd(false);
-      setFormData(emptyAnimal);
+      setFormData({
+        tag_no: '',
+        species: 'bovine',
+        sex: '',
+        age_months: '',
+        holder_name: selectedFarm.name,
+        holder_address: selectedFarm.address || '',
+      });
       loadData();
     } catch (error: any) {
       alert('Klaida kuriant gyvūną: ' + error.message);
@@ -179,6 +199,14 @@ export function AnimalsCompact() {
 
       await logAction('update_animal', 'animals', id);
       setEditing(null);
+      setFormData({
+        tag_no: '',
+        species: 'bovine',
+        sex: '',
+        age_months: '',
+        holder_name: selectedFarm?.name || '',
+        holder_address: selectedFarm?.address || '',
+      });
       loadData();
     } catch (error: any) {
       alert('Klaida atnaujinant gyvūną: ' + error.message);
@@ -186,27 +214,18 @@ export function AnimalsCompact() {
   };
 
   const filteredAnimals = animals.filter(animal => {
-    let matchesGeneral = true;
-    let matchesNeck = true;
-
     // Filter by general search term
     if (searchTerm) {
       const searchLower = searchTerm.toLowerCase();
-      matchesGeneral =
+      return (
         animal.tag_no?.toLowerCase().includes(searchLower) ||
         animal.species.toLowerCase().includes(searchLower) ||
         animal.holder_name?.toLowerCase().includes(searchLower) ||
-        false;
+        false
+      );
     }
 
-    // Filter by neck number search term (exact match)
-    if (neckNumberSearch) {
-      const searchStr = neckNumberSearch.trim();
-      const collarNo = geaCollars.get(animal.id);
-      matchesNeck = collarNo ? collarNo.toString() === searchStr : false;
-    }
-
-    return matchesGeneral && matchesNeck;
+    return true;
   });
 
   if (loading) {
@@ -216,33 +235,21 @@ export function AnimalsCompact() {
   return (
     <div className="space-y-6">
       <div className="flex flex-col gap-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Ieškoti pagal ID, rūšį, laikytoją..."
-              value={searchTerm}
-              onChange={(e) => {
-                const newValue = e.target.value;
-                setSearchTerm(newValue);
-                if (newValue.length >= 3) {
-                  logAction('search_animals', null, null, null, { search_term: newValue });
-                }
-              }}
-              className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-            />
-          </div>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-500 w-5 h-5" />
-            <input
-              type="text"
-              placeholder="Ieškoti pagal kaklo numerį..."
-              value={neckNumberSearch}
-              onChange={(e) => setNeckNumberSearch(e.target.value)}
-              className="w-full pl-10 pr-4 py-2 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
+          <input
+            type="text"
+            placeholder="Ieškoti pagal ID, rūšį, laikytoją..."
+            value={searchTerm}
+            onChange={(e) => {
+              const newValue = e.target.value;
+              setSearchTerm(newValue);
+              if (newValue.length >= 3) {
+                logAction('search_animals', null, null, null, { search_term: newValue });
+              }
+            }}
+            className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+          />
         </div>
         <div className="flex gap-2 justify-end">
           <button
@@ -269,7 +276,6 @@ export function AnimalsCompact() {
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ID</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Kaklo nr.</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rūšis</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amžius</th>
                 <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Sekantis vizitas</th>
@@ -308,9 +314,6 @@ export function AnimalsCompact() {
                             className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                             onClick={(e) => e.stopPropagation()}
                           />
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-500">
-                          {(animal as any).neck_no || '-'}
                         </td>
                         <td className="px-4 py-3">
                           <input
@@ -366,9 +369,6 @@ export function AnimalsCompact() {
                       <>
                         <td className="px-4 py-3 text-sm font-medium text-gray-900">
                           {animal.tag_no}
-                        </td>
-                        <td className="px-4 py-3 text-sm text-gray-700">
-                          {(animal as any).neck_no || '-'}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {animal.sex || animal.species}
@@ -490,7 +490,14 @@ export function AnimalsCompact() {
               <button
                 onClick={() => {
                   setShowAdd(false);
-                  setFormData(emptyAnimal);
+                  setFormData({
+                    tag_no: '',
+                    species: 'bovine',
+                    sex: '',
+                    age_months: '',
+                    holder_name: selectedFarm?.name || '',
+                    holder_address: selectedFarm?.address || '',
+                  });
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
               >

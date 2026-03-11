@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Trash2, Check, Package, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { MedicalWasteWithDetails } from '../lib/types';
 import { showNotification } from './NotificationToast';
@@ -10,6 +11,7 @@ type WasteFilter = 'all' | 'automatic' | 'manual';
 
 export function MedicalWaste() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [records, setRecords] = useState<MedicalWasteWithDetails[]>([]);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -35,6 +37,8 @@ export function MedicalWaste() {
 
   useRealtimeSubscription({
     table: 'medical_waste',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(async (payload: any) => {
       await loadRecords();
 
@@ -85,7 +89,13 @@ export function MedicalWaste() {
     setSuccess(false);
 
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį');
+        return;
+      }
+
       const { error } = await supabase.from('medical_waste').insert({
+        farm_id: selectedFarm.id,
         waste_code: formData.waste_code,
         name: formData.name,
         period: formData.period || null,

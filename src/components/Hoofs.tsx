@@ -11,6 +11,7 @@ import {
   Unit
 } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { HoofSelector } from './HoofSelector';
 import { SearchableSelect } from './SearchableSelect';
@@ -49,6 +50,7 @@ interface ClawExamination {
 
 export function Hoofs() {
   const { user, logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [conditions, setConditions] = useState<HoofConditionCode[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -84,10 +86,12 @@ export function Hoofs() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'hoof_records',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(() => {
       loadData();
     }, []),
@@ -102,20 +106,21 @@ export function Hoofs() {
   const loadData = async () => {
     try {
       setLoading(true);
+      if (!selectedFarm) return;
 
-      const [animalsData, conditionsRes, productsRes, batchesRes, recordsData] = await Promise.all([
-        fetchAllRows<Animal>('animals', supabase),
+      const [animalsRes, conditionsRes, productsRes, batchesRes, recordsRes] = await Promise.all([
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
         supabase.from('hoof_condition_codes').select('*').eq('is_active', true).order('name_lt'),
-        supabase.from('products').select('*').eq('is_active', true).order('name'),
-        supabase.from('batches').select('*').order('expiry_date', { ascending: false }),
-        fetchAllRows<HoofRecord>('hoof_records', supabase)
+        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+        supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date', { ascending: false }),
+        supabase.from('hoof_records').select('*').eq('farm_id', selectedFarm.id)
       ]);
 
-      setAnimals(animalsData);
+      setAnimals(animalsRes.data || []);
       setConditions(conditionsRes.data || []);
       setProducts(productsRes.data || []);
       setBatches(batchesRes.data || []);
-      setHoofRecords(recordsData);
+      setHoofRecords(recordsRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {

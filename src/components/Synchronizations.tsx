@@ -4,7 +4,8 @@ import { supabase } from '../lib/supabase';
 import { SynchronizationStepWithDetails, Animal } from '../lib/types';
 import { formatDateLT, formatDateTimeLT } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchAllRows, formatAnimalDisplay, fetchLatestCollarNumbers } from '../lib/helpers';
+import { useFarm } from '../contexts/FarmContext';
+import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
 import { AnimalDetailSidebar } from './AnimalDetailSidebar';
 import { InseminationModal } from './InseminationModal';
 
@@ -17,6 +18,7 @@ interface SyncStepDisplay extends SynchronizationStepWithDetails {
 
 export function Synchronizations() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [syncSteps, setSyncSteps] = useState<SyncStepDisplay[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -24,31 +26,22 @@ export function Synchronizations() {
   const [customDateFrom, setCustomDateFrom] = useState('');
   const [customDateTo, setCustomDateTo] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [neckNumberSearch, setNeckNumberSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | 'pending' | 'completed'>('pending');
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
   const [inseminationStep, setInseminationStep] = useState<SyncStepDisplay | null>(null);
 
   useEffect(() => {
     loadData();
-  }, [filterDate, customDateFrom, customDateTo, statusFilter]);
+  }, [selectedFarm, filterDate, customDateFrom, customDateTo, statusFilter]);
 
   const loadData = async () => {
     setLoading(true);
     try {
-      // Load animals and collar data in parallel
-      const [allAnimals, collarMap] = await Promise.all([
-        fetchAllRows<Animal>('animals', '*', 'tag_no'),
-        fetchLatestCollarNumbers()
-      ]);
+      if (!selectedFarm) return;
 
-      // Enrich animals with collar numbers from optimized view
-      const enrichedAnimals = allAnimals.map(animal => ({
-        ...animal,
-        collar_no: collarMap.get(animal.id)
-      }));
-
-      setAnimals(enrichedAnimals);
+      // Load animals
+      const animalsRes = await supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no');
+      setAnimals(animalsRes.data || []);
 
       const today = new Date().toISOString().split('T')[0];
       const tomorrow = new Date(Date.now() + 86400000).toISOString().split('T')[0];
@@ -61,6 +54,7 @@ export function Synchronizations() {
           product:medication_product_id(id, name, primary_pack_unit),
           batch:batch_id(id, lot, expiry_date)
         `)
+        .eq('farm_id', selectedFarm.id)
         .order('scheduled_date', { ascending: true })
         .order('step_number', { ascending: true });
 
@@ -198,13 +192,6 @@ export function Synchronizations() {
       if (!matchesGeneral) return false;
     }
 
-    // Neck number search (exact match on collar_no)
-    if (neckNumberSearch) {
-      const neckTerm = neckNumberSearch.toLowerCase().trim();
-      const collarNo = animal?.collar_no?.toString().toLowerCase() || '';
-      if (!collarNo.includes(neckTerm)) return false;
-    }
-
     return true;
   });
 
@@ -252,16 +239,6 @@ export function Synchronizations() {
             />
           </div>
 
-          <div className="relative">
-            <Activity className="absolute left-3 top-1/2 transform -translate-y-1/2 text-emerald-500 w-5 h-5" />
-            <input
-              type="text"
-              value={neckNumberSearch}
-              onChange={(e) => setNeckNumberSearch(e.target.value)}
-              placeholder="Ieškoti pagal kaklo numerį..."
-              className="w-full pl-10 pr-4 py-2 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-            />
-          </div>
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-4">
@@ -308,12 +285,9 @@ export function Synchronizations() {
           </div>
         </div>
 
-        {(searchTerm || neckNumberSearch) && (
+        {searchTerm && (
           <button
-            onClick={() => {
-              setSearchTerm('');
-              setNeckNumberSearch('');
-            }}
+            onClick={() => setSearchTerm('')}
             className="text-sm text-blue-600 hover:text-blue-700 font-medium mb-4"
           >
             Išvalyti paieškos filtrus
@@ -354,11 +328,6 @@ export function Synchronizations() {
                   </div>
 
                   <div className="text-sm space-y-1">
-                    {(step.animal as any)?.collar_no && (
-                      <div className="font-medium text-gray-700">
-                        Kaklo Nr.: <span className="font-bold">{(step.animal as any).collar_no}</span>
-                      </div>
-                    )}
                     <div className="font-medium text-gray-700">
                       Protokolas: <span className="font-bold">{step.protocol_name || 'Nežinomas'}</span>
                     </div>

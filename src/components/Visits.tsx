@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/helpers';
 import { Animal } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { Calendar, Plus, Edit2, Save, X, Check, XCircle, Clock, Search, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 
@@ -25,6 +26,7 @@ interface VisitWithAnimal extends Visit {
 
 export function Visits() {
   const { user, logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [visits, setVisits] = useState<VisitWithAnimal[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,16 +52,18 @@ export function Visits() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   const loadData = async () => {
     try {
+      if (!selectedFarm) return;
+
       const [visitsRes, animalsRes] = await Promise.all([
-        supabase.from('animal_visits').select('*').order('visit_date', { ascending: false }),
-        fetchAllRows('animals', '*', 'tag_no'),
+        supabase.from('animal_visits').select('*').eq('farm_id', selectedFarm.id).order('visit_date', { ascending: false }),
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
       ]);
 
-      const animalsData = animalsRes || [];
+      const animalsData = animalsRes.data || [];
       const visitsData = (visitsRes.data || []).map((visit: Visit) => ({
         ...visit,
         animal: animalsData.find(a => a.id === visit.animal_id),

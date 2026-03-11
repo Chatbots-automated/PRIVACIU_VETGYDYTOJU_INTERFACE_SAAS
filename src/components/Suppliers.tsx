@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Supplier } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Edit2, Save, X, Building2 } from 'lucide-react';
 import { showNotification } from './NotificationToast';
 
 export function Suppliers() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -25,10 +27,12 @@ export function Suppliers() {
 
   useEffect(() => {
     loadSuppliers();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'suppliers',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback((payload) => {
       setSuppliers(prev => [...prev, payload.new].sort((a, b) => a.name.localeCompare(b.name)));
     }, []),
@@ -42,9 +46,16 @@ export function Suppliers() {
 
   const loadSuppliers = async () => {
     try {
+      if (!selectedFarm) {
+        setSuppliers([]);
+        setLoading(false);
+        return;
+      }
+
       const { data, error } = await supabase
         .from('suppliers')
         .select('*')
+        .eq('farm_id', selectedFarm.id)
         .order('name');
 
       if (error) throw error;
@@ -58,7 +69,13 @@ export function Suppliers() {
 
   const handleSave = async () => {
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį');
+        return;
+      }
+
       const supplierData = {
+        farm_id: selectedFarm.id,
         name: formData.name,
         code: formData.code || null,
         vat_code: formData.vat_code || null,

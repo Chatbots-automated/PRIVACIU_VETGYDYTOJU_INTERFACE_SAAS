@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllRows, normalizeNumberInput, fetchLatestCollarNumbers } from '../lib/helpers';
+import { fetchAllRows, normalizeNumberInput } from '../lib/helpers';
 import { Product, Animal, Batch, Unit } from '../lib/types';
 import { Syringe, Check, Search, CheckSquare, Square, Calendar, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { showNotification } from './NotificationToast';
 
@@ -13,22 +14,15 @@ interface VaccinationGroup {
   vaccinations: any[];
 }
 
-interface GeaCollarData {
-  animal_id: string;
-  collar_no: number;
-  snapshot_date: string;
-}
-
 export function Vaccinations() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [vaccinations, setVaccinations] = useState<any[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
-  const [geaCollars, setGeaCollars] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
-  const [neckNumberSearch, setNeckNumberSearch] = useState('');
   const [selectedAnimals, setSelectedAnimals] = useState<Set<string>>(new Set());
   const [showMassVaccination, setShowMassVaccination] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -60,10 +54,12 @@ export function Vaccinations() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'vaccinations',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(() => {
       loadData();
     }, []),
@@ -77,18 +73,18 @@ export function Vaccinations() {
 
   const loadData = async () => {
     try {
-      const [vacsRes, prodsRes, animalsRes, batchesRes, collarMap] = await Promise.all([
-        supabase.from('vaccinations').select('*').order('vaccination_date', { ascending: false }),
-        supabase.from('products').select('*').eq('is_active', true).in('category', ['prevention', 'vakcina']).order('name'),
-        fetchAllRows('animals', '*', 'tag_no', [{ column: 'active', value: true }]),
-        supabase.from('batches').select('*').order('expiry_date', { ascending: false }),
-        fetchLatestCollarNumbers(),
+      if (!selectedFarm) return;
+
+      const [vacsRes, prodsRes, animalsRes, batchesRes] = await Promise.all([
+        supabase.from('vaccinations').select('*').eq('farm_id', selectedFarm.id).order('vaccination_date', { ascending: false }),
+        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).in('category', ['prevention', 'vakcina']).order('name'),
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).eq('active', true).order('tag_no'),
+        supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date', { ascending: false }),
       ]);
 
-      setGeaCollars(collarMap);
       setVaccinations(vacsRes.data || []);
       setProducts(prodsRes.data || []);
-      setAnimals(animalsRes || []);
+      setAnimals(animalsRes.data || []);
       setBatches(batchesRes.data || []);
     } catch (error) {
       console.error('Error:', error);
@@ -99,9 +95,12 @@ export function Vaccinations() {
 
   const getOldestBatchWithStock = async (productId: string): Promise<string> => {
     try {
+      if (!selectedFarm) return '';
+
       const { data, error } = await supabase
         .from('batches')
         .select('id, qty_left, expiry_date')
+        .eq('farm_id', selectedFarm.id)
         .eq('product_id', productId)
         .gt('qty_left', 0)
         .order('expiry_date', { ascending: true });
@@ -168,8 +167,14 @@ export function Vaccinations() {
     try {
       const allVaccinationEntries = [];
 
+      if (!selectedFarm) {
+        showNotification('Pasirinkite ūkį', 'error');
+        return;
+      }
+
       for (const vaccine of validVaccines) {
         const vaccinationEntries = Array.from(selectedAnimals).map(animalId => ({
+          farm_id: selectedFarm.id,
           animal_id: animalId,
           product_id: vaccine.product_id,
           batch_id: vaccine.batch_id || null,
@@ -304,13 +309,6 @@ export function Vaccinations() {
     const matchesSearch = a.tag_no?.toLowerCase().includes(searchTerm.toLowerCase()) ||
       a.holder_name?.toLowerCase().includes(searchTerm.toLowerCase());
 
-    // Filter by neck number search term (exact match only)
-    let matchesNeck = true;
-    if (neckNumberSearch) {
-      const collarNo = geaCollars.get(a.id);
-      matchesNeck = collarNo ? collarNo.toString() === neckNumberSearch : false;
-    }
-
     const matchesSex = !filterSex || a.sex?.toLowerCase() === filterSex.toLowerCase();
 
     const ageInMonths = a.age_months || 0;
@@ -331,7 +329,7 @@ export function Vaccinations() {
       return true;
     };
 
-    return matchesSearch && matchesNeck && matchesSex && matchesAgeFrom && matchesAgeTo && matchesTagRange();
+    return matchesSearch && matchesSex && matchesAgeFrom && matchesAgeTo && matchesTagRange();
   });
 
   const filteredVaccinations = vaccinations.filter(vac => {
@@ -670,7 +668,6 @@ export function Vaccinations() {
                   setFilterTagFrom('');
                   setFilterTagTo('');
                   setSearchTerm('');
-                  setNeckNumberSearch('');
                 }}
                 className="px-3 py-1 bg-gray-200 text-gray-700 rounded text-xs font-medium hover:bg-gray-300 transition-colors"
               >
@@ -687,27 +684,15 @@ export function Vaccinations() {
               <p className="text-sm font-medium text-gray-700 mb-2">
                 Pasirinkta gyvūnų: <span className="text-blue-600 font-bold">{selectedAnimals.size}</span>
               </p>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
-                  <input
-                    type="text"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                    placeholder="Ieškoti pagal ID, laikytoją..."
-                    className="w-full pl-10 pr-4 py-1.5 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                <div className="relative">
-                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-emerald-500" />
-                  <input
-                    type="text"
-                    value={neckNumberSearch}
-                    onChange={(e) => setNeckNumberSearch(e.target.value)}
-                    placeholder="Ieškoti pagal kaklo numerį..."
-                    className="w-full pl-10 pr-4 py-1.5 border-2 border-emerald-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
-                  />
-                </div>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  placeholder="Ieškoti pagal ID, laikytoją..."
+                  className="w-full pl-10 pr-4 py-1.5 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
             </div>
 

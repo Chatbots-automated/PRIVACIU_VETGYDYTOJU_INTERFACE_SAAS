@@ -2,12 +2,14 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Product, Unit } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Droplet, Check } from 'lucide-react';
 import { showNotification } from './NotificationToast';
 
 export function Biocides() {
   const { user, logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [usageRecords, setUsageRecords] = useState<any[]>([]);
@@ -26,10 +28,12 @@ export function Biocides() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useRealtimeSubscription({
     table: 'biocide_usage',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback(() => {
       loadData();
     }, []),
@@ -42,10 +46,12 @@ export function Biocides() {
   });
 
   const loadData = async () => {
+    if (!selectedFarm) return;
+
     const [productsRes, batchesRes, usageRes] = await Promise.all([
-      supabase.from('products').select('*').eq('category', 'biocide').eq('is_active', true),
-      supabase.from('stock_by_batch').select(`*, products!inner(name)`).eq('products.category', 'biocide').gt('on_hand', 0),
-      supabase.from('biocide_usage').select(`*, products(name)`).order('use_date', { ascending: false }).limit(10),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('category', 'biocide').eq('is_active', true),
+      supabase.from('stock_by_batch').select(`*, products!inner(name)`).eq('farm_id', selectedFarm.id).eq('products.category', 'biocide').gt('on_hand', 0),
+      supabase.from('biocide_usage').select(`*, products(name)`).eq('farm_id', selectedFarm.id).order('use_date', { ascending: false }).limit(10),
     ]);
 
     if (productsRes.data) setProducts(productsRes.data);
@@ -93,7 +99,13 @@ export function Biocides() {
     setSuccess(false);
 
     try {
+      if (!selectedFarm) {
+        showNotification('Pasirinkite ūkį', 'error');
+        return;
+      }
+
       const { error } = await supabase.from('biocide_usage').insert({
+        farm_id: selectedFarm.id,
         product_id: formData.product_id,
         batch_id: formData.batch_id || null,
         use_date: formData.use_date,

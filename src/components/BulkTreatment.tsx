@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllRows, sortByLithuanian, fetchLatestCollarNumbers } from '../lib/helpers';
+import { fetchAllRows, sortByLithuanian } from '../lib/helpers';
 import { Product, Animal, StockByBatch, Unit } from '../lib/types';
 import { Users, Plus, Trash2, Check, Search, Syringe, Package } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface SelectedAnimal extends Animal {
   collar_no: string | null;
@@ -34,6 +35,7 @@ const AGE_GROUPS: AgeGroup[] = [
 
 export function BulkTreatment() {
   const { user, logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<SelectedAnimal[]>([]);
   const [filteredAnimals, setFilteredAnimals] = useState<SelectedAnimal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -60,31 +62,23 @@ export function BulkTreatment() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   useEffect(() => {
     filterAnimals();
   }, [animals, searchTerm, collarSearch, selectedAgeGroup]);
 
   const loadData = async () => {
-    const [animalsRes, productsRes, batchesRes, collarMap, vetsRes] = await Promise.all([
-      fetchAllRows<Animal>('animals', '*', 'tag_no'),
-      supabase.from('products').select('*').eq('is_active', true),
-      supabase.from('stock_by_batch').select('*').gt('on_hand', 0),
-      fetchLatestCollarNumbers(),
-      supabase.from('treatments').select('vet_name').not('vet_name', 'is', null),
+    if (!selectedFarm) return;
+
+    const [animalsRes, productsRes, batchesRes, vetsRes] = await Promise.all([
+      supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
+      supabase.from('stock_by_batch').select('*').eq('farm_id', selectedFarm.id).gt('on_hand', 0),
+      supabase.from('treatments').select('vet_name').eq('farm_id', selectedFarm.id).not('vet_name', 'is', null),
     ]);
 
-    // Enrich animals with collar numbers
-    const enrichedAnimals = animalsRes.map((animal) => {
-      const collarNo = collarMap.get(animal.id) || null;
-      return {
-        ...animal,
-        collar_no: collarNo?.toString() || null,
-      };
-    });
-
-    setAnimals(enrichedAnimals);
+    setAnimals(animalsRes.data || []);
     if (productsRes.data) {
       const sortedProducts = sortByLithuanian(productsRes.data, 'name');
       setProducts(sortedProducts);
@@ -228,6 +222,11 @@ export function BulkTreatment() {
       return;
     }
 
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -237,6 +236,7 @@ export function BulkTreatment() {
         const { data: treatment, error: treatmentError } = await supabase
           .from('treatments')
           .insert({
+            farm_id: selectedFarm.id,
             reg_date: formData.treatment_date,
             animal_id: animal.id,
             vet_name: formData.vet_name,
@@ -250,6 +250,7 @@ export function BulkTreatment() {
 
         // Add all medications to this treatment
         const usageItems = validMedications.map(med => ({
+          farm_id: selectedFarm.id,
           treatment_id: treatment.id,
           product_id: med.product_id,
           batch_id: med.batch_id,

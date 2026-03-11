@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { useFarm } from '../contexts/FarmContext';
 import {
   Heart,
   Package,
@@ -25,6 +26,7 @@ import { formatAnimalDisplay } from '../lib/helpers';
 type Tab = 'records' | 'inventory' | 'products' | 'analytics';
 
 export function Seklinimas() {
+  const { selectedFarm } = useFarm();
   const [activeTab, setActiveTab] = useState<Tab>('records');
   const [records, setRecords] = useState<InseminationRecord[]>([]);
   const [inventory, setInventory] = useState<InseminationInventory[]>([]);
@@ -50,7 +52,7 @@ export function Seklinimas() {
 
   useEffect(() => {
     loadData();
-  }, [activeTab]);
+  }, [selectedFarm, activeTab]);
 
   useEffect(() => {
     if (showReceiveStockForm) {
@@ -76,6 +78,8 @@ export function Seklinimas() {
   };
 
   const loadRecords = async () => {
+    if (!selectedFarm) return;
+
     const { data } = await supabase
       .from('insemination_records')
       .select(`
@@ -84,27 +88,34 @@ export function Seklinimas() {
         sperm_product:insemination_products!insemination_records_sperm_product_id_fkey(*),
         glove_product:insemination_products!insemination_records_glove_product_id_fkey(*)
       `)
+      .eq('farm_id', selectedFarm.id)
       .order('insemination_date', { ascending: false });
 
     if (data) setRecords(data as any);
   };
 
   const loadInventory = async () => {
+    if (!selectedFarm) return;
+
     const { data } = await supabase
       .from('insemination_inventory')
       .select(`
         *,
         product:insemination_products(*)
       `)
+      .eq('farm_id', selectedFarm.id)
       .order('expiry_date', { ascending: true });
 
     if (data) setInventory(data as any);
   };
 
   const loadProducts = async () => {
+    if (!selectedFarm) return;
+
     const { data } = await supabase
       .from('insemination_products')
       .select('*')
+      .eq('farm_id', selectedFarm.id)
       .eq('is_active', true)
       .order('product_type')
       .order('name');
@@ -116,7 +127,13 @@ export function Seklinimas() {
     e.preventDefault();
 
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį');
+        return;
+      }
+
       const { error } = await supabase.from('insemination_products').insert({
+        farm_id: selectedFarm.id,
         name: productFormData.name,
         product_type: productFormData.product_type,
         supplier_group: productFormData.supplier_group,

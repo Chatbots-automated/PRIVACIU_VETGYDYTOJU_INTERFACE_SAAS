@@ -3,8 +3,9 @@ import { supabase } from '../lib/supabase';
 import { formatCurrencyLT, formatDateLT, formatNumberLT } from '../lib/formatters';
 import { calculateSafeUnitCost, TREATMENT_COST_CONFIG, formatCost, formatUnitCost } from '../lib/costCalculations';
 import { fetchAllRows } from '../lib/helpers';
-import { Euro, Activity, Syringe, Calendar, TrendingDown, Package, RefreshCw, ChevronDown, ChevronRight, Search, Droplet } from 'lucide-react';
-import { TreatmentMilkLossAnalysis } from './TreatmentMilkLossAnalysis';
+import { useFarm } from '../contexts/FarmContext';
+import { Euro, Activity, Syringe, Calendar, TrendingDown, Package, RefreshCw, ChevronDown, ChevronRight, Search } from 'lucide-react';
+// TreatmentMilkLossAnalysis removed - GEA integration no longer available
 
 interface AnimalCostData {
   animal_id: string;
@@ -73,6 +74,7 @@ interface RawData {
 }
 
 export function TreatmentCostAnalysis() {
+  const { selectedFarm } = useFarm();
   const [costData, setCostData] = useState<AnimalCostData[]>([]);
   const [rawData, setRawData] = useState<RawData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -86,11 +88,11 @@ export function TreatmentCostAnalysis() {
   const [dateTo, setDateTo] = useState('');
   const [minCost, setMinCost] = useState('');
   const [showFilters, setShowFilters] = useState(false);
-  const [milkLossModalAnimal, setMilkLossModalAnimal] = useState<{ id: string; tag: string } | null>(null);
+  // Milk loss modal removed - GEA integration no longer available
 
   useEffect(() => {
     loadCostData();
-  }, []);
+  }, [selectedFarm]);
 
   // Recalculate costs when date filters change
   useEffect(() => {
@@ -241,21 +243,30 @@ export function TreatmentCostAnalysis() {
   const loadCostData = async () => {
     try {
       setLoading(true);
+      if (!selectedFarm) {
+        setLoading(false);
+        return;
+      }
 
       // Get all animals using pagination helper
-      const animals = await fetchAllRows<{ id: string; tag_no: string | null }>('animals', 'id, tag_no', 'tag_no');
+      const animalsRes = await supabase.from('animals').select('id, tag_no').eq('farm_id', selectedFarm.id).order('tag_no');
+      const animals = animalsRes.data || [];
 
       console.log('Animals loaded:', animals?.length);
 
       // Get all treatments (all time)
-      const treatments = await fetchAllRows<any>('treatments', `
-        id,
-        animal_id,
-        disease_id,
-        reg_date,
-        outcome,
-        diseases(name)
-      `);
+      const treatmentsRes = await supabase
+        .from('treatments')
+        .select(`
+          id,
+          animal_id,
+          disease_id,
+          reg_date,
+          outcome,
+          diseases(name)
+        `)
+        .eq('farm_id', selectedFarm.id);
+      const treatments = treatmentsRes.data || [];
 
       console.log('Treatments loaded:', treatments?.length);
 
@@ -269,7 +280,8 @@ export function TreatmentCostAnalysis() {
           batch_id,
           qty,
           batches(purchase_price, received_qty)
-        `);
+        `)
+        .eq('farm_id', selectedFarm.id);
 
       if (usageError) {
         console.error('Usage items error:', usageError);
@@ -278,34 +290,43 @@ export function TreatmentCostAnalysis() {
 
       console.log('Usage items loaded:', usageItems?.length);
 
-      // Get all vaccinations with batch info (all time)
-      const { data: vaccinations, error: vaccinationsError } = await supabase
+      // Get all vaccinations (all time)
+      const { data: vaccinationsData, error: vaccinationsError } = await supabase
         .from('vaccinations')
-        .select(`
-          id,
-          animal_id,
-          dose_amount,
-          batch_id,
-          vaccination_date,
-          batches(purchase_price, received_qty)
-        `);
+        .select('id, animal_id, dose_amount, batch_id, vaccination_date')
+        .eq('farm_id', selectedFarm.id);
 
       if (vaccinationsError) {
         console.error('Vaccinations error:', vaccinationsError);
         throw vaccinationsError;
       }
 
+      // Get batch info separately for vaccinations
+      const vaccinationBatchIds = [...new Set(vaccinationsData?.filter(v => v.batch_id).map(v => v.batch_id))];
+      const { data: vaccinationBatches } = await supabase
+        .from('batches')
+        .select('id, purchase_price, received_qty')
+        .in('id', vaccinationBatchIds.length > 0 ? vaccinationBatchIds : ['00000000-0000-0000-0000-000000000000']);
+
+      // Merge batch data with vaccinations
+      const vaccinations = vaccinationsData?.map(v => ({
+        ...v,
+        batches: v.batch_id ? vaccinationBatches?.find(b => b.id === v.batch_id) : null
+      })) || [];
+
       console.log('Vaccinations loaded:', vaccinations?.length);
 
       // Get all visits with dates for filtering
       const { data: visits, error: visitsError } = await supabase
         .from('animal_visits')
-        .select('id, animal_id, visit_datetime, status');
+        .select('id, animal_id, visit_datetime, status')
+        .eq('farm_id', selectedFarm.id);
 
       if (visitsError) throw visitsError;
 
       // Get all synchronization data for sync medication costs
-      const syncs = await fetchAllRows<any>('animal_synchronizations', 'id, animal_id, start_date');
+      const syncsRes = await supabase.from('animal_synchronizations').select('id, animal_id, start_date').eq('farm_id', selectedFarm.id);
+      const syncs = syncsRes.data || [];
 
       // Get completed synchronization steps with batch info
       const { data: syncSteps, error: syncStepsError } = await supabase
@@ -319,6 +340,7 @@ export function TreatmentCostAnalysis() {
           completed_at,
           batches(purchase_price, received_qty)
         `)
+        .eq('farm_id', selectedFarm.id)
         .eq('completed', true)
         .not('batch_id', 'is', null);
 
@@ -1162,14 +1184,6 @@ export function TreatmentCostAnalysis() {
                                   <Calendar className="w-7 h-7 text-blue-600" />
                                   Vizitai ({detailData.visits.length})
                                 </h4>
-                                <button
-                                  onClick={() => setMilkLossModalAnimal({ id: row.animal_id, tag: row.tag_no || '' })}
-                                  className="flex items-center gap-2 px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white rounded-lg transition-colors shadow-md"
-                                  title="Pieno nuostoliai dėl karencijos"
-                                >
-                                  <Droplet className="w-5 h-5" />
-                                  <span className="text-sm font-medium">Pieno Nuostoliai</span>
-                                </button>
                               </div>
 
                               <div className="space-y-3">
@@ -1352,14 +1366,7 @@ export function TreatmentCostAnalysis() {
         </div>
       )}
 
-      {/* Milk Loss Modal */}
-      {milkLossModalAnimal && (
-        <TreatmentMilkLossAnalysis
-          animalId={milkLossModalAnimal.id}
-          animalTag={milkLossModalAnimal.tag}
-          onClose={() => setMilkLossModalAnimal(null)}
-        />
-      )}
+      {/* Milk Loss Modal removed - GEA integration no longer available */}
     </div>
   );
 }

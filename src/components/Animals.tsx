@@ -2,7 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Animal, Product, Disease } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
-import { fetchAllRows, formatAnimalDisplay, fetchLatestCollarNumbers } from '../lib/helpers';
+import { useFarm } from '../contexts/FarmContext';
+import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
 import { Plus, Edit2, Save, X, Stethoscope, Search, Syringe, Activity, FileText, Calendar, AlertCircle, User, MapPin, RefreshCw, ExternalLink } from 'lucide-react';
 
 interface AnimalDetail extends Animal {
@@ -14,6 +15,7 @@ interface AnimalDetail extends Animal {
 
 export function Animals() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [selectedAnimal, setSelectedAnimal] = useState<AnimalDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -39,29 +41,25 @@ export function Animals() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   const loadData = async () => {
     try {
-      const [allAnimals, productsRes, diseasesRes, collarMap] = await Promise.all([
-        fetchAllRows<Animal>('animals', '*', 'tag_no'),
-        supabase.from('products').select('*').eq('is_active', true),
-        supabase.from('diseases').select('*'),
-        fetchLatestCollarNumbers(),
+      if (!selectedFarm) {
+        setAnimals([]);
+        setProducts([]);
+        setDiseases([]);
+        setLoading(false);
+        return;
+      }
+
+      const [animalsRes, productsRes, diseasesRes] = await Promise.all([
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
+        supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id),
       ]);
 
-      // Enrich animals with collar numbers from optimized view
-      // Neck number is the same as collar number
-      const enrichedAnimals = allAnimals.map((animal: Animal) => {
-        const collarNo = collarMap.get(animal.id) || null;
-        return {
-          ...animal,
-          collar_no: collarNo?.toString() || null,
-          neck_no: collarNo?.toString() || null,
-        };
-      });
-
-      setAnimals(enrichedAnimals);
+      setAnimals(animalsRes.data || []);
       setProducts(productsRes.data || []);
       setDiseases(diseasesRes.data || []);
     } catch (error) {
@@ -151,7 +149,13 @@ export function Animals() {
 
   const handleSave = async () => {
     try {
+      if (!selectedFarm) {
+        alert('Pasirinkite ūkį prieš kurdami gyvūną');
+        return;
+      }
+
       const animalData = {
+        farm_id: selectedFarm.id,
         tag_no: formData.tag_no || null,
         species: formData.species,
         sex: formData.sex || null,

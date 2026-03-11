@@ -5,6 +5,7 @@ import { Animal, Product, Batch, Disease, Unit } from '../lib/types';
 import { Syringe, Plus, Save, X, AlertTriangle, Calendar } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { SearchableSelect } from './SearchableSelect';
 import { showNotification } from './NotificationToast';
@@ -31,6 +32,7 @@ interface UsageLine {
 
 export function TreatmentCompact() {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [diseases, setDiseases] = useState<Disease[]>([]);
@@ -50,11 +52,13 @@ export function TreatmentCompact() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   // Real-time subscriptions
   useRealtimeSubscription({
     table: 'batches',
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    enabled: !!selectedFarm,
     onInsert: useCallback((payload) => {
       setBatches(prev => [...prev, payload.new as Batch].sort((a, b) => {
         const dateA = a.expiry_date ? new Date(a.expiry_date).getTime() : Infinity;
@@ -91,14 +95,16 @@ export function TreatmentCompact() {
 
   const loadData = async () => {
     try {
-      const [animalsData, productsRes, diseasesRes, batchesRes] = await Promise.all([
-        fetchAllRows<Animal>('animals', '*', 'tag_no'),
-        supabase.from('products').select('*').eq('is_active', true).order('name'),
-        supabase.from('diseases').select('*').order('name'),
-        supabase.from('batches').select('*').order('expiry_date'),
+      if (!selectedFarm) return;
+
+      const [animalsRes, productsRes, diseasesRes, batchesRes] = await Promise.all([
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+        supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id).order('name'),
+        supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date'),
       ]);
 
-      setAnimals(animalsData || []);
+      setAnimals(animalsRes.data || []);
       setProducts(productsRes.data || []);
       setDiseases(diseasesRes.data || []);
       setBatches(batchesRes.data || []);
@@ -253,10 +259,16 @@ export function TreatmentCompact() {
       return;
     }
 
+    if (!selectedFarm) {
+      showNotification('Pasirinkite ūkį', 'error');
+      return;
+    }
+
     try {
       const { data: treatment, error: treatmentError } = await supabase
         .from('treatments')
         .insert({
+          farm_id: selectedFarm.id,
           animal_id: animalId,
           disease_id: diseaseId || null,
           reg_date: regDate,
@@ -311,6 +323,7 @@ export function TreatmentCompact() {
           const { data: course, error: courseError } = await supabase
             .from('treatment_courses')
             .insert({
+              farm_id: selectedFarm.id,
               treatment_id: treatment.id,
               product_id: line.product_id,
               batch_id: line.batch_id || null,
@@ -328,6 +341,7 @@ export function TreatmentCompact() {
           const { error: usageError } = await supabase
             .from('usage_items')
             .insert({
+              farm_id: selectedFarm.id,
               treatment_id: treatment.id,
               product_id: line.product_id,
               batch_id: line.batch_id,

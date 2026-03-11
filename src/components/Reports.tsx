@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/helpers';
+import { useFarm } from '../contexts/FarmContext';
 import {
   FileText,
   Download,
@@ -62,6 +63,7 @@ const getCurrentMonthDates = () => {
 };
 
 export function Reports() {
+  const { selectedFarm } = useFarm();
   const currentMonth = getCurrentMonthDates();
 
   const [reportType, setReportType] = useState<ReportType>('analytics');
@@ -84,32 +86,35 @@ export function Reports() {
   const [diseases, setDiseases] = useState<any[]>([]);
 
   useEffect(() => {
-    loadFilterOptions();
-    if (reportType === 'analytics') {
-      loadAnalytics();
-    } else if (reportType !== 'treated_animals') {
-      // For other reports, load immediately
-      loadReport();
+    if (selectedFarm) {
+      loadFilterOptions();
+      if (reportType === 'analytics') {
+        loadAnalytics();
+      } else if (reportType !== 'treated_animals') {
+        loadReport();
+      }
     }
     // For treated_animals, wait for date filters to be set (handled in separate useEffect)
-  }, [reportType]);
+  }, [reportType, selectedFarm]);
 
   // Auto-load treated_animals report with current month filters
   useEffect(() => {
-    if (reportType === 'treated_animals' && dateFrom && dateTo) {
+    if (reportType === 'treated_animals' && dateFrom && dateTo && selectedFarm) {
       loadReport();
     }
-  }, [reportType, dateFrom, dateTo]);
+  }, [reportType, dateFrom, dateTo, selectedFarm]);
 
   const loadFilterOptions = async () => {
     try {
+      if (!selectedFarm) return;
+
       const [animalsRes, productsRes, diseasesRes] = await Promise.all([
-        fetchAllRows('animals', 'id, tag_no, species', 'tag_no'),
-        supabase.from('products').select('id, name').eq('is_active', true).order('name'),
-        supabase.from('diseases').select('id, name').order('name'),
+        supabase.from('animals').select('id, tag_no, species').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('products').select('id, name').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+        supabase.from('diseases').select('id, name').eq('farm_id', selectedFarm.id).order('name'),
       ]);
 
-      if (animalsRes) setAnimals(animalsRes);
+      if (animalsRes.data) setAnimals(animalsRes.data);
       if (productsRes.data) setProducts(productsRes.data);
       if (diseasesRes.data) setDiseases(diseasesRes.data);
     } catch (error) {
@@ -124,6 +129,8 @@ export function Reports() {
       const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
       const sixMonthsAgo = new Date(Date.now() - 180 * 24 * 60 * 60 * 1000).toISOString().split('T')[0];
 
+      if (!selectedFarm) return;
+
       const [
         animalsRes,
         treatmentsRes,
@@ -134,17 +141,17 @@ export function Reports() {
         usageRes,
         withdrawalRes,
       ] = await Promise.all([
-        fetchAllRows('animals', 'id, active'),
-        supabase.from('treatments').select('id, reg_date, outcome, disease_id').gte('reg_date', sixMonthsAgo),
-        supabase.from('vaccinations').select('id, vaccination_date').gte('vaccination_date', sixMonthsAgo),
-        supabase.from('products').select('id, name, category, is_active'),
-        supabase.from('batches').select('id, product_id, expiry_date, received_qty, purchase_price'),
-        supabase.from('diseases').select('id, name'),
-        supabase.from('usage_items').select('product_id, qty, treatment_id, batch_id'),
-        supabase.from('treatments').select('withdrawal_until_meat, withdrawal_until_milk').or(`withdrawal_until_meat.gte.${today},withdrawal_until_milk.gte.${today}`),
+        supabase.from('animals').select('id, active').eq('farm_id', selectedFarm.id),
+        supabase.from('treatments').select('id, reg_date, outcome, disease_id').eq('farm_id', selectedFarm.id).gte('reg_date', sixMonthsAgo),
+        supabase.from('vaccinations').select('id, vaccination_date').eq('farm_id', selectedFarm.id).gte('vaccination_date', sixMonthsAgo),
+        supabase.from('products').select('id, name, category, is_active').eq('farm_id', selectedFarm.id),
+        supabase.from('batches').select('id, product_id, expiry_date, received_qty, purchase_price').eq('farm_id', selectedFarm.id),
+        supabase.from('diseases').select('id, name').eq('farm_id', selectedFarm.id),
+        supabase.from('usage_items').select('product_id, qty, treatment_id, batch_id').eq('farm_id', selectedFarm.id),
+        supabase.from('treatments').select('withdrawal_until_meat, withdrawal_until_milk').eq('farm_id', selectedFarm.id).or(`withdrawal_until_meat.gte.${today},withdrawal_until_milk.gte.${today}`),
       ]);
 
-      const animals = animalsRes || [];
+      const animals = animalsRes.data || [];
       const treatments = treatmentsRes.data || [];
       const vaccinations = vaccinationsRes.data || [];
       const products = productsRes.data || [];
@@ -313,7 +320,9 @@ export function Reports() {
 
       switch (reportType) {
         case 'drug_journal': {
-          let query = supabase.from('vw_vet_drug_journal').select('*');
+          if (!selectedFarm) return;
+          
+          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('receipt_date', dateFrom);
           if (dateTo) query = query.lte('receipt_date', dateTo);
           if (filterProduct) query = query.eq('product_id', filterProduct);
@@ -333,9 +342,13 @@ export function Reports() {
         }
 
         case 'treated_animals': {
-          // Build filters array for fetchAllRows
-          const filters: { column: string; value: any; operator?: string }[] = [];
+          if (!selectedFarm) return;
           
+          // Build filters array for fetchAllRows
+          const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'farm_id', value: selectedFarm.id }
+          ];
+
           if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
           if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
           if (filterAnimal) filters.push({ column: 'animal_id', value: filterAnimal });
@@ -367,7 +380,9 @@ export function Reports() {
 
 
         case 'biocide_journal': {
-          let query = supabase.from('vw_biocide_journal').select('*');
+          if (!selectedFarm) return;
+          
+          let query = supabase.from('vw_biocide_journal').select('*').eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('use_date', dateFrom);
           if (dateTo) query = query.lte('use_date', dateTo);
           if (filterProduct) query = query.eq('product_id', filterProduct);
@@ -384,6 +399,8 @@ export function Reports() {
         }
 
         case 'insemination_journal': {
+          if (!selectedFarm) return;
+          
           let query = supabase
             .from('insemination_records')
             .select(`
@@ -392,6 +409,7 @@ export function Reports() {
               sperm_product:insemination_products!insemination_records_sperm_product_id_fkey(name, unit),
               glove_product:insemination_products!insemination_records_glove_product_id_fkey(name, unit)
             `)
+            .eq('farm_id', selectedFarm.id)
             .order('insemination_date', { ascending: false });
 
           if (dateFrom) query = query.gte('insemination_date', dateFrom);
@@ -406,7 +424,9 @@ export function Reports() {
         }
 
         case 'medical_waste': {
-          let query = supabase.from('vw_medical_waste').select('*');
+          if (!selectedFarm) return;
+          
+          let query = supabase.from('vw_medical_waste').select('*').eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('record_date', dateFrom);
           if (dateTo) query = query.lte('record_date', dateTo);
 

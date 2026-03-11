@@ -31,24 +31,15 @@ export function AuthForm() {
         <div className="bg-white rounded-2xl shadow-2xl overflow-hidden">
           <div className="bg-gradient-to-r from-emerald-600 to-teal-600 px-8 py-10 text-center">
             <div className="flex items-center justify-center mb-4">
-              <img
-                src="https://rekvizitai.vz.lt/logos/berciunai-16440-447.jpg"
-                alt="ŽŪB Berčiunai"
-                className="w-20 h-20 rounded-xl bg-white p-2 shadow-lg object-contain"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const fallback = document.createElement('div');
-                  fallback.className = 'w-20 h-20 rounded-xl bg-white p-4 shadow-lg flex items-center justify-center';
-                  fallback.innerHTML = '<svg class="w-12 h-12 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>';
-                  e.currentTarget.parentNode?.appendChild(fallback);
-                }}
-              />
+              <div className="w-20 h-20 rounded-xl bg-white p-4 shadow-lg flex items-center justify-center">
+                <Stethoscope className="w-12 h-12 text-emerald-600" />
+              </div>
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">
-              ŽŪB Berčiunai
+              GRATO TESTAS
             </h1>
             <p className="text-emerald-50">
-              VetStock Valdymo Sistema
+              Veterinarijos Valdymo Sistema
             </p>
           </div>
 

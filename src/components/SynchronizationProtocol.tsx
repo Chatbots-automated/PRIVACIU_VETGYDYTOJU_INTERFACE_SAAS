@@ -34,14 +34,14 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
   const [todayStepData, setTodayStepData] = useState<{[key: number]: {batchId: string, dosage: string, unit: string}}>({});
   const [globalDosage, setGlobalDosage] = useState<string>('');
   const [globalUnit, setGlobalUnit] = useState<string>('ml');
-  const [geaStatus, setGeaStatus] = useState<string | null>(null);
+  // GEA status removed - no longer tracking pregnancy status from GEA system
 
   useEffect(() => {
     loadProtocols();
     loadActiveSync();
     loadProducts();
     loadBatches();
-    loadGeaStatus();
+    // GEA status loading removed
   }, [animalId]);
 
   // Set default dosages for G7G and GGPG protocols
@@ -151,35 +151,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
     }
   };
 
-  const loadGeaStatus = async () => {
-    // Get animal's tag number first
-    const { data: animalData } = await supabase
-      .from('animals')
-      .select('tag_no')
-      .eq('id', animalId)
-      .single();
-
-    if (!animalData?.tag_no) {
-      console.log('🔍 No tag_no for animal:', animalId);
-      return;
-    }
-
-    // Query new GEA system using ear_number (tag_no)
-    const { data } = await supabase
-      .from('gea_daily_cows_joined')
-      .select('cow_state')
-      .eq('ear_number', animalData.tag_no)
-      .order('import_created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-
-    if (data) {
-      console.log('🔍 GEA status for', animalData.tag_no, ':', data.cow_state);
-      setGeaStatus(data.cow_state);
-    } else {
-      console.log('🔍 No GEA data for', animalData.tag_no);
-    }
-  };
+  // GEA status loading function removed - no longer checking pregnancy status from GEA
 
   const handleCreateProtocol = async () => {
     if (!selectedProtocolId) {
@@ -187,10 +159,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
       return;
     }
 
-    if (geaStatus === 'APSĖK') {
-      alert('Negalima pradėti sinchronizacijos protokolo: gyvūnas jau apsėklintas (APSĖK statusas)');
-      return;
-    }
+    // Pregnancy check removed - no longer checking GEA status
 
     // Check if today's steps have required data
     const selectedProtocol = protocols.find(p => p.id === selectedProtocolId);
@@ -722,8 +691,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
             <div className="mt-4 pt-4 border-t border-gray-300">
               <button
                 onClick={async () => {
-                  // Reload GEA status to check if animal is still APSĖK
-                  await loadGeaStatus();
+                  // GEA status reload removed
                   setActiveSync(null);
                   setShowCreateForm(true);
                 }}
@@ -744,7 +712,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
     );
   }
 
-  const isApsek = geaStatus === 'APSĖK';
+  const isApsek = false; // GEA pregnancy check removed
 
   return (
     <div className="space-y-4">

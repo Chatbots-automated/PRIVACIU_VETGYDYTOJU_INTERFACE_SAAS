@@ -5,6 +5,7 @@ import { Product, Animal, Disease, StockByBatch, Unit } from '../lib/types';
 import { Syringe, Plus, Trash2, Check, Search } from 'lucide-react';
 import { formatDateLT, getDaysUntil } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 
 interface UsageLine {
   id: string;
@@ -17,6 +18,7 @@ interface UsageLine {
 
 export function Treatment() {
   const { user, logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [diseases, setDiseases] = useState<Disease[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -49,20 +51,22 @@ export function Treatment() {
 
   useEffect(() => {
     loadData();
-  }, []);
+  }, [selectedFarm]);
 
   const loadData = async () => {
+    if (!selectedFarm) return;
+
     const [animalsRes, diseasesRes, productsRes, batchesRes] = await Promise.all([
-      fetchAllRows('animals', '*', 'tag_no'),
-      supabase.from('diseases').select('*').order('name'),
-      supabase.from('products').select('*').eq('is_active', true),
+      supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+      supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id).order('name'),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
       supabase.from('stock_by_batch').select(`
         *,
         products!inner(name)
-      `).gt('on_hand', 0),
+      `).eq('farm_id', selectedFarm.id).gt('on_hand', 0),
     ]);
 
-    if (animalsRes) setAnimals(animalsRes);
+    if (animalsRes.data) setAnimals(animalsRes.data);
     if (diseasesRes.data) setDiseases(diseasesRes.data);
     if (productsRes.data) {
       const sortedProducts = sortByLithuanian(productsRes.data, 'name');
@@ -109,10 +113,18 @@ export function Treatment() {
       return;
     }
 
+    if (!selectedFarm || !selectedFarm.id) {
+      alert('Pasirinkite ūkį');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('diseases')
-        .insert({ name: newDiseaseName.trim() })
+        .insert({
+          farm_id: selectedFarm.id,
+          name: newDiseaseName.trim()
+        })
         .select()
         .single();
 
@@ -125,6 +137,7 @@ export function Treatment() {
 
       await logAction('create_disease', 'diseases', data.id, null, { name: data.name });
     } catch (error: any) {
+      console.error('Error creating disease:', error);
       alert('Klaida kuriant ligą: ' + error.message);
     }
   };
@@ -210,12 +223,18 @@ export function Treatment() {
       }
     }
 
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      return;
+    }
+
     console.log('✅ Validation passed, inserting treatment...');
     alert('DEBUG: Validation passed, creating treatment in database...');
     try {
       const { data: treatment, error: treatmentError } = await supabase
         .from('treatments')
         .insert({
+          farm_id: selectedFarm.id,
           reg_date: formData.reg_date,
           animal_id: formData.animal_id || null,
           disease_id: formData.disease_id || null,
@@ -226,6 +245,7 @@ export function Treatment() {
           services: formData.services || null,
           outcome: formData.outcome || null,
           vet_name: formData.vet_name || null,
+          created_by_user_id: user?.id || null,
           notes: formData.notes || null,
           withdrawal_until: formData.withdrawal_until || null,
         })

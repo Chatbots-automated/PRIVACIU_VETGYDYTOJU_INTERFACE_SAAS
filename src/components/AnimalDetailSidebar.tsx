@@ -5,6 +5,7 @@ import { X, Calendar, Thermometer, Pill, Syringe, FileText, Plus, CheckCircle, C
 import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
+import { useFarm } from '../contexts/FarmContext';
 import { AnimalAnalytics } from './AnimalAnalytics';
 import { TeatStatusCard } from './TeatStatusCard';
 import { TeatDisplay, TeatSelector } from './TeatSelector';
@@ -41,45 +42,7 @@ interface WithdrawalStatus {
   meat_until: string | null;
 }
 
-interface GeaDaily {
-  id: number;
-  animal_id: string;
-  tag_no: string;
-  collar_no: number | null;
-  statusas: string | null;
-  grupe: number | null;
-  veisline_verte: string | null;
-  milk_avg: number | null;
-  m1_date: string | null;
-  m1_time: string | null;
-  m1_qty: number | null;
-  m2_date: string | null;
-  m2_time: string | null;
-  m2_qty: number | null;
-  m3_date: string | null;
-  m3_time: string | null;
-  m3_qty: number | null;
-  m4_date: string | null;
-  m4_time: string | null;
-  m4_qty: number | null;
-  m5_date: string | null;
-  m5_time: string | null;
-  m5_qty: number | null;
-  in_milk: boolean | null;
-  calved_on: string | null;
-  lact_days: number | null;
-  inseminated_on: string | null;
-  kada_versiuosis: string | null;
-  snapshot_date: string;
-  source: string;
-  created_at: string;
-}
-
-// New GEA system structure (for reference, transformed to GeaDaily format)
-// Data comes from gea_daily_cows_joined view which joins:
-// - gea_daily_ataskaita1 (pregnancy/lactation)
-// - gea_daily_ataskaita2 (milking data with JSONB array)
-// - gea_daily_ataskaita3 (teat/insemination data)
+// GEA-related interfaces and components removed - no longer tracking milk production data
 
 function WithdrawalStatusCard({ animalId }: { animalId: string }) {
   const [withdrawalStatus, setWithdrawalStatus] = useState<WithdrawalStatus | null>(null);
@@ -148,563 +111,7 @@ function WithdrawalStatusCard({ animalId }: { animalId: string }) {
   );
 }
 
-function GeaDailyCard({ animalId, onStatusChange }: { animalId: string; onStatusChange?: () => void }) {
-  const [geaData, setGeaData] = useState<GeaDaily | null>(null);
-  const [rawGeaData, setRawGeaData] = useState<any>(null); // Store raw new GEA data for full display
-  const [loading, setLoading] = useState(true);
-  const [prevStatus, setPrevStatus] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadGeaData();
-
-    // Subscribe to new GEA imports for realtime updates
-    const channel = supabase
-      .channel(`gea_daily_imports`)
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'gea_daily_imports',
-        },
-        () => {
-          // Reload when new GEA import happens
-          console.log('🔄 New GEA import detected, reloading data...');
-          loadGeaData();
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [animalId]);
-
-  const loadGeaData = async () => {
-    try {
-      // First, try to get the animal's tag number
-      const { data: animalData } = await supabase
-        .from('animals')
-        .select('tag_no')
-        .eq('id', animalId)
-        .single();
-
-      console.log('🔍 Animal data:', { animalId, tag_no: animalData?.tag_no });
-
-      if (!animalData?.tag_no) {
-        console.log('❌ No tag_no found for animal');
-        setLoading(false);
-        return;
-      }
-
-      // Try new GEA system first (gea_daily_cows_joined view)
-      // NOTE: cow_number is the collar number, ear_number is the tag_no!
-      console.log('🔍 Querying gea_daily_cows_joined for ear_number:', animalData.tag_no);
-      const { data: newGeaData, error: newGeaError } = await supabase
-        .from('gea_daily_cows_joined')
-        .select('*')
-        .eq('ear_number', animalData.tag_no)
-        .order('import_created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      console.log('🔍 Query result:', { newGeaData, newGeaError });
-
-      if (newGeaData && !newGeaError) {
-        console.log('✅ New GEA data found:', newGeaData);
-        // Store raw data for full display
-        setRawGeaData(newGeaData);
-        
-        // Transform new GEA data to old format for backwards compatibility
-        const transformedData: GeaDaily = {
-          id: 0, // Not used in new system
-          animal_id: animalId,
-          tag_no: animalData.tag_no,
-          collar_no: null, // Not in new system
-          statusas: newGeaData.cow_state,
-          grupe: newGeaData.group_number ? parseInt(newGeaData.group_number) : null,
-          veisline_verte: newGeaData.genetic_worth,
-          milk_avg: newGeaData.avg_milk_prod_weight,
-          // Map milkings array to individual columns
-          m1_date: newGeaData.milkings?.[0]?.date || null,
-          m1_time: newGeaData.milkings?.[0]?.time || null,
-          m1_qty: newGeaData.milkings?.[0]?.weight || null,
-          m2_date: newGeaData.milkings?.[1]?.date || null,
-          m2_time: newGeaData.milkings?.[1]?.time || null,
-          m2_qty: newGeaData.milkings?.[1]?.weight || null,
-          m3_date: newGeaData.milkings?.[2]?.date || null,
-          m3_time: newGeaData.milkings?.[2]?.time || null,
-          m3_qty: newGeaData.milkings?.[2]?.weight || null,
-          m4_date: newGeaData.milkings?.[3]?.date || null,
-          m4_time: newGeaData.milkings?.[3]?.time || null,
-          m4_qty: newGeaData.milkings?.[3]?.weight || null,
-          m5_date: newGeaData.milkings?.[4]?.date || null,
-          m5_time: newGeaData.milkings?.[4]?.time || null,
-          m5_qty: newGeaData.milkings?.[4]?.weight || null,
-          in_milk: newGeaData.produce_milk,
-          calved_on: null, // Calculate from lactation_days if needed
-          lact_days: newGeaData.lactation_days,
-          inseminated_on: newGeaData.inseminated_at,
-          kada_versiuosis: newGeaData.next_pregnancy_date,
-          snapshot_date: newGeaData.import_created_at,
-          source: 'gea_daily_new',
-          created_at: newGeaData.import_created_at,
-        };
-
-        setGeaData(transformedData);
-        setPrevStatus(transformedData.statusas);
-        setLoading(false);
-        return;
-      }
-
-      // Fallback to old gea_daily table (if it still exists)
-      console.log('⚠️ No new GEA data, trying old gea_daily table');
-      const { data: oldGeaData, error: oldGeaError } = await supabase
-        .from('gea_daily')
-        .select('*')
-        .eq('animal_id', animalId)
-        .order('snapshot_date', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-
-      if (oldGeaError) {
-        // Old table might not exist anymore - that's okay
-        console.log('⚠️ Old gea_daily table not found or error:', oldGeaError.message);
-        setLoading(false);
-        return;
-      }
-      
-      console.log('Old GEA data:', oldGeaData);
-      setGeaData(oldGeaData);
-      setPrevStatus(oldGeaData?.statusas || null);
-    } catch (error) {
-      console.error('Error loading GEA data:', error);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="bg-gradient-to-br from-purple-50 to-pink-50 border-2 border-purple-200 rounded-xl p-5 shadow-sm">
-        <p className="text-sm text-gray-500">Kraunama...</p>
-      </div>
-    );
-  }
-
-  if (!geaData) {
-    return null;
-  }
-
-  const milkings = [
-    { date: geaData.m1_date, time: geaData.m1_time, qty: geaData.m1_qty },
-    { date: geaData.m2_date, time: geaData.m2_time, qty: geaData.m2_qty },
-    { date: geaData.m3_date, time: geaData.m3_time, qty: geaData.m3_qty },
-    { date: geaData.m4_date, time: geaData.m4_time, qty: geaData.m4_qty },
-    { date: geaData.m5_date, time: geaData.m5_time, qty: geaData.m5_qty },
-  ].filter(m => m.qty !== null);
-
-  // Calculate days until calving (expected calving date is insemination date + 283 days)
-  const daysUntilCalving = geaData.inseminated_on ? (() => {
-    const inseminationDate = new Date(geaData.inseminated_on);
-    const expectedCalvingDate = new Date(inseminationDate);
-    expectedCalvingDate.setDate(expectedCalvingDate.getDate() + 283);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    expectedCalvingDate.setHours(0, 0, 0, 0);
-    const diffTime = expectedCalvingDate.getTime() - today.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  })() : null;
-
-  // Calculate pregnancy days (days since insemination)
-  const pregnancyDays = geaData.inseminated_on ? (() => {
-    const inseminationDate = new Date(geaData.inseminated_on);
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    inseminationDate.setHours(0, 0, 0, 0);
-    const diffTime = today.getTime() - inseminationDate.getTime();
-    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-    return diffDays;
-  })() : null;
-
-  const isApsek = geaData.statusas === 'APSĖK';
-  const isNewSystem = rawGeaData !== null;
-
-  // If using new system, show comprehensive 3-section view
-  if (isNewSystem && rawGeaData) {
-    const allMilkings = rawGeaData.milkings || [];
-    
-    return (
-      <div className={`bg-gradient-to-br ${isApsek ? 'from-green-50 to-emerald-50 border-green-300' : 'from-blue-50 to-indigo-50 border-blue-200'} border-2 rounded-xl shadow-lg overflow-hidden`}>
-        {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 p-4">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Milk className="w-6 h-6 text-white" />
-              <div>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <h3 className="font-bold text-white text-lg">GEA Duomenys</h3>
-                  {rawGeaData.ear_number && (
-                    <span className="bg-white/20 text-white text-sm font-bold px-2 py-0.5 rounded">
-                      Ausies Nr: {rawGeaData.ear_number}
-                    </span>
-                  )}
-                </div>
-                <p className="text-blue-100 text-xs">Importuota: {formatDateLT(rawGeaData.import_created_at)}</p>
-              </div>
-            </div>
-            {isApsek && (
-              <span className="px-3 py-1 bg-green-500 text-white text-xs font-bold rounded-full flex items-center gap-1">
-                <CheckCircle className="w-4 h-4" />
-                APSĖKLINTAS
-              </span>
-            )}
-          </div>
-        </div>
-
-        {isApsek && (
-          <div className="bg-green-100 border-b-2 border-green-400 p-3">
-            <div className="flex items-start gap-2">
-              <AlertCircle className="w-5 h-5 text-green-700 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-green-800">
-                <p className="font-semibold mb-1">Gyvūnas apsėklintas</p>
-                <p className="text-xs">Visi aktyvūs sinchronizacijos protokolai automatiškai atšaukiami</p>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* All Sections - Scrollable */}
-        <div className="p-4 space-y-4 max-h-[600px] overflow-y-auto">
-          {/* 1-oji Ataskaita - Pregnancy & Lactation */}
-          <div className="bg-blue-50 border-l-4 border-blue-600 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-blue-600 rounded-full p-1.5">
-                <Calendar className="w-4 h-4 text-white" />
-              </div>
-              <h4 className="font-bold text-blue-900 text-sm">1-oji Ataskaita: Veršingumas ir Laktacija</h4>
-            </div>
-            <div className="grid grid-cols-2 gap-2">
-              {/* Left Column */}
-              <div className="space-y-2">
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Kaklo Nr.</span>
-                  <span className="font-semibold text-gray-900 text-sm">{rawGeaData.cow_number || '-'}</span>
-                </div>
-                <div className={`bg-white rounded-lg p-2 border ${isApsek ? 'border-green-400 bg-green-50' : 'border-blue-100'}`}>
-                  <span className="text-xs text-gray-500 block mb-0.5">Statusas</span>
-                  <span className={`font-bold text-base ${isApsek ? 'text-green-700' : 'text-gray-900'}`}>
-                    {rawGeaData.cow_state || '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Apsiveršiavo</span>
-                  <span className="font-semibold text-gray-900 text-xs">
-                    {rawGeaData.pregnant_since ? formatDateLT(rawGeaData.pregnant_since) : '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Apsėklinta</span>
-                  <span className="font-semibold text-gray-900 text-xs">
-                    {rawGeaData.inseminated_at ? formatDateLT(rawGeaData.inseminated_at) : '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Veršiuosis</span>
-                  <span className="font-semibold text-gray-900 text-xs">
-                    {rawGeaData.next_pregnancy_date ? formatDateLT(rawGeaData.next_pregnancy_date) : '-'}
-                  </span>
-                </div>
-              </div>
-
-              {/* Right Column */}
-              <div className="space-y-2">
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Laktacijos Nr.</span>
-                  <span className="font-bold text-blue-600 text-base">
-                    {rawGeaData.lactation_number !== null ? rawGeaData.lactation_number : '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Grupė</span>
-                  <span className="font-bold text-gray-900 text-base">{rawGeaData.group_number || '-'}</span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Laktacijos dienos</span>
-                  <span className="font-bold text-blue-600 text-base">
-                    {rawGeaData.lactation_days !== null ? rawGeaData.lactation_days : '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Veršingumo dienos</span>
-                  <span className="font-bold text-blue-600 text-base">
-                    {rawGeaData.pregnant_days !== null ? `${rawGeaData.pregnant_days} d.` : '-'}
-                  </span>
-                </div>
-                <div className="bg-white rounded-lg p-2 border border-blue-100">
-                  <span className="text-xs text-gray-500 block mb-0.5">Liko dienų iki veršiavimosi</span>
-                  <span className="font-bold text-orange-600 text-base">
-                    {rawGeaData.days_until_waiting_pregnancy !== null 
-                      ? `${rawGeaData.days_until_waiting_pregnancy} d.` 
-                      : '-'}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          {/* 2-oji Ataskaita - Milking Data */}
-          <div className="bg-purple-50 border-l-4 border-purple-600 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-purple-600 rounded-full p-1.5">
-                <Milk className="w-4 h-4 text-white" />
-              </div>
-              <h4 className="font-bold text-purple-900 text-sm">2-oji Ataskaita: Melžimas</h4>
-            </div>
-            <div className="space-y-2">
-                <div className="grid grid-cols-2 gap-2">
-                  <div className="bg-white rounded-lg p-2 border border-purple-100">
-                    <span className="text-xs text-gray-500 block mb-0.5">Genetinė vertė</span>
-                    <span className="font-semibold text-gray-900 text-sm">{rawGeaData.genetic_worth || '-'}</span>
-                  </div>
-                  <div className="bg-white rounded-lg p-2 border border-purple-100">
-                    <span className="text-xs text-gray-500 block mb-0.5">Kraujo linija</span>
-                    <span className="font-semibold text-gray-900 text-sm">{rawGeaData.blood_line || '-'}</span>
-                  </div>
-                  <div className="bg-white rounded-lg p-2 border border-purple-100">
-                    <span className="text-xs text-gray-500 block mb-0.5">Gamina pieną</span>
-                    <span className="font-bold text-gray-900 text-base">
-                      {rawGeaData.produce_milk ? 'Taip' : 'Ne'}
-                    </span>
-                  </div>
-                  <div className="bg-white rounded-lg p-2 border border-purple-100">
-                    <span className="text-xs text-gray-500 block mb-0.5">Paskutinis melžimas</span>
-                    <span className="font-semibold text-gray-900 text-xs">
-                      {rawGeaData.last_milking_date ? formatDateLT(rawGeaData.last_milking_date) : '-'}
-                      {rawGeaData.last_milking_time && ` ${rawGeaData.last_milking_time.substring(0, 5)}`}
-                    </span>
-                  </div>
-                  <div className="bg-white rounded-lg p-2 border border-purple-100 col-span-2">
-                    <span className="text-xs text-gray-500 block mb-0.5">Paskutinio melžimo kiekis</span>
-                    <span className="font-bold text-purple-600 text-base">
-                      {rawGeaData.last_milking_weight ? `${rawGeaData.last_milking_weight.toFixed(2)} kg` : '-'}
-                    </span>
-                  </div>
-                </div>
-
-                {/* Milkings Array - Compact */}
-                {allMilkings.length > 0 && (
-                  <div className="bg-white rounded-lg p-2 border border-purple-100">
-                    <div className="flex items-center gap-2 mb-2">
-                      <Activity className="w-3 h-3 text-purple-600" />
-                      <span className="text-xs font-semibold text-gray-700">Visi melžimai ({allMilkings.length})</span>
-                    </div>
-                    <div className="space-y-1 max-h-48 overflow-y-auto">
-                      {allMilkings.map((m: any, idx: number) => (
-                        <div key={idx} className="flex items-center justify-between p-1.5 bg-purple-50 rounded text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-purple-600 bg-purple-200 px-1.5 py-0.5 rounded">
-                              #{m.idx}
-                            </span>
-                            <span className="text-gray-700">
-                              {m.date ? formatDateLT(m.date) : '-'} 
-                              {m.time && <span className="text-gray-500 ml-1">{m.time.substring(0, 5)}</span>}
-                            </span>
-                          </div>
-                          <span className="font-bold text-purple-600">
-                            {m.weight ? `${m.weight.toFixed(1)} kg` : '-'}
-                          </span>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                )}
-            </div>
-          </div>
-
-          {/* 3-oji Ataskaita - Teat & Insemination */}
-          <div className="bg-orange-50 border-l-4 border-orange-600 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-3">
-              <div className="bg-orange-600 rounded-full p-1.5">
-                <AlertCircle className="w-4 h-4 text-white" />
-              </div>
-              <h4 className="font-bold text-orange-900 text-sm">3-oji Ataskaita: Speniai ir Veisimas</h4>
-            </div>
-            <div className="space-y-2">
-                
-                {/* Teat Status - Compact */}
-                <div className="bg-white rounded-lg p-2 border border-orange-100">
-                  <h5 className="text-xs font-semibold text-gray-700 mb-2">Spenių Būklė</h5>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className={`p-2 rounded-lg border ${rawGeaData.teat_missing_front_left ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
-                      <span className="text-xs text-gray-600 block mb-0.5">Priekinis kairysis</span>
-                      <span className={`font-bold text-sm ${rawGeaData.teat_missing_front_left ? 'text-red-700' : 'text-green-700'}`}>
-                        {rawGeaData.teat_missing_front_left ? 'Trūksta' : 'OK'}
-                      </span>
-                    </div>
-                    <div className={`p-2 rounded-lg border ${rawGeaData.teat_missing_front_right ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
-                      <span className="text-xs text-gray-600 block mb-0.5">Priekinis dešinysis</span>
-                      <span className={`font-bold text-sm ${rawGeaData.teat_missing_front_right ? 'text-red-700' : 'text-green-700'}`}>
-                        {rawGeaData.teat_missing_front_right ? 'Trūksta' : 'OK'}
-                      </span>
-                    </div>
-                    <div className={`p-2 rounded-lg border ${rawGeaData.teat_missing_back_left ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
-                      <span className="text-xs text-gray-600 block mb-0.5">Galinis kairysis</span>
-                      <span className={`font-bold text-sm ${rawGeaData.teat_missing_back_left ? 'text-red-700' : 'text-green-700'}`}>
-                        {rawGeaData.teat_missing_back_left ? 'Trūksta' : 'OK'}
-                      </span>
-                    </div>
-                    <div className={`p-2 rounded-lg border ${rawGeaData.teat_missing_right_back ? 'bg-red-50 border-red-300' : 'bg-green-50 border-green-300'}`}>
-                      <span className="text-xs text-gray-600 block mb-0.5">Galinis dešinysis</span>
-                      <span className={`font-bold text-sm ${rawGeaData.teat_missing_right_back ? 'text-red-700' : 'text-green-700'}`}>
-                        {rawGeaData.teat_missing_right_back ? 'Trūksta' : 'OK'}
-                      </span>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Insemination Data - Compact */}
-                <div className="bg-white rounded-lg p-2 border border-orange-100">
-                  <h5 className="text-xs font-semibold text-gray-700 mb-2">Veisimo Informacija</h5>
-                  <div className="grid grid-cols-2 gap-2">
-                    <div className="bg-orange-50 rounded-lg p-2">
-                      <span className="text-xs text-gray-600 block mb-0.5">Apsėklinimų sk.</span>
-                      <span className="font-bold text-orange-600 text-base">
-                        {rawGeaData.insemination_count !== null ? rawGeaData.insemination_count : '-'}
-                      </span>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-2">
-                      <span className="text-xs text-gray-600 block mb-0.5">Bulius #1</span>
-                      <span className="font-semibold text-gray-900 text-sm">{rawGeaData.bull_1 || '-'}</span>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-2">
-                      <span className="text-xs text-gray-600 block mb-0.5">Bulius #2</span>
-                      <span className="font-semibold text-gray-900 text-sm">{rawGeaData.bull_2 || '-'}</span>
-                    </div>
-                    <div className="bg-orange-50 rounded-lg p-2">
-                      <span className="text-xs text-gray-600 block mb-0.5">Bulius #3</span>
-                      <span className="font-semibold text-gray-900 text-sm">{rawGeaData.bull_3 || '-'}</span>
-                    </div>
-                  </div>
-                </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Fallback to old simple display for legacy gea_daily data
-  return (
-    <div className={`bg-gradient-to-br ${isApsek ? 'from-green-50 to-emerald-50 border-green-300' : 'from-purple-50 to-pink-50 border-purple-200'} border-2 rounded-xl p-5 shadow-sm`}>
-      <div className="flex items-center gap-2 mb-4">
-        <Milk className={`w-5 h-5 ${isApsek ? 'text-green-600' : 'text-purple-600'}`} />
-        <h3 className="font-bold text-gray-900 text-lg">GEA Duomenys (Legacy)</h3>
-        {isApsek && (
-          <span className="ml-2 px-2 py-1 bg-green-600 text-white text-xs font-bold rounded-full flex items-center gap-1">
-            <CheckCircle className="w-3 h-3" />
-            APSĖKLINTAS
-          </span>
-        )}
-        <span className="text-xs text-gray-500 ml-auto">
-          {formatDateLT(geaData.snapshot_date)}
-        </span>
-      </div>
-
-      {isApsek && (
-        <div className="bg-green-100 border-2 border-green-400 rounded-lg p-3 mb-4">
-          <div className="flex items-start gap-2">
-            <AlertCircle className="w-5 h-5 text-green-700 flex-shrink-0 mt-0.5" />
-            <div className="text-sm text-green-800">
-              <p className="font-semibold mb-1">Gyvūnas apsėklintas</p>
-              <p className="text-xs">Visi aktyvūs sinchronizacijos protokolai automatiškai atšaukiami</p>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3 mb-4">
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Duomenų data</span>
-          <span className="font-bold text-gray-900 text-sm">{formatDateLT(geaData.snapshot_date)}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Kaklo Nr.</span>
-          <span className="font-bold text-gray-900 text-lg">{geaData.collar_no || '-'}</span>
-        </div>
-        <div className={`bg-white rounded-lg p-3 border ${isApsek ? 'border-green-400 bg-green-50' : 'border-purple-100'}`}>
-          <span className="text-xs text-gray-500 block mb-1">Statusas</span>
-          <span className={`font-bold text-lg ${isApsek ? 'text-green-700' : 'text-gray-900'}`}>{geaData.statusas || '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Grupė</span>
-          <span className="font-bold text-gray-900 text-lg">{geaData.grupe || '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Veislinė vertė</span>
-          <span className="font-bold text-gray-900 text-lg">{geaData.veisline_verte || '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Pieno vidurkis</span>
-          <span className="font-bold text-purple-600 text-lg">{geaData.milk_avg ? `${geaData.milk_avg.toFixed(1)} L` : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Dalyvauja pieno gamyboje</span>
-          <span className="font-bold text-gray-900 text-lg">{geaData.in_milk ? 'Taip' : 'Ne'}</span>
-        </div>
-      </div>
-
-      {geaData.in_milk && (
-        <div className="bg-white rounded-lg p-3 border border-purple-100 mb-3">
-          <div className="flex items-center gap-2 mb-2">
-            <Activity className="w-4 h-4 text-purple-600" />
-            <span className="text-xs font-semibold text-gray-700">Melžimai</span>
-          </div>
-          <div className="space-y-1">
-            {milkings.map((m, idx) => (
-              <div key={idx} className="flex justify-between text-sm">
-                <span className="text-gray-600">
-                  {m.date && formatDateLT(m.date)} {m.time?.substring(0, 5)}
-                </span>
-                <span className="font-semibold text-purple-600">{m.qty?.toFixed(2)} L</span>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
-
-      <div className="grid grid-cols-2 gap-3">
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Apsiveršiavo</span>
-          <span className="font-semibold text-gray-900 text-sm">{geaData.calved_on ? formatDateLT(geaData.calved_on) : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Laktacijos dienos</span>
-          <span className="font-bold text-gray-900 text-lg">{geaData.lact_days !== null ? geaData.lact_days : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Apsėklinimo diena</span>
-          <span className="font-semibold text-gray-900 text-sm">{geaData.inseminated_on ? formatDateLT(geaData.inseminated_on) : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Veršingumas</span>
-          <span className="font-bold text-blue-600 text-lg">{pregnancyDays !== null ? `${pregnancyDays} d.` : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Kada veršiuosis</span>
-          <span className="font-semibold text-gray-900 text-sm">{geaData.kada_versiuosis ? formatDateLT(geaData.kada_versiuosis) : '-'}</span>
-        </div>
-        <div className="bg-white rounded-lg p-3 border border-purple-100">
-          <span className="text-xs text-gray-500 block mb-1">Liko iki apsiveršiavimo</span>
-          <span className={`font-bold text-lg ${daysUntilCalving !== null && daysUntilCalving < 30 ? 'text-orange-600' : 'text-gray-900'}`}>
-            {daysUntilCalving !== null ? `${daysUntilCalving} d.` : '-'}
-          </span>
-        </div>
-      </div>
-    </div>
-  );
-}
+// GeaDailyCard function completely removed (was 575 lines)
 
 interface TreatmentWithDetails extends Treatment {
   usage_items?: UsageItemWithProduct[];
@@ -724,7 +131,8 @@ interface AnimalDetailSidebarProps {
 type TabType = 'overview' | 'visits' | 'treatments' | 'vaccinations' | 'logs';
 
 export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }: AnimalDetailSidebarProps) {
-  const { logAction } = useAuth();
+  const { logAction, user } = useAuth();
+  const { selectedFarm } = useFarm();
   const [activeTab, setActiveTab] = useState<TabType>(defaultTab);
   const [visits, setVisits] = useState<AnimalVisit[]>([]);
   const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
@@ -1099,7 +507,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
 
             <TeatStatusCard key={`teat-${animal.id}-${treatments.length}`} animalId={animal.id} />
 
-            <GeaDailyCard animalId={animal.id} onStatusChange={handleApsekStatusChange} />
+            {/* GEA Daily Card removed - no longer tracking milk production data */}
 
             <div className="grid grid-cols-2 gap-4">
               <div className="bg-green-50 border border-green-200 rounded-lg p-4">
@@ -2251,7 +1659,8 @@ function VisitCard({ visit, getStatusColor, getStatusIcon, onClick }: { visit: A
 }
 
 function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { animalId: string; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit }) {
-  const { logAction } = useAuth();
+  const { logAction, user } = useAuth();
+  const { selectedFarm } = useFarm();
   const modalContentRef = useRef<HTMLDivElement>(null);
 
   // Refs for auto-scrolling to sections in modal
@@ -2381,7 +1790,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
     if (isEditMode && visitToEdit) {
       loadExistingData();
     }
-  }, []);
+  }, [selectedFarm]);
 
   const loadExistingData = async () => {
     if (!visitToEdit) return;
@@ -2637,10 +2046,12 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
   };
 
   const loadResources = async () => {
+    if (!selectedFarm) return;
+
     const [productsRes, diseasesRes, batchesRes, usersRes, hoofConditionsRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true),
-      supabase.from('diseases').select('*').order('name'),
-      supabase.from('batches').select('*').order('expiry_date'),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
+      supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id).order('name'),
+      supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date'),
       supabase.from('users').select('id, full_name, email').eq('role', 'vet').order('full_name'),
       supabase.from('hoof_condition_codes').select('*').order('code'),
     ]);
@@ -2658,10 +2069,18 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
       return;
     }
 
+    if (!selectedFarm || !selectedFarm.id) {
+      showNotification('Pasirinkite ūkį', 'error');
+      return;
+    }
+
     try {
       const { data, error } = await supabase
         .from('diseases')
-        .insert({ name: newDiseaseName.trim() })
+        .insert({ 
+          farm_id: selectedFarm.id,
+          name: newDiseaseName.trim() 
+        })
         .select()
         .single();
 
@@ -2675,6 +2094,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
       await logAction('create_disease', 'diseases', data.id, null, { name: data.name });
       showNotification('Liga sėkmingai sukurta', 'success');
     } catch (error: any) {
+      console.error('Error creating disease:', error);
       showNotification('Klaida kuriant ligą: ' + error.message, 'error');
     }
   };
@@ -2933,6 +2353,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data, error: visitError } = await supabase
             .from('animal_visits')
             .insert({
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_datetime: formData.visit_datetime,
               procedures: formData.procedures,
@@ -2941,6 +2362,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               status: formData.status,
               notes: formData.notes ? formData.notes : null,
               vet_name: formData.vet_name ? formData.vet_name : null,
+              created_by_user_id: user?.id || null,
               next_visit_required: formData.next_visit_required,
               next_visit_date: formData.next_visit_required ? formData.next_visit_date : null,
               treatment_required: formData.procedures.includes('Gydymas'),
@@ -3004,6 +2426,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { data, error: treatmentError } = await supabase
               .from('treatments')
               .insert({
+                farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_id: visitData.id,
                 reg_date: formData.visit_datetime.split('T')[0],
@@ -3031,6 +2454,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data, error: treatmentError } = await supabase
             .from('treatments')
             .insert({
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_id: visitData.id,
               reg_date: formData.visit_datetime.split('T')[0],
@@ -3096,6 +2520,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { error: courseError } = await supabase
               .from('treatment_courses')
               .insert({
+                farm_id: selectedFarm!.id,
                 treatment_id: treatmentRecord.id,
                 product_id: med.product_id,
                 batch_id: med.batch_id || null,
@@ -3125,6 +2550,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               const { error: usageError } = await supabase
                 .from('usage_items')
                 .insert({
+                  farm_id: selectedFarm!.id,
                   treatment_id: treatmentRecord.id,
                   product_id: med.product_id,
                   batch_id: med.batch_id,
@@ -3261,6 +2687,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                     const { error: usageError } = await supabase
                       .from('usage_items')
                       .insert({
+                        farm_id: selectedFarm!.id,
                         treatment_id: treatmentRecord.id,
                         product_id: med.product_id,
                         batch_id: med.batch_id,
@@ -3328,12 +2755,14 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             futureVisits = treatmentData.recurring_days
               .filter(dateStr => dateStr !== todayDate)
               .map(dateStr => ({
+                farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_datetime: `${dateStr}T10:00:00`,
                 procedures: ['Gydymas'],
                 status: 'Planuojamas',
                 notes: `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
                 vet_name: formData.vet_name || null,
+                created_by_user_id: user?.id || null,
                 next_visit_required: false,
                 treatment_required: true,
                 related_treatment_id: treatmentRecord.id,
@@ -3447,6 +2876,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data: teatData, error: teatError } = await supabase
             .from('teat_status')
             .upsert({
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               teat_position: teatPosition.toLowerCase(),
               is_disabled: isDisabled,
@@ -3479,6 +2909,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data: vaccinationRecord, error: vaccinationError } = await supabase
             .from('vaccinations')
             .insert({
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               product_id: vaccine.product_id,
               batch_id: vaccine.batch_id,
@@ -3502,12 +2933,14 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { error: futureVisitError } = await supabase
               .from('animal_visits')
               .insert({
+                farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_datetime: `${vaccine.next_booster_date}T10:00:00`,
                 procedures: ['Vakcina'],
                 status: 'Planuojamas',
                 notes: `Pakartotinė vakcina: ${products.find(p => p.id === vaccine.product_id)?.name || 'N/A'}`,
                 vet_name: vaccinationData.administered_by || formData.vet_name || null,
+                created_by_user_id: user?.id || null,
                 next_visit_required: false,
                 treatment_required: false,
               });
@@ -3537,6 +2970,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               const { data: preventionRecord, error: preventionError } = await supabase
                 .from('biocide_usage')
                 .insert({
+                  farm_id: selectedFarm!.id,
                   product_id: product.product_id,
                   batch_id: product.batch_id,
                   use_date: formData.visit_datetime.split('T')[0],
@@ -3643,12 +3077,14 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const dateStr = nextDate.toISOString().split('T')[0];
 
             futureVisits.push({
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_datetime: `${dateStr}T10:00:00`,
               procedures: ['Profilaktika'],
               status: 'Planuojamas',
               notes: `Pakartotinė profilaktika (${courseDays} dienų kursas)\nProduktai: ${productNames}`,
               vet_name: formData.vet_name || null,
+              created_by_user_id: user?.id || null,
               next_visit_required: false,
               treatment_required: false,
               related_visit_id: visitData.id,
@@ -5044,6 +4480,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
 function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: AnimalVisit; animalId: string; onClose: () => void; onSuccess: () => void }) {
   const { logAction } = useAuth();
+  const { selectedFarm } = useFarm();
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState(visit.notes || '');
   const [status, setStatus] = useState(visit.status);
@@ -5060,7 +4497,7 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
 
   useEffect(() => {
     loadProductsAndBatches();
-  }, []);
+  }, [selectedFarm]);
 
   useEffect(() => {
     if (batches.length > 0) {
@@ -5069,9 +4506,11 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
   }, [batches, visit.planned_medications]);
 
   const loadProductsAndBatches = async () => {
+    if (!selectedFarm) return;
+
     const [productsRes, batchesRes] = await Promise.all([
-      supabase.from('products').select('*').order('name'),
-      supabase.from('batches').select('*').order('expiry_date')
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).order('name'),
+      supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date')
     ]);
 
     if (productsRes.data) setProducts(productsRes.data);

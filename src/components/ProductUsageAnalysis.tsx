@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabase';
 import { formatDateTimeLT, formatNumberLT } from '../lib/formatters';
 import { calculateSafeUnitCost, formatCost, formatUnitCost } from '../lib/costCalculations';
 import { fetchAllRows } from '../lib/helpers';
+import { useFarm } from '../contexts/FarmContext';
 import { Package, Search, RefreshCw, ChevronDown, ChevronRight, Calendar, Activity, TrendingUp, Filter } from 'lucide-react';
 
 interface ProductUsageRecord {
@@ -43,6 +44,7 @@ interface UsageDetail {
 }
 
 export function ProductUsageAnalysis() {
+  const { selectedFarm } = useFarm();
   const [usageData, setUsageData] = useState<ProductUsageRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedProduct, setExpandedProduct] = useState<string | null>(null);
@@ -55,26 +57,30 @@ export function ProductUsageAnalysis() {
 
   useEffect(() => {
     loadProductUsage();
-  }, []);
+  }, [selectedFarm]);
 
   const loadProductUsage = async () => {
     try {
       setLoading(true);
+      if (!selectedFarm) return;
+      
       console.log('🔄 Loading product usage data...');
 
       // 1. Get all usage_items
-      const usageItems = await fetchAllRows<any>(
-        'usage_items',
-        'id, qty, created_at, treatment_id, product_id, batch_id'
-      );
+      const usageItemsRes = await supabase
+        .from('usage_items')
+        .select('id, qty, created_at, treatment_id, product_id, batch_id')
+        .eq('farm_id', selectedFarm.id);
+      const usageItems = usageItemsRes.data || [];
 
       console.log('✅ Usage items loaded:', usageItems.length);
 
       // 2. Get all vaccinations
-      const vaccinations = await fetchAllRows<any>(
-        'vaccinations',
-        'id, dose_amount, unit, vaccination_date, animal_id, product_id, batch_id'
-      );
+      const vaccinationsRes = await supabase
+        .from('vaccinations')
+        .select('id, dose_amount, unit, vaccination_date, animal_id, product_id, batch_id')
+        .eq('farm_id', selectedFarm.id);
+      const vaccinations = vaccinationsRes.data || [];
 
       console.log('✅ Vaccinations loaded:', vaccinations.length);
 
@@ -90,6 +96,7 @@ export function ProductUsageAnalysis() {
           completed_at,
           batches(id, product_id, purchase_price, received_qty)
         `)
+        .eq('farm_id', selectedFarm.id)
         .eq('completed', true)
         .not('batch_id', 'is', null);
 
@@ -101,7 +108,11 @@ export function ProductUsageAnalysis() {
       console.log('✅ Sync steps loaded:', syncSteps?.length || 0);
 
       // Get synchronizations for animal lookup
-      const synchronizations = await fetchAllRows<any>('animal_synchronizations', 'id, animal_id');
+      const synchronizationsRes = await supabase
+        .from('animal_synchronizations')
+        .select('id, animal_id')
+        .eq('farm_id', selectedFarm.id);
+      const synchronizations = synchronizationsRes.data || [];
       const syncMap = new Map(synchronizations.map(s => [s.id, s]));
 
       // NOTE: We DO NOT load planned_medications because they are converted to usage_items
@@ -109,11 +120,17 @@ export function ProductUsageAnalysis() {
 
       // Fetch all lookup data upfront (MUCH faster than individual queries)
       console.log('📚 Loading lookup data...');
-      const products = await fetchAllRows<any>('products', 'id, name, category, subcategory, primary_pack_unit');
-      const batches = await fetchAllRows<any>('batches', 'id, product_id, purchase_price, received_qty, qty_left, created_at, supplier_id');
-      const suppliers = await fetchAllRows<any>('suppliers', 'id, name');
-      const treatments = await fetchAllRows<any>('treatments', 'id, animal_id');
-      const animals = await fetchAllRows<any>('animals', 'id, tag_no');
+      const productsRes = await supabase.from('products').select('id, name, category, subcategory, primary_pack_unit').eq('farm_id', selectedFarm.id);
+      const batchesRes = await supabase.from('batches').select('id, product_id, purchase_price, received_qty, qty_left, created_at, supplier_id').eq('farm_id', selectedFarm.id);
+      const suppliersRes = await supabase.from('suppliers').select('id, name').eq('farm_id', selectedFarm.id);
+      const treatmentsRes = await supabase.from('treatments').select('id, animal_id').eq('farm_id', selectedFarm.id);
+      const animalsRes = await supabase.from('animals').select('id, tag_no').eq('farm_id', selectedFarm.id);
+      
+      const products = productsRes.data || [];
+      const batches = batchesRes.data || [];
+      const suppliers = suppliersRes.data || [];
+      const treatments = treatmentsRes.data || [];
+      const animals = animalsRes.data || [];
 
       // Create lookup maps
       const productMap = new Map(products.map(p => [p.id, p]));
