@@ -557,7 +557,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                   <p className="text-xs text-gray-600">Būsimų</p>
                 </div>
                 <div className="bg-white rounded-lg p-3 shadow-sm col-span-2">
-                  <p className="text-3xl font-bold text-teal-600">{treatments.length}</p>
+                  <p className="text-3xl font-bold text-indigo-600">{treatments.length}</p>
                   <p className="text-xs text-gray-600">Iš viso gydymų</p>
                 </div>
               </div>
@@ -1099,7 +1099,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                   </div>
 
                   {vaccination.next_booster_date && (
-                    <div className="bg-gradient-to-r from-green-50 to-emerald-50 border border-green-200 rounded-lg p-3 mb-3">
+                    <div className="bg-gradient-to-r from-green-50 to-blue-50 border border-green-200 rounded-lg p-3 mb-3">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-green-600" />
@@ -1344,9 +1344,9 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                       const totalCost = usageCost + courseCost;
 
                                       return totalCost > 0 ? (
-                                        <div className="flex items-center justify-between text-xs bg-emerald-100 px-2 py-1.5 rounded font-bold border border-emerald-200">
-                                          <span className="text-emerald-900">SAVIKAINA (Gydymo kaina)</span>
-                                          <span className="text-emerald-700 text-sm">€{totalCost.toFixed(2)}</span>
+                                        <div className="flex items-center justify-between text-xs bg-blue-100 px-2 py-1.5 rounded font-bold border border-blue-200">
+                                          <span className="text-blue-900">SAVIKAINA (Gydymo kaina)</span>
+                                          <span className="text-blue-700 text-sm">€{totalCost.toFixed(2)}</span>
                                         </div>
                                       ) : null;
                                     })()}
@@ -1486,9 +1486,9 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                         const totalCost = usageCost + courseCost;
 
                         return totalCost > 0 ? (
-                          <div className="flex items-center justify-between text-xs bg-emerald-100 px-3 py-2 rounded-lg font-bold border-2 border-emerald-300">
-                            <span className="text-emerald-900">SAVIKAINA (Gydymo kaina)</span>
-                            <span className="text-emerald-700 text-sm">€{totalCost.toFixed(2)}</span>
+                          <div className="flex items-center justify-between text-xs bg-blue-100 px-3 py-2 rounded-lg font-bold border-2 border-blue-300">
+                            <span className="text-blue-900">SAVIKAINA (Gydymo kaina)</span>
+                            <span className="text-blue-700 text-sm">€{totalCost.toFixed(2)}</span>
                           </div>
                         ) : null;
                       })()}

@@ -89,8 +89,8 @@ export function RealtimeProvider({ children }: RealtimeProviderProps) {
   return (
     <RealtimeContext.Provider value={{ isConnected, subscriptionCount }}>
       {isConnected && (
-        <div className="fixed top-20 right-4 bg-emerald-50 border border-emerald-200 text-emerald-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm flex items-center gap-2 z-[5]">
-          <div className="w-1.5 h-1.5 bg-emerald-500 rounded-full animate-pulse" />
+        <div className="fixed top-20 right-4 bg-blue-50 border border-blue-200 text-blue-700 px-3 py-1.5 rounded-lg text-xs font-medium shadow-sm flex items-center gap-2 z-[5]">
+          <div className="w-1.5 h-1.5 bg-blue-500 rounded-full animate-pulse" />
           Sinchronizuota
         </div>
       )}

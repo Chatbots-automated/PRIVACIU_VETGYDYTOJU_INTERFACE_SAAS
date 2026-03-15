@@ -17,7 +17,7 @@ export function TreatmentCostTab() {
             onClick={() => setActiveTab('costs')}
             className={`flex items-center justify-center gap-2 px-6 py-3 rounded-lg font-medium transition-all ${
               activeTab === 'costs'
-                ? 'bg-emerald-600 text-white shadow-md'
+                ? 'bg-blue-600 text-white shadow-md'
                 : 'text-gray-600 hover:bg-gray-100'
             }`}
           >

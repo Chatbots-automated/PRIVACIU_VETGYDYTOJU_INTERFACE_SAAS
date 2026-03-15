@@ -366,7 +366,7 @@ export function Treatment() {
         </div>
 
         {success && (
-          <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2">
             <Check className="w-5 h-5" />
             <span>Gydymas sėkmingai užregistruotas!</span>
           </div>

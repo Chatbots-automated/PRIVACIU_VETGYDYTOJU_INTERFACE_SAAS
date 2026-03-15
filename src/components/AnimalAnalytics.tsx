@@ -172,17 +172,17 @@ export function AnimalAnalytics({ animalId, tagNumber }: AnimalAnalyticsProps) {
 
   return (
     <div className="space-y-6">
-      <div className="bg-gradient-to-br from-emerald-50 to-teal-50 border border-emerald-200 rounded-lg p-6 shadow-sm">
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-6 shadow-sm">
         <h3 className="font-bold text-gray-900 mb-4 flex items-center gap-2 text-lg">
-          <Euro className="w-6 h-6 text-emerald-600" />
+          <Euro className="w-6 h-6 text-blue-600" />
           Išlaidų suvestinė
         </h3>
 
         {costAnalytics ? (
           <div className="space-y-4">
-            <div className="bg-white rounded-lg p-4 shadow-sm border border-emerald-100">
+            <div className="bg-white rounded-lg p-4 shadow-sm border border-blue-100">
               <div className="text-center">
-                <div className="text-4xl font-bold text-emerald-600 mb-2">
+                <div className="text-4xl font-bold text-blue-600 mb-2">
                   €{costAnalytics.total_cost.toFixed(2)}
                 </div>
                 <div className="text-sm text-gray-600">Visos išlaidos</div>

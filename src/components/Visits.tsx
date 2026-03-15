@@ -237,7 +237,7 @@ export function Visits() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -271,7 +271,7 @@ export function Visits() {
             type="date"
             value={formData.visit_date}
             onChange={(e) => setFormData({ ...formData, visit_date: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -282,7 +282,7 @@ export function Visits() {
           <select
             value={formData.visit_type}
             onChange={(e) => setFormData({ ...formData, visit_type: e.target.value as any })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="checkup">Patikrinimas</option>
             <option value="vaccination">Vakcinacija</option>
@@ -300,7 +300,7 @@ export function Visits() {
           <select
             value={formData.status}
             onChange={(e) => setFormData({ ...formData, status: e.target.value as any })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="scheduled">Suplanuotas</option>
             <option value="completed">Įvykęs</option>
@@ -317,7 +317,7 @@ export function Visits() {
             value={formData.vet_name}
             onChange={(e) => setFormData({ ...formData, vet_name: e.target.value })}
             placeholder="Veterinaro vardas"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -330,7 +330,7 @@ export function Visits() {
             value={formData.purpose}
             onChange={(e) => setFormData({ ...formData, purpose: e.target.value })}
             placeholder="Vizito tikslas ar priežastis"
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
 
@@ -343,7 +343,7 @@ export function Visits() {
             onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
             placeholder="Papildomos pastabos..."
             rows={3}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
       </div>
@@ -357,7 +357,7 @@ export function Visits() {
         </button>
         <button
           onClick={handleSave}
-          className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
         >
           <Save className="w-4 h-4" />
           Išsaugoti
@@ -381,7 +381,7 @@ export function Visits() {
         {!showAdd && !editing && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Pridėti vizitą
@@ -397,14 +397,14 @@ export function Visits() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Ieškoti pagal ženklo nr., savininką, tikslą, veterinarą..."
-            className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="w-full pl-12 pr-4 py-3 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
         <div>
           <select
             value={filterStatus}
             onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="px-4 py-3 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="px-4 py-3 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           >
             <option value="all">Visi vizitai</option>
             <option value="scheduled">Suplanuoti</option>

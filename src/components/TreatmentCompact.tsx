@@ -384,7 +384,7 @@ export function TreatmentCompact() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -392,7 +392,7 @@ export function TreatmentCompact() {
   return (
     <div className="space-y-4">
       <div className="flex items-center gap-2">
-        <Syringe className="w-5 h-5 text-emerald-600" />
+        <Syringe className="w-5 h-5 text-blue-600" />
         <h2 className="text-lg font-bold text-gray-900">Gydymas / Nurašymas</h2>
       </div>
 
@@ -432,7 +432,7 @@ export function TreatmentCompact() {
           <select
             value={diseaseId}
             onChange={(e) => setDiseaseId(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           >
             <option value="">Liga (nebūtina)</option>
             {diseases.map(d => (
@@ -444,7 +444,7 @@ export function TreatmentCompact() {
             type="date"
             value={regDate}
             onChange={(e) => setRegDate(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -499,7 +499,7 @@ export function TreatmentCompact() {
             placeholder="Veterinaras"
             value={vetName}
             onChange={(e) => setVetName(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           />
 
           <input
@@ -507,7 +507,7 @@ export function TreatmentCompact() {
             placeholder="Pastabos"
             value={notes}
             onChange={(e) => setNotes(e.target.value)}
-            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500"
+            className="px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"
           />
         </div>
 
@@ -516,7 +516,7 @@ export function TreatmentCompact() {
             <h3 className="text-sm font-semibold text-gray-900">Panaudoti vaistai</h3>
             <button
               onClick={addUsageLine}
-              className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-xs"
+              className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-xs"
             >
               <Plus className="w-4 h-4" />
               Pridėti vaistą
@@ -555,7 +555,7 @@ export function TreatmentCompact() {
                             });
                           }
                         }}
-                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-emerald-500"
+                        className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Produktas *</option>
                         {products.map(p => (
@@ -572,7 +572,7 @@ export function TreatmentCompact() {
                     <select
                       value={line.batch_id}
                       onChange={(e) => updateUsageLine(line.id, { batch_id: e.target.value })}
-                      className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-emerald-500"
+                      className="col-span-2 px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                       disabled={!line.product_id}
                     >
                       <option value="">Serija *</option>
@@ -589,7 +589,7 @@ export function TreatmentCompact() {
                       placeholder={line.is_course ? 'Visa dozė' : 'Kiekis'}
                       value={line.qty}
                       onChange={(e) => updateUsageLine(line.id, { qty: e.target.value })}
-                      className="px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-emerald-500"
+                      className="px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                     />
 
                     <div className="flex gap-1">
@@ -647,13 +647,13 @@ export function TreatmentCompact() {
                           placeholder="Dienų"
                           value={line.course_days}
                           onChange={(e) => updateUsageLine(line.id, { course_days: e.target.value })}
-                          className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-emerald-500"
+                          className="w-20 px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                         />
                         <input
                           type="date"
                           value={line.course_start_date}
                           onChange={(e) => updateUsageLine(line.id, { course_start_date: e.target.value })}
-                          className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-emerald-500"
+                          className="px-2 py-1 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                         />
                         {parseInt(line.course_days) > 1 && line.qty && (
                           <span className="text-xs text-gray-600">
@@ -672,7 +672,7 @@ export function TreatmentCompact() {
         <div className="flex gap-2 pt-4 border-t border-gray-200">
           <button
             onClick={handleSave}
-            className="flex items-center gap-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm font-medium"
+            className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm font-medium"
           >
             <Save className="w-4 h-4" />
             Išsaugoti gydymą

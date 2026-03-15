@@ -862,11 +862,11 @@ export function TreatmentCostAnalysis() {
   return (
     <div className="space-y-6">
       {/* Header with Summary Stats */}
-      <div className="bg-gradient-to-r from-emerald-50 to-teal-50 rounded-xl p-6 border border-emerald-200">
+      <div className="bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center">
-              <Euro className="w-6 h-6 text-emerald-600" />
+            <div className="w-12 h-12 bg-blue-100 rounded-full flex items-center justify-center">
+              <Euro className="w-6 h-6 text-blue-600" />
             </div>
             <div>
               <h2 className="text-2xl font-bold text-gray-900">Gydymų Savikainos</h2>
@@ -892,12 +892,12 @@ export function TreatmentCostAnalysis() {
                 placeholder="Ieškoti pagal gyvūno numerį..."
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
-                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 bg-white"
+                className="w-full pl-10 pr-4 py-2 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
               />
             </div>
             <button
               onClick={() => setShowFilters(!showFilters)}
-              className={`px-4 py-2 rounded-lg font-medium transition-colors ${showFilters ? 'bg-emerald-600 text-white' : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'}`}
+              className={`px-4 py-2 rounded-lg font-medium transition-colors ${showFilters ? 'bg-blue-600 text-white' : 'bg-white text-gray-700 border-2 border-gray-300 hover:bg-gray-50'}`}
             >
               {showFilters ? 'Paslėpti filtrus' : 'Rodyti filtrus'}
             </button>
@@ -923,7 +923,7 @@ export function TreatmentCostAnalysis() {
                     type="date"
                     value={dateFrom}
                     onChange={(e) => setDateFrom(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -935,7 +935,7 @@ export function TreatmentCostAnalysis() {
                     type="date"
                     value={dateTo}
                     onChange={(e) => setDateTo(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
 
@@ -950,7 +950,7 @@ export function TreatmentCostAnalysis() {
                     min="0"
                     value={minCost}
                     onChange={(e) => setMinCost(e.target.value)}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -1008,10 +1008,10 @@ export function TreatmentCostAnalysis() {
 
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <TrendingDown className="w-4 h-4 text-emerald-600" />
+              <TrendingDown className="w-4 h-4 text-blue-600" />
               <span className="text-xs font-semibold text-gray-600 uppercase">Viso</span>
             </div>
-            <div className="text-2xl font-bold text-emerald-600">{formatCost(totalStats.totalCosts)}</div>
+            <div className="text-2xl font-bold text-blue-600">{formatCost(totalStats.totalCosts)}</div>
           </div>
         </div>
 
@@ -1029,11 +1029,11 @@ export function TreatmentCostAnalysis() {
           </div>
         </div>
 
-        <div className="mt-4 pt-4 border-t border-emerald-200">
+        <div className="mt-4 pt-4 border-t border-blue-200">
           <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
             <div>
               <span className="text-gray-600">Vidutinė kaina per gyvūną:</span>
-              <span className="ml-2 font-bold text-emerald-700">
+              <span className="ml-2 font-bold text-blue-700">
                 {formatCost(totalStats.totalAnimals > 0 ? totalStats.totalCosts / totalStats.totalAnimals : 0)}
               </span>
             </div>
@@ -1060,7 +1060,7 @@ export function TreatmentCostAnalysis() {
           <select
             value={sortBy}
             onChange={(e) => setSortBy(e.target.value as any)}
-            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <optgroup label="Pagal kainą">
               <option value="total">Bendra kaina</option>
@@ -1129,7 +1129,7 @@ export function TreatmentCostAnalysis() {
                   return (
                     <React.Fragment key={row.animal_id}>
                       <tr
-                        className="hover:bg-emerald-50 transition-colors cursor-pointer"
+                        className="hover:bg-blue-50 transition-colors cursor-pointer"
                         onClick={() => toggleExpand(row.animal_id)}
                       >
                         <td className="px-4 py-4 text-center">
@@ -1168,7 +1168,7 @@ export function TreatmentCostAnalysis() {
                           </span>
                         </td>
                         <td className="px-6 py-4 whitespace-nowrap text-right">
-                          <span className="text-lg font-bold text-emerald-700">
+                          <span className="text-lg font-bold text-blue-700">
                             {formatCost(row.total_costs)}
                           </span>
                         </td>

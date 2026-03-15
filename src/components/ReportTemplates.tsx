@@ -291,7 +291,7 @@ export function MedicalWasteReport({ data }: MedicalWasteReportProps) {
                   </div>
                 </td>
                 <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-semibold text-gray-900">{row.quantity_generated || '-'}</td>
-                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-semibold text-emerald-700">{row.quantity_transferred || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-semibold text-blue-700">{row.quantity_transferred || '-'}</td>
                 <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">{row.waste_carrier || '-'}</td>
                 <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">{row.waste_processor || '-'}</td>
                 <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">{row.transfer_date ? formatDateLT(row.transfer_date) : '-'}</td>
@@ -357,13 +357,13 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
       {medicines.map((medicine, medIdx) => (
         <div key={medIdx} className="mb-8 page-break-inside-avoid">
           {/* Medicine Header */}
-          <div className="bg-gradient-to-r from-emerald-50 to-teal-50 border-2 border-gray-300 rounded-t-lg p-4 mb-0">
+          <div className="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-gray-300 rounded-t-lg p-4 mb-0">
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Veterinarinio vaisto / vaistinio preparato pavadinimas</p>
                 <p className="text-base font-bold text-gray-900">{medicine.product_name || '-'}</p>
                 {medicine.registration_code && (
-                  <p className="text-xs text-emerald-700 mt-1">📋 Reg. kodas: {medicine.registration_code}</p>
+                  <p className="text-xs text-blue-700 mt-1">📋 Reg. kodas: {medicine.registration_code}</p>
                 )}
                 {medicine.active_substance && (
                   <p className="text-xs text-gray-600 mt-1">💊 Veiklioji medžiaga: {medicine.active_substance}</p>
@@ -392,7 +392,7 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
               </thead>
               <tbody>
                 {medicine.batches.map((batch: any, batchIdx: number) => (
-                  <tr key={batchIdx} className="hover:bg-emerald-50 transition-colors print-break-avoid">
+                  <tr key={batchIdx} className="hover:bg-blue-50 transition-colors print-break-avoid">
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">
                       {batch.receipt_date ? formatDateLT(batch.receipt_date) : '-'}
                     </td>
@@ -425,7 +425,7 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                     </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right">
                       <span className={`inline-flex items-center px-2 py-1 rounded-md text-xs font-bold ${
-                        (parseFloat(batch.quantity_remaining) || 0) > 0.01 ? 'bg-emerald-100 text-emerald-700' : 'bg-gray-100 text-gray-500'
+                        (parseFloat(batch.quantity_remaining) || 0) > 0.01 ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500'
                       }`}>
                         {Math.abs(parseFloat(batch.quantity_remaining) || 0) < 0.01 ? '0' : (parseFloat(batch.quantity_remaining) || 0).toFixed(2)}
                       </span>
@@ -450,7 +450,7 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                       return Math.abs(total) < 0.01 ? '0.00' : total.toFixed(2);
                     })()}
                   </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-bold text-emerald-900">
+                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-bold text-blue-900">
                     {(() => {
                       const total = medicine.batches.reduce((sum: number, b: any) => sum + (parseFloat(b.quantity_remaining) || 0), 0);
                       return Math.abs(total) < 0.01 ? '0.00' : total.toFixed(2);
@@ -616,10 +616,10 @@ export function OwnerMedsReport({ data }: OwnerMedsReportProps) {
                     {row.total_dose || '-'} {row.unit || ''}
                   </span>
                 </td>
-                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-semibold text-emerald-700">{row.doses_administered || '0'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-semibold text-blue-700">{row.doses_administered || '0'}</td>
                 <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
                   <span className={`inline-flex items-center px-2.5 py-1.5 rounded-full text-xs font-bold ${
-                    row.course_status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                    row.course_status === 'completed' ? 'bg-blue-100 text-blue-700' :
                     row.course_status === 'active' ? 'bg-blue-100 text-blue-700' :
                     'bg-gray-100 text-gray-700'
                   }`}>

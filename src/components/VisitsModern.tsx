@@ -457,13 +457,13 @@ export function VisitsModern() {
               />
             </div>
             <div className="relative">
-              <Activity className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-emerald-500 w-4 h-4 sm:w-5 sm:h-5" />
+              <Activity className="absolute left-2 sm:left-3 top-1/2 transform -translate-y-1/2 text-blue-500 w-4 h-4 sm:w-5 sm:h-5" />
               <input
                 type="text"
                 placeholder="Ieškoti pagal kaklo numerį..."
                 value={neckNumberSearch}
                 onChange={(e) => setNeckNumberSearch(e.target.value)}
-                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 border-2 border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 text-sm"
+                className="w-full pl-8 sm:pl-10 pr-3 sm:pr-4 py-1.5 sm:py-2 border-2 border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-sm"
               />
             </div>
           </div>

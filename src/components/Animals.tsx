@@ -278,7 +278,7 @@ export function Animals() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -300,7 +300,7 @@ export function Animals() {
           </div>
           <button
             onClick={handleOpenExternalSearch}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors shadow-md hover:shadow-lg"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
           >
             <ExternalLink className="w-4 h-4" />
             Ieškoti VIC sistemoje
@@ -555,7 +555,7 @@ export function Animals() {
               </div>
 
               <div className="bg-white rounded-xl shadow-sm border-2 border-gray-200 overflow-hidden">
-                <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-emerald-50 border-b-2 border-green-200">
+                <div className="px-6 py-4 bg-gradient-to-r from-green-50 to-blue-50 border-b-2 border-green-200">
                   <div className="flex items-center gap-2">
                     <Syringe className="w-5 h-5 text-green-600" />
                     <h3 className="text-lg font-bold text-gray-900">Vakcinacijų istorija</h3>
@@ -920,13 +920,13 @@ export function Animals() {
           />
         </div>
         <div className="relative">
-          <Activity className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-emerald-500" />
+          <Activity className="absolute left-4 top-1/2 transform -translate-y-1/2 w-5 h-5 text-blue-500" />
           <input
             type="text"
             value={neckNumberSearch}
             onChange={(e) => setNeckNumberSearch(e.target.value)}
             placeholder="Ieškoti pagal kaklo numerį..."
-            className="w-full pl-12 pr-4 py-3 border-2 border-emerald-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+            className="w-full pl-12 pr-4 py-3 border-2 border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
           />
         </div>
       </div>

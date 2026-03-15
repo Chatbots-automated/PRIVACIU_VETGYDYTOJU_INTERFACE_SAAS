@@ -17,7 +17,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-emerald-900 via-teal-800 to-emerald-900 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-blue-900 via-indigo-800 to-blue-900 flex items-center justify-center p-4">
       <div className="absolute inset-0 bg-[url('data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNjAiIGhlaWdodD0iNjAiIHZpZXdCb3g9IjAgMCA2MCA2MCIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj48ZyBmaWxsPSJub25lIiBmaWxsLXJ1bGU9ImV2ZW5vZGQiPjxnIGZpbGw9IiNmZmYiIGZpbGwtb3BhY2l0eT0iMC4wNSI+PHBhdGggZD0iTTM2IDE0YzMuMzEgMCA2LTIuNjkgNi02cy0yLjY5LTYtNi02LTYgMi42OS02IDYgMi42OSA2IDYgNnptMCAzMGMzLjMxIDAgNi0yLjY5IDYtNnMtMi42OS02LTYtNi02IDIuNjktNiA2IDIuNjkgNiA2IDZ6TTE2IDE0YzMuMzEgMCA2LTIuNjkgNi02cy0yLjY5LTYtNi02LTYgMi42OS02IDYgMi42OSA2IDYgNnptMCAzMGMzLjMxIDAgNi0yLjY5IDYtNnMtMi42OS02LTYtNi02IDIuNjktNiA2IDIuNjkgNiA2IDZ6Ii8+PC9nPjwvZz48L3N2Zz4=')] opacity-30"></div>
 
       <div className="w-full max-w-6xl relative">
@@ -33,10 +33,10 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
           <h1 className="text-4xl lg:text-5xl font-bold text-white mb-3">
             RVAC Veterinarija
           </h1>
-          <p className="text-xl text-emerald-200 mb-2">
+          <p className="text-xl text-blue-200 mb-2">
             Respublikinis veterinarijos aprūpinimo centras
           </p>
-          <p className="text-emerald-300">
+          <p className="text-blue-300">
             Pasirinkite modulį
           </p>
         </div>
@@ -48,7 +48,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
             onClick={() => onSelectModule('veterinarija')}
             className="group bg-white rounded-2xl shadow-2xl overflow-hidden hover:shadow-3xl transition-all duration-300 transform hover:-translate-y-2"
           >
-            <div className="bg-gradient-to-br from-blue-600 to-blue-700 p-6 lg:p-8 text-center">
+            <div className="bg-gradient-to-br from-blue-600 to-indigo-600 p-6 lg:p-8 text-center">
               <div className="w-24 h-24 mx-auto bg-white rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform duration-300">
                 <Stethoscope className="w-14 h-14 text-blue-600" />
               </div>
@@ -119,14 +119,14 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
             onClick={() => onSelectModule('klientai')}
             className="group bg-white rounded-2xl shadow-2xl overflow-hidden hover:shadow-3xl transition-all duration-300 transform hover:-translate-y-2"
           >
-            <div className="bg-gradient-to-br from-emerald-600 to-teal-600 p-6 lg:p-8 text-center">
+            <div className="bg-gradient-to-br from-indigo-600 to-purple-600 p-6 lg:p-8 text-center">
               <div className="w-24 h-24 mx-auto bg-white rounded-2xl flex items-center justify-center shadow-lg mb-4 group-hover:scale-110 transition-transform duration-300">
-                <Building2 className="w-14 h-14 text-emerald-600" />
+                <Building2 className="w-14 h-14 text-indigo-600" />
               </div>
               <h2 className="text-2xl lg:text-3xl font-bold text-white mb-2">
                 Klientai
               </h2>
-              <p className="text-sm lg:text-base text-emerald-100">
+              <p className="text-sm lg:text-base text-indigo-100">
                 Ūkių valdymas
               </p>
             </div>
@@ -134,8 +134,8 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
             <div className="p-6 lg:p-8">
               <div className="space-y-4 mb-8">
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center mt-0.5">
-                    <Building2 className="w-4 h-4 text-emerald-600" />
+                  <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center mt-0.5">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
                   </div>
                   <div className="text-left">
                     <p className="font-medium text-gray-900">Ūkių registras</p>
@@ -144,8 +144,8 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                   </div>
@@ -156,8 +156,8 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
                 </div>
 
                 <div className="flex items-start gap-3">
-                  <div className="flex-shrink-0 w-6 h-6 bg-emerald-100 rounded-full flex items-center justify-center mt-0.5">
-                    <svg className="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <div className="flex-shrink-0 w-6 h-6 bg-indigo-100 rounded-full flex items-center justify-center mt-0.5">
+                    <svg className="w-4 h-4 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                     </svg>
                   </div>
@@ -168,7 +168,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
                 </div>
               </div>
 
-              <div className="flex items-center justify-center gap-2 text-emerald-600 font-semibold group-hover:gap-3 transition-all">
+              <div className="flex items-center justify-center gap-2 text-indigo-600 font-semibold group-hover:gap-3 transition-all">
                 <span>Atidaryti</span>
                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
@@ -245,7 +245,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
         <div className="mt-12 text-center">
           <div className="inline-flex items-center gap-4 bg-white/10 backdrop-blur-sm rounded-xl px-6 py-3 border border-white/20">
             <div className="text-white">
-              <p className="text-sm text-emerald-200">Prisijungęs kaip</p>
+              <p className="text-sm text-blue-200">Prisijungęs kaip</p>
               <p className="font-semibold">{user?.email}</p>
             </div>
             <button

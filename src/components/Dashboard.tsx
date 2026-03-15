@@ -520,7 +520,7 @@ export function Dashboard() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -533,7 +533,7 @@ export function Dashboard() {
           <p className="text-sm text-gray-600 mt-1">VetStock valdymo sistema · Pilna apžvalga</p>
         </div>
         <div className="flex gap-3">
-          <button className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors font-medium shadow-sm">
+          <button className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium shadow-sm">
             <Plus className="w-4 h-4" />
             Priimti
           </button>
@@ -591,8 +591,8 @@ export function Dashboard() {
               <p className="text-3xl font-bold text-gray-900 mt-2">{formatCurrencyLT(stats.totalValue)}</p>
               <p className="text-xs text-gray-500 mt-1">{stats.totalBatches} partijos</p>
             </div>
-            <div className="bg-emerald-50 p-3 rounded-lg">
-              <Euro className="w-6 h-6 text-emerald-600" />
+            <div className="bg-blue-50 p-3 rounded-lg">
+              <Euro className="w-6 h-6 text-blue-600" />
             </div>
           </div>
         </div>
@@ -602,7 +602,7 @@ export function Dashboard() {
         <div className="bg-white rounded-xl shadow-sm p-5 border border-gray-100">
           <div className="flex items-center justify-between mb-2">
             <Users className="w-5 h-5 text-gray-600" />
-            <span className="text-xs font-medium text-emerald-600 flex items-center gap-1">
+            <span className="text-xs font-medium text-blue-600 flex items-center gap-1">
               <ArrowUpRight className="w-3 h-3" />
             </span>
           </div>
@@ -788,9 +788,9 @@ export function Dashboard() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        <div className="bg-gradient-to-br from-emerald-50 to-emerald-100 rounded-xl shadow-sm p-6 border border-emerald-200">
+        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl shadow-sm p-6 border border-blue-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="bg-emerald-600 p-2 rounded-lg">
+            <div className="bg-blue-600 p-2 rounded-lg">
               <PackagePlus className="w-5 h-5 text-white" />
             </div>
             <h3 className="font-semibold text-gray-900">Priėmimas</h3>
@@ -798,7 +798,7 @@ export function Dashboard() {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700">Per 7 dienas</span>
-              <span className="text-2xl font-bold text-emerald-600">{stats.recentReceived}</span>
+              <span className="text-2xl font-bold text-blue-600">{stats.recentReceived}</span>
             </div>
             <div className="flex items-center justify-between">
               <span className="text-sm text-gray-700">Vid. partijos vertė</span>
@@ -807,9 +807,9 @@ export function Dashboard() {
           </div>
         </div>
 
-        <div className="bg-gradient-to-br from-teal-50 to-teal-100 rounded-xl shadow-sm p-6 border border-teal-200">
+        <div className="bg-gradient-to-br from-indigo-50 to-indigo-100 rounded-xl shadow-sm p-6 border border-indigo-200">
           <div className="flex items-center gap-3 mb-4">
-            <div className="bg-teal-600 p-2 rounded-lg">
+            <div className="bg-indigo-600 p-2 rounded-lg">
               <BarChart3 className="w-5 h-5 text-white" />
             </div>
             <h3 className="font-semibold text-gray-900">Kategorijos</h3>
@@ -818,7 +818,7 @@ export function Dashboard() {
             {categoryStats.slice(0, 3).map((cat) => (
               <div key={cat.category} className="flex items-center justify-between text-sm">
                 <span className="text-gray-700">{getCategoryLabel(cat.category)}</span>
-                <span className="font-semibold text-teal-600">{cat.count}</span>
+                <span className="font-semibold text-indigo-600">{cat.count}</span>
               </div>
             ))}
             {categoryStats.length > 3 && (
@@ -880,12 +880,12 @@ export function Dashboard() {
                       </div>
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
-                          <PackagePlus className="w-3 h-3 text-emerald-600" />
+                          <PackagePlus className="w-3 h-3 text-blue-600" />
                           <span className="text-xs text-gray-600">Priėmimas: {trend.received}</span>
                         </div>
                         <div className="w-full bg-gray-200 rounded-full h-2">
                           <div
-                            className="bg-emerald-600 h-2 rounded-full transition-all"
+                            className="bg-blue-600 h-2 rounded-full transition-all"
                             style={{ width: `${Math.min((trend.received / Math.max(...monthlyTrends.map(t => t.received), 1)) * 100, 100)}%` }}
                           />
                         </div>
@@ -1072,8 +1072,8 @@ export function Dashboard() {
               <div className="space-y-3">
                 {recentBatches.map((batch) => (
                   <div key={batch.id} className="flex items-start gap-3 p-3 bg-gray-50 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer">
-                    <div className="bg-emerald-100 p-2 rounded-lg">
-                      <PackagePlus className="w-4 h-4 text-emerald-600" />
+                    <div className="bg-blue-100 p-2 rounded-lg">
+                      <PackagePlus className="w-4 h-4 text-blue-600" />
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{batch.products?.name}</p>

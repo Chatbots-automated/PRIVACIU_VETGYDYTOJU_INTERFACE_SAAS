@@ -546,10 +546,10 @@ export function ProductUsageAnalysis() {
 
           <div className="bg-white rounded-lg p-4 shadow-sm">
             <div className="flex items-center gap-2 mb-1">
-              <TrendingUp className="w-4 h-4 text-emerald-600" />
+              <TrendingUp className="w-4 h-4 text-blue-600" />
               <span className="text-xs font-semibold text-gray-600 uppercase">Viso išlaidų</span>
             </div>
-            <div className="text-2xl font-bold text-emerald-600">{formatCost(totalStats.totalCost)}</div>
+            <div className="text-2xl font-bold text-blue-600">{formatCost(totalStats.totalCost)}</div>
           </div>
         </div>
 

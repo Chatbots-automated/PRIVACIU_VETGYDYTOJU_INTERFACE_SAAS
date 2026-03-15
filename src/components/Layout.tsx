@@ -70,12 +70,12 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-gray-50 to-slate-100">
       <div className={`fixed inset-0 bg-black bg-opacity-50 z-20 lg:hidden transition-opacity ${sidebarOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`} onClick={() => setSidebarOpen(false)} />
 
-      <aside className={`fixed left-0 top-0 bottom-0 w-56 xl:w-72 bg-gradient-to-b from-emerald-900 via-emerald-800 to-teal-900 shadow-2xl z-30 transition-all duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+      <aside className={`fixed left-0 top-0 bottom-0 w-56 xl:w-72 bg-gradient-to-b from-blue-900 via-blue-800 to-indigo-900 shadow-2xl z-30 transition-all duration-300 lg:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
         <div className="h-full flex flex-col">
-          <div className="p-3 xl:p-6 border-b border-emerald-700/50">
+          <div className="p-3 xl:p-6 border-b border-blue-700/50">
             <div className="flex items-center justify-between mb-2 xl:mb-4">
-              <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1 xl:p-2 hover:bg-emerald-700/50 rounded">
-                <X className="w-4 xl:w-5 h-4 xl:h-5 text-emerald-200" />
+              <button onClick={() => setSidebarOpen(false)} className="lg:hidden p-1 xl:p-2 hover:bg-blue-700/50 rounded">
+                <X className="w-4 xl:w-5 h-4 xl:h-5 text-blue-200" />
               </button>
             </div>
             <div className="flex items-center gap-2 xl:gap-4">
@@ -91,7 +91,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
               </div>
               <div>
                 <h1 className="font-bold text-sm xl:text-xl text-white leading-tight">RVAC</h1>
-                <p className="text-xs text-emerald-200 xl:mt-1">Veterinarija<span className="hidden xl:inline"> Sistema</span></p>
+                <p className="text-xs text-blue-200 xl:mt-1">Veterinarija<span className="hidden xl:inline"> Sistema</span></p>
               </div>
             </div>
           </div>
@@ -111,11 +111,11 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                     }}
                     className={`w-full flex items-center gap-2 xl:gap-3 px-2 xl:px-4 py-2 xl:py-3 rounded-lg transition-all duration-200 min-h-[40px] xl:min-h-[44px] touch-manipulation ${
                       isActive
-                        ? 'bg-white text-emerald-900 shadow-lg font-semibold'
-                        : 'text-emerald-50 hover:bg-emerald-700/50 hover:text-white active:bg-emerald-600/50'
+                        ? 'bg-white text-blue-900 shadow-lg font-semibold'
+                        : 'text-blue-50 hover:bg-blue-700/50 hover:text-white active:bg-blue-600/50'
                     }`}
                   >
-                    <Icon className={`w-4 xl:w-5 h-4 xl:h-5 flex-shrink-0 ${isActive ? 'text-emerald-700' : ''}`} />
+                    <Icon className={`w-4 xl:w-5 h-4 xl:h-5 flex-shrink-0 ${isActive ? 'text-blue-700' : ''}`} />
                     <span className="text-xs xl:text-sm truncate">{item.label}</span>
                   </button>
                 );
@@ -123,15 +123,15 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
             </div>
           </nav>
 
-          <div className="p-2 xl:p-4 border-t border-emerald-700/50 xl:space-y-3">
+          <div className="p-2 xl:p-4 border-t border-blue-700/50 xl:space-y-3">
             <button
               onClick={onBackToModules}
-              className="w-full flex items-center gap-2 xl:gap-3 px-2 xl:px-4 py-2 xl:py-2.5 text-emerald-50 hover:bg-emerald-700/50 hover:text-white rounded-lg transition-all text-xs xl:text-sm min-h-[40px] xl:min-h-[44px] touch-manipulation active:bg-emerald-600/50"
+              className="w-full flex items-center gap-2 xl:gap-3 px-2 xl:px-4 py-2 xl:py-2.5 text-blue-50 hover:bg-blue-700/50 hover:text-white rounded-lg transition-all text-xs xl:text-sm min-h-[40px] xl:min-h-[44px] touch-manipulation active:bg-blue-600/50"
             >
               <Grid3x3 className="w-4 h-4" />
               <span className="truncate"><span className="xl:hidden">Moduliai</span><span className="hidden xl:inline">Modulių pasirinkimas</span></span>
             </button>
-            <div className="text-xs text-emerald-300 xl:text-emerald-400 text-center pt-1 xl:pt-2">
+            <div className="text-xs text-blue-300 xl:text-blue-400 text-center pt-1 xl:pt-2">
               <p className="hidden xl:block">Veterinarijos apskaita</p>
               <p className="xl:mt-1">v1.0<span className="hidden xl:inline">.0</span></p>
             </div>
@@ -166,7 +166,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                       const farm = farms.find(f => f.id === e.target.value);
                       if (farm) setSelectedFarm(farm);
                     }}
-                    className="px-2 xl:px-3 py-1.5 xl:py-2 text-xs xl:text-sm font-medium bg-white border-2 border-emerald-300 text-emerald-700 rounded-lg hover:border-emerald-400 focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 transition-colors"
+                    className="px-2 xl:px-3 py-1.5 xl:py-2 text-xs xl:text-sm font-medium bg-white border-2 border-blue-300 text-blue-700 rounded-lg hover:border-blue-400 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-colors"
                   >
                     {farms.map(farm => (
                       <option key={farm.id} value={farm.id}>
@@ -177,7 +177,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                 )}
                 <button
                   onClick={onBackToModules}
-                  className="hidden xl:flex items-center gap-2 px-4 py-2 text-sm font-medium text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors border border-emerald-200 hover:border-emerald-300"
+                  className="hidden xl:flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-700 hover:bg-blue-50 rounded-lg transition-colors border border-blue-200 hover:border-blue-300"
                   title="Modulių pasirinkimas"
                 >
                   <Grid3x3 className="w-4 h-4" />
@@ -191,14 +191,14 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                   <StickyNote className="w-4 h-4" />
                   <span className="hidden xl:inline">Užrašinė</span>
                 </button>
-                <div className="flex items-center gap-2 px-2 xl:px-4 py-1.5 xl:py-2 bg-gradient-to-r from-emerald-50 to-teal-50 rounded-lg border border-emerald-200 min-h-[36px]">
-                  <User className="w-4 h-4 text-emerald-700 flex-shrink-0" />
+                <div className="flex items-center gap-2 px-2 xl:px-4 py-1.5 xl:py-2 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-lg border border-blue-200 min-h-[36px]">
+                  <User className="w-4 h-4 text-blue-700 flex-shrink-0" />
                   <div className="flex flex-col">
-                    <span className="text-xs xl:text-sm font-medium text-emerald-900 truncate max-w-[80px] xl:max-w-none">
+                    <span className="text-xs xl:text-sm font-medium text-blue-900 truncate max-w-[80px] xl:max-w-none">
                       {user?.full_name || user?.email}
                     </span>
                     {user && (
-                      <span className="text-xs text-emerald-600 hidden xl:block">
+                      <span className="text-xs text-blue-600 hidden xl:block">
                         {user.role === 'admin' ? 'Admin' : user.role === 'vet' ? 'Veterinaras' : user.role === 'tech' ? 'Technikas' : 'Žiūrėtojas'}
                       </span>
                     )}

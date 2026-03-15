@@ -92,7 +92,7 @@ function App() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-50 to-gray-100 flex items-center justify-center">
         <div className="text-center">
-          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-emerald-600 mx-auto mb-4"></div>
+          <div className="animate-spin rounded-full h-16 w-16 border-b-4 border-blue-600 mx-auto mb-4"></div>
           <p className="text-gray-600 font-medium">Kraunama...</p>
         </div>
       </div>
@@ -111,11 +111,11 @@ function App() {
     return (
       <RealtimeProvider>
         <FarmProvider>
-          <div className="min-h-screen bg-gradient-to-br from-emerald-50 via-teal-50 to-emerald-50">
+          <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-blue-50">
             <div className="max-w-7xl mx-auto p-8">
               <div className="flex items-center justify-between mb-8">
                 <div className="flex items-center gap-4">
-                  <div className="w-16 h-16 bg-gradient-to-br from-emerald-500 to-teal-500 rounded-2xl flex items-center justify-center shadow-lg">
+                  <div className="w-16 h-16 bg-gradient-to-br from-blue-600 to-indigo-600 rounded-2xl flex items-center justify-center shadow-lg">
                     <Building2 className="w-10 h-10 text-white" />
                   </div>
                   <div>

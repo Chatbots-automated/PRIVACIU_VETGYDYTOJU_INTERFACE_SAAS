@@ -121,7 +121,7 @@ export function InvoiceViewer() {
 
   return (
     <div className="space-y-4">
-      <div className="bg-gradient-to-r from-blue-50 to-emerald-50 p-4 rounded-lg border-2 border-blue-200">
+      <div className="bg-gradient-to-r from-blue-50 to-blue-50 p-4 rounded-lg border-2 border-blue-200">
         <div className="flex items-center gap-3">
           <FileText className="w-6 h-6 text-blue-600" />
           <div>
@@ -169,7 +169,7 @@ export function InvoiceViewer() {
                     </div>
                   </div>
                   <div className="text-right">
-                    <div className="text-xl font-bold text-emerald-700">
+                    <div className="text-xl font-bold text-blue-700">
                       {invoice.currency} {invoice.total_gross.toFixed(2)}
                     </div>
                     <div className="text-xs text-gray-500">
@@ -219,7 +219,7 @@ export function InvoiceViewer() {
                             <div className="text-sm text-gray-600 mb-1">
                               {item.quantity} × {invoice.currency} {item.unit_price.toFixed(2)}
                             </div>
-                            <div className="font-bold text-emerald-700">
+                            <div className="font-bold text-blue-700">
                               {invoice.currency} {item.total_price.toFixed(2)}
                             </div>
                           </div>

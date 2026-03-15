@@ -285,7 +285,7 @@ export function TreatmentHistory() {
                                 </div>
 
                                 <div className="flex items-center gap-2 text-sm">
-                                  <FileText className="w-4 h-4 text-emerald-600" />
+                                  <FileText className="w-4 h-4 text-blue-600" />
                                   <span className="font-semibold text-gray-900">{treatment.disease_name}</span>
                                   {treatment.disease_code && (
                                     <span className="text-gray-500">({treatment.disease_code})</span>
@@ -379,7 +379,7 @@ export function TreatmentHistory() {
                               )}
 
                               {treatment.products_used && treatment.products_used.length > 0 && (
-                                <div className="bg-emerald-50 rounded-lg p-4">
+                                <div className="bg-blue-50 rounded-lg p-4">
                                   <h5 className="text-sm font-bold text-gray-900 mb-3 flex items-center gap-2">
                                     <Pill className="w-4 h-4" />
                                     Panaudoti Produktai:
@@ -412,7 +412,7 @@ export function TreatmentHistory() {
                                         <div className="flex items-center justify-between">
                                           <span className="font-medium text-gray-900">{course.product_name}</span>
                                           <span className={`px-2.5 py-1 rounded-full text-xs font-bold ${
-                                            course.status === 'completed' ? 'bg-emerald-100 text-emerald-700' :
+                                            course.status === 'completed' ? 'bg-blue-100 text-blue-700' :
                                             course.status === 'active' ? 'bg-blue-100 text-blue-700' :
                                             'bg-gray-100 text-gray-700'
                                           }`}>

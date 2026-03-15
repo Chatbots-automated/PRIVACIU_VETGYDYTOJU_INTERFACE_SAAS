@@ -788,8 +788,8 @@ export function ReceiveStock() {
       <div className={invoiceData && pdfUrl ? "flex-1 overflow-y-auto bg-white rounded-xl shadow-sm border border-gray-100" : "bg-white rounded-xl shadow-sm border border-gray-100"}>
         <div className="p-6">
         <div className="flex items-center gap-3 mb-6">
-          <div className="bg-emerald-50 p-2 rounded-lg">
-            <Plus className="w-6 h-6 text-emerald-600" />
+          <div className="bg-blue-50 p-2 rounded-lg">
+            <Plus className="w-6 h-6 text-blue-600" />
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Priėmimo registravimas</h2>
@@ -798,7 +798,7 @@ export function ReceiveStock() {
         </div>
 
         {success && (
-          <div className="mb-6 bg-emerald-50 border border-emerald-200 text-emerald-700 px-4 py-3 rounded-lg flex items-center gap-2">
+          <div className="mb-6 bg-blue-50 border border-blue-200 text-blue-700 px-4 py-3 rounded-lg flex items-center gap-2">
             <Check className="w-5 h-5" />
             <span>Atsargos sėkmingai priimtos!</span>
           </div>
@@ -853,7 +853,7 @@ export function ReceiveStock() {
               {uploadMessage && (
                 <div className={`px-4 py-3 rounded-lg flex items-center gap-2 ${
                   uploadStatus === 'success'
-                    ? 'bg-emerald-50 border border-emerald-200 text-emerald-700'
+                    ? 'bg-blue-50 border border-blue-200 text-blue-700'
                     : uploadStatus === 'error'
                     ? 'bg-red-50 border border-red-200 text-red-700'
                     : 'bg-blue-50 border border-blue-200 text-blue-700'
@@ -891,7 +891,7 @@ export function ReceiveStock() {
                 ) : (
                   <button
                     onClick={handleSaveHeader}
-                    className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg text-sm font-medium hover:bg-emerald-700 transition-colors"
+                    className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
                   >
                     <Save className="w-4 h-4" />
                     Išsaugoti
@@ -928,7 +928,7 @@ export function ReceiveStock() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-4 p-4 bg-gradient-to-r from-blue-50 to-emerald-50 rounded-lg border-2 border-emerald-200">
+                  <div className="grid grid-cols-3 gap-4 p-4 bg-gradient-to-r from-blue-50 to-blue-50 rounded-lg border-2 border-blue-200">
                     <div>
                       <p className="text-xs text-gray-600 mb-1">Suma be PVM</p>
                       <p className="font-bold text-blue-700 text-lg">
@@ -943,7 +943,7 @@ export function ReceiveStock() {
                     </div>
                     <div>
                       <p className="text-xs text-gray-600 mb-1">Viso su PVM</p>
-                      <p className="font-bold text-emerald-700 text-xl">
+                      <p className="font-bold text-blue-700 text-xl">
                         €{invoiceData.invoice.total_gross?.toFixed(2) || '0.00'}
                       </p>
                     </div>
@@ -1036,7 +1036,7 @@ export function ReceiveStock() {
                         step="0.01"
                         value={headerData.total_gross || 0}
                         onChange={(e) => setHeaderData({ ...headerData, total_gross: e.target.value })}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-emerald-700 focus:ring-2 focus:ring-blue-500"
+                        className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-blue-700 focus:ring-2 focus:ring-blue-500"
                       />
                     </div>
                   </div>
@@ -1059,7 +1059,7 @@ export function ReceiveStock() {
                         !isChecked
                           ? 'bg-gray-100 border-gray-300 opacity-50'
                           : isMatched
-                          ? 'bg-emerald-50 border-emerald-300'
+                          ? 'bg-blue-50 border-blue-300'
                           : 'bg-amber-50 border-amber-300'
                       }`}
                     >
@@ -1076,7 +1076,7 @@ export function ReceiveStock() {
                           title={itemsToReceive.get(index) !== false ? "Pašalinti žymėjimą" : "Įtraukti į pajamimą"}
                         />
                         {isMatched ? (
-                          <CheckCircle className="w-4 h-4 text-emerald-600 flex-shrink-0" />
+                          <CheckCircle className="w-4 h-4 text-blue-600 flex-shrink-0" />
                         ) : (
                           <AlertCircle className="w-4 h-4 text-amber-600 flex-shrink-0" />
                         )}
@@ -1177,7 +1177,7 @@ export function ReceiveStock() {
                                   handleItemEdit(index, 'price_per_unit', perUnitPrice);
                                 }
                               }}
-                              className="w-16 px-1 py-0.5 border border-emerald-300 rounded text-xs font-semibold bg-emerald-50"
+                              className="w-16 px-1 py-0.5 border border-blue-300 rounded text-xs font-semibold bg-blue-50"
                               readOnly={!!(getItemData(item, index).package_size && getItemData(item, index).package_count)}
                             />
                           </div>
@@ -1206,7 +1206,7 @@ export function ReceiveStock() {
                                   handleItemEdit(index, 'price_per_unit', perUnitPrice);
                                 }
                               }}
-                              className="w-20 px-1 py-0.5 border-2 border-emerald-300 rounded text-xs font-semibold bg-emerald-50"
+                              className="w-20 px-1 py-0.5 border-2 border-blue-300 rounded text-xs font-semibold bg-blue-50"
                             />
                           </div>
                           <div>
@@ -1255,7 +1255,7 @@ export function ReceiveStock() {
                               return null;
                             })()}
                             {getItemData(item, index).price_per_unit && getItemData(item, index).qty && (
-                              <span className="ml-2 text-emerald-600">
+                              <span className="ml-2 text-blue-600">
                                 | Tikrinimas: {getItemData(item, index).price_per_unit} × {getItemData(item, index).qty} = {(() => {
                                   const qty = parseFloat(getItemData(item, index).qty) || 0;
                                   const perUnit = parseFloat(getItemData(item, index).price_per_unit) || 0;
@@ -1289,13 +1289,13 @@ export function ReceiveStock() {
                       </div>
 
                       {isMatched ? (
-                        <div className="flex items-center justify-between text-xs bg-white px-2 py-1 rounded border border-emerald-200">
+                        <div className="flex items-center justify-between text-xs bg-white px-2 py-1 rounded border border-blue-200">
                           <div className="flex items-center gap-2">
-                            <span className="text-emerald-800"><strong>Produktas:</strong></span>
+                            <span className="text-blue-800"><strong>Produktas:</strong></span>
                             <select
                               value={matchedProduct.id}
                               onChange={(e) => handleProductMatch(index, e.target.value)}
-                              className="px-2 py-0.5 border border-emerald-300 rounded text-xs bg-white"
+                              className="px-2 py-0.5 border border-blue-300 rounded text-xs bg-white"
                             >
                               {products.filter(p => p.is_active).map(p => (
                                 <option key={p.id} value={p.id}>
@@ -1365,7 +1365,7 @@ export function ReceiveStock() {
               <button
                 onClick={handleBulkReceive}
                 disabled={bulkReceiving}
-                className="w-full px-6 py-3 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                className="w-full px-6 py-3 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
               >
                 <Check className="w-5 h-5" />
                 {bulkReceiving ? 'Priimama...' : `Priimti pažymėtus produktus (${
@@ -1397,7 +1397,7 @@ export function ReceiveStock() {
                     </div>
                     <div>
                       <span className="text-blue-700 font-medium">Viso:</span>
-                      <p className="font-bold text-emerald-700">{creatingProduct.qty || 'Nenustatyta'}</p>
+                      <p className="font-bold text-blue-700">{creatingProduct.qty || 'Nenustatyta'}</p>
                     </div>
                   </div>
                   {creatingProduct.package_size && creatingProduct.package_count ? (
@@ -1422,7 +1422,7 @@ export function ReceiveStock() {
                       type="text"
                       value={newProductForm.name}
                       onChange={(e) => setNewProductForm({ ...newProductForm, name: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Produkto pavadinimas"
                     />
                   </div>
@@ -1447,7 +1447,7 @@ export function ReceiveStock() {
                           withdrawal_days_milk: newCategory === 'medicines' ? '0' : newProductForm.withdrawal_days_milk,
                         });
                       }}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="medicines">Vaistai</option>
                       <option value="prevention">Prevencija</option>
@@ -1476,7 +1476,7 @@ export function ReceiveStock() {
                             subcategory_2: '',
                           });
                         }}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Pasirinkite subkategoriją</option>
                         {getSubcategories(newProductForm.category).map(sub => (
@@ -1494,7 +1494,7 @@ export function ReceiveStock() {
                       <select
                         value={newProductForm.subcategory_2}
                         onChange={(e) => setNewProductForm({ ...newProductForm, subcategory_2: e.target.value })}
-                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                        className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       >
                         <option value="">Pasirinkite detalią subkategoriją</option>
                         {getNestedSubcategories(newProductForm.category, newProductForm.subcategory).map(sub2 => (
@@ -1513,7 +1513,7 @@ export function ReceiveStock() {
                       step="0.01"
                       value={newProductForm.primary_pack_size}
                       onChange={(e) => setNewProductForm({ ...newProductForm, primary_pack_size: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="100"
                     />
                     <p className="text-xs text-gray-500 mt-1">Standartinės pakuotės dydis</p>
@@ -1526,7 +1526,7 @@ export function ReceiveStock() {
                     <select
                       value={newProductForm.primary_pack_unit}
                       onChange={(e) => setNewProductForm({ ...newProductForm, primary_pack_unit: e.target.value as any })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       disabled={newProductForm.category === 'svirkstukai'}
                     >
                       <option value="ml">ml</option>
@@ -1572,7 +1572,7 @@ export function ReceiveStock() {
                         <div>
                           <label className="block text-xs font-medium text-gray-700 mb-1">
                             Viso {newProductForm.primary_pack_size && newProductForm.package_count && (
-                              <span className="text-emerald-600 font-bold">(auto)</span>
+                              <span className="text-blue-600 font-bold">(auto)</span>
                             )}
                           </label>
                           <input
@@ -1580,11 +1580,11 @@ export function ReceiveStock() {
                             step="0.01"
                             value={newProductForm.total_quantity}
                             onChange={(e) => setNewProductForm({ ...newProductForm, total_quantity: normalizeNumberInput(e.target.value) })}
-                            className="w-full px-3 py-2 border border-emerald-300 rounded-lg text-sm focus:ring-2 focus:ring-emerald-500 bg-emerald-50 font-semibold"
+                            className="w-full px-3 py-2 border border-blue-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 bg-blue-50 font-semibold"
                             placeholder="500"
                             readOnly={!!(newProductForm.primary_pack_size && newProductForm.package_count)}
                           />
-                          <p className="text-xs text-emerald-600 mt-0.5 font-medium">
+                          <p className="text-xs text-blue-600 mt-0.5 font-medium">
                             {newProductForm.primary_pack_size && newProductForm.package_count ? (
                               `${newProductForm.package_count} pak × ${newProductForm.primary_pack_size}${newProductForm.primary_pack_unit}`
                             ) : (
@@ -1604,7 +1604,7 @@ export function ReceiveStock() {
                       type="text"
                       value={newProductForm.active_substance}
                       onChange={(e) => setNewProductForm({ ...newProductForm, active_substance: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Pvz: Penicilinas"
                     />
                   </div>
@@ -1652,7 +1652,7 @@ export function ReceiveStock() {
                     <textarea
                       value={newProductForm.dosage_notes}
                       onChange={(e) => setNewProductForm({ ...newProductForm, dosage_notes: e.target.value })}
-                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                      className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                       placeholder="Papildomos dozavimo instrukcijos..."
                       rows={3}
                     />
@@ -1700,7 +1700,7 @@ export function ReceiveStock() {
                 </button>
                 <button
                   onClick={handleSaveNewProduct}
-                  className="flex-1 px-4 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                  className="flex-1 px-4 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
                 >
                   Sukurti produktą
                 </button>
@@ -1747,7 +1747,7 @@ export function ReceiveStock() {
                   <select
                     value={formData.product_id}
                     onChange={(e) => setFormData({ ...formData, product_id: e.target.value })}
-                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                    className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     required
                   >
                     <option value="">Pasirinkite produktą...</option>
@@ -1956,7 +1956,7 @@ export function ReceiveStock() {
                 type="text"
                 value={formData.lot}
                 onChange={(e) => setFormData({ ...formData, lot: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="PARTIJA-001"
               />
             </div>
@@ -1985,7 +1985,7 @@ export function ReceiveStock() {
                     };
                   });
                 }}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="pvz: 10 (viena pakuotė)"
               />
               <p className="text-xs text-gray-500 mt-1">Vienos pakuotės dydis (pvz: 1 buteliukas = 10ml)</p>
@@ -2015,7 +2015,7 @@ export function ReceiveStock() {
                     };
                   });
                 }}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="pvz: 6 (buteliukų)"
               />
               <p className="text-xs text-gray-500 mt-1">Kiek pakuočių priimta</p>
@@ -2024,7 +2024,7 @@ export function ReceiveStock() {
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 Viso kiekis {formData.package_size && formData.package_count && (
-                  <span className="text-emerald-600 font-bold">
+                  <span className="text-blue-600 font-bold">
                     (apskaičiuota automatiškai)
                   </span>
                 )}
@@ -2046,12 +2046,12 @@ export function ReceiveStock() {
                     };
                   });
                 }}
-                className="w-full px-4 py-2.5 border border-emerald-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent bg-emerald-50 font-semibold"
+                className="w-full px-4 py-2.5 border border-blue-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-blue-50 font-semibold"
                 placeholder="100"
                 required
                 readOnly={!!(formData.package_size && formData.package_count)}
               />
-              <p className="text-xs text-emerald-600 mt-1 font-medium">
+              <p className="text-xs text-blue-600 mt-1 font-medium">
                 {formData.package_size && formData.package_count ? (
                   `${formData.package_count} × ${formData.package_size} = ${formData.received_qty || '0'}`
                 ) : (
@@ -2068,7 +2068,7 @@ export function ReceiveStock() {
                 type="date"
                 value={formData.mfg_date}
                 onChange={(e) => setFormData({ ...formData, mfg_date: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -2080,7 +2080,7 @@ export function ReceiveStock() {
                 type="date"
                 value={formData.expiry_date}
                 onChange={(e) => setFormData({ ...formData, expiry_date: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -2091,7 +2091,7 @@ export function ReceiveStock() {
               <select
                 value={formData.supplier_id}
                 onChange={(e) => setFormData({ ...formData, supplier_id: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               >
                 <option value="">Pasirinkite tiekėją...</option>
                 {suppliers.map((supplier) => (
@@ -2110,7 +2110,7 @@ export function ReceiveStock() {
                 type="text"
                 value={formData.doc_title}
                 onChange={(e) => setFormData({ ...formData, doc_title: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="Sąskaita"
               />
             </div>
@@ -2123,7 +2123,7 @@ export function ReceiveStock() {
                 type="text"
                 value={formData.doc_number}
                 onChange={(e) => setFormData({ ...formData, doc_number: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 placeholder="S-2025-001"
               />
             </div>
@@ -2136,7 +2136,7 @@ export function ReceiveStock() {
                 type="date"
                 value={formData.doc_date}
                 onChange={(e) => setFormData({ ...formData, doc_date: e.target.value })}
-                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               />
             </div>
 
@@ -2167,7 +2167,7 @@ export function ReceiveStock() {
                 <select
                   value={formData.currency}
                   onChange={(e) => setFormData({ ...formData, currency: e.target.value })}
-                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="EUR">EUR</option>
                   <option value="USD">USD</option>
@@ -2195,7 +2195,7 @@ export function ReceiveStock() {
                   };
                   return `${unitLabels[unit] || 'Vieneto'} kaina`;
                 })()} {formData.unit_price && (
-                  <span className="text-emerald-600 font-bold">(auto)</span>
+                  <span className="text-blue-600 font-bold">(auto)</span>
                 )}
               </label>
               <input
@@ -2225,7 +2225,7 @@ export function ReceiveStock() {
             <button
               type="submit"
               disabled={loading}
-              className="px-6 py-2.5 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 focus:ring-4 focus:ring-emerald-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 focus:ring-4 focus:ring-blue-500 focus:ring-opacity-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {loading ? 'Registruojama...' : 'Registruoti priėmimą'}
             </button>

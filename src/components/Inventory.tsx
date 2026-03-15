@@ -371,7 +371,7 @@ export function Inventory() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -392,13 +392,13 @@ export function Inventory() {
                 logAction('search_inventory', null, null, null, { search_term: newValue });
               }
             }}
-            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
         <select
           value={filterCategory}
           onChange={(e) => setFilterCategory(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
         >
           <option value="all">Visos kategorijos</option>
           <option value="medicines">Vaistai</option>
@@ -415,7 +415,7 @@ export function Inventory() {
         <button
           onClick={exportToExcel}
           disabled={filteredInventory.length === 0}
-          className="px-4 py-2.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+          className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-5 h-5" />
           <span className="hidden sm:inline">Eksportuoti Excel</span>
@@ -515,7 +515,7 @@ export function Inventory() {
                             type="number"
                             value={editingData.on_hand}
                             onChange={(e) => setEditingData({ ...editingData, on_hand: e.target.value })}
-                            className="w-20 px-2 py-1 border border-emerald-300 rounded text-sm focus:ring-2 focus:ring-emerald-500"
+                            className="w-20 px-2 py-1 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
                             step="0.01"
                             min="0"
                           />
@@ -578,7 +578,7 @@ export function Inventory() {
                           Greitai pasibaigs
                         </span>
                       ) : (
-                        <span className="px-2 py-1 text-xs font-medium bg-emerald-50 text-emerald-700 rounded-full">
+                        <span className="px-2 py-1 text-xs font-medium bg-blue-50 text-blue-700 rounded-full">
                           Geras
                         </span>
                       )}
@@ -588,7 +588,7 @@ export function Inventory() {
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => handleSaveEdit(item)}
-                            className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded transition-colors"
+                            className="p-1.5 text-blue-600 hover:bg-blue-50 rounded transition-colors"
                             title="Išsaugoti"
                           >
                             <Save className="w-4 h-4" />

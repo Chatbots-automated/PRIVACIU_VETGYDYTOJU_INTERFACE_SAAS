@@ -118,7 +118,7 @@ export function getActionCategory(action: string): string {
 export function getActionCategoryColor(action: string): string {
   const category = getActionCategory(action);
   switch (category) {
-    case 'Autentifikacija': return 'text-emerald-600';
+    case 'Autentifikacija': return 'text-blue-600';
     case 'Gyvūnai': return 'text-blue-600';
     case 'Produktai': return 'text-purple-600';
     case 'Gydymas': return 'text-red-600';

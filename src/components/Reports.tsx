@@ -527,14 +527,14 @@ export function Reports() {
             </div>
           </div>
 
-          <div className="bg-gradient-to-br from-emerald-500 to-emerald-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
+          <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white transform hover:scale-105 transition-transform">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-emerald-100 font-medium">Gydymai</p>
+                <p className="text-sm text-blue-100 font-medium">Gydymai</p>
                 <span className="text-3xl font-bold">{analytics.totalTreatments}</span>
-                <p className="text-xs text-emerald-100 mt-1">Per 6 mėn.</p>
+                <p className="text-xs text-blue-100 mt-1">Per 6 mėn.</p>
               </div>
-              <Syringe className="w-12 h-12 text-emerald-200 opacity-80" />
+              <Syringe className="w-12 h-12 text-blue-200 opacity-80" />
             </div>
           </div>
 
@@ -621,9 +621,9 @@ export function Reports() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-emerald-50 to-green-50 border-b border-emerald-100">
+            <div className="px-6 py-4 bg-gradient-to-r from-blue-50 to-green-50 border-b border-blue-100">
               <div className="flex items-center gap-2">
-                <BarChart3 className="w-5 h-5 text-emerald-600" />
+                <BarChart3 className="w-5 h-5 text-blue-600" />
                 <h3 className="text-lg font-bold text-gray-900">Gydymai per mėnesį</h3>
               </div>
             </div>
@@ -637,7 +637,7 @@ export function Reports() {
                       <span className="text-xs font-medium text-gray-600 w-20">{item.month}</span>
                       <div className="flex-1 bg-gray-100 rounded-full h-8 relative overflow-hidden">
                         <div
-                          className="bg-gradient-to-r from-emerald-400 to-emerald-500 h-8 rounded-full transition-all flex items-center justify-end pr-3"
+                          className="bg-gradient-to-r from-blue-400 to-blue-500 h-8 rounded-full transition-all flex items-center justify-end pr-3"
                           style={{ width: `${(item.count / Math.max(...analytics.treatmentsByMonth.map(t => t.count))) * 100}%` }}
                         >
                           <span className="text-xs font-bold text-white">{item.count}</span>
@@ -683,9 +683,9 @@ export function Reports() {
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
           <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-            <div className="px-6 py-4 bg-gradient-to-r from-teal-50 to-cyan-50 border-b border-teal-100">
+            <div className="px-6 py-4 bg-gradient-to-r from-indigo-50 to-cyan-50 border-b border-indigo-100">
               <div className="flex items-center gap-2">
-                <Activity className="w-5 h-5 text-teal-600" />
+                <Activity className="w-5 h-5 text-indigo-600" />
                 <h3 className="text-lg font-bold text-gray-900">Gydymo rezultatai</h3>
               </div>
             </div>
@@ -746,7 +746,7 @@ export function Reports() {
     if (loading) {
       return (
         <div className="flex items-center justify-center h-64">
-          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
         </div>
       );
     }
@@ -815,7 +815,7 @@ export function Reports() {
               </button>
               <button
                 onClick={handleExport}
-                className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-medium hover:bg-emerald-700 transition-colors"
+                className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors"
               >
                 <Download className="w-4 h-4" />
                 Eksportuoti

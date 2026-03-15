@@ -745,7 +745,7 @@ export function Vaccinations() {
             <button
               onClick={handleMassVaccinate}
               disabled={saving || selectedAnimals.size === 0 || massVaccines.filter(v => v.product_id && v.dose_amount).length === 0}
-              className="flex items-center gap-2 px-6 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="flex items-center gap-2 px-6 py-2 bg-blue-600 text-white rounded-lg font-semibold hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               <Check className="w-5 h-5" />
               {saving ? 'Išsaugoma...' : `Vakcinuoti (${selectedAnimals.size})`}

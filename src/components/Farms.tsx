@@ -144,7 +144,7 @@ export function Farms() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -159,7 +159,7 @@ export function Farms() {
         {!showAdd && !editing && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Pridėti ūkį
@@ -168,7 +168,7 @@ export function Farms() {
       </div>
 
       {(showAdd || editing) && (
-        <div className="bg-white border-2 border-emerald-500 rounded-xl p-6 shadow-lg">
+        <div className="bg-white border-2 border-blue-500 rounded-xl p-6 shadow-lg">
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             {editing ? 'Redaguoti ūkį' : 'Naujas ūkis'}
           </h3>
@@ -181,7 +181,7 @@ export function Farms() {
                 type="text"
                 value={formData.name}
                 onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ūkio pavadinimas"
               />
             </div>
@@ -194,7 +194,7 @@ export function Farms() {
                 type="text"
                 value={formData.code}
                 onChange={(e) => setFormData({ ...formData, code: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="ŪKIO-001"
               />
             </div>
@@ -207,7 +207,7 @@ export function Farms() {
                 type="text"
                 value={formData.address || ''}
                 onChange={(e) => setFormData({ ...formData, address: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Ūkio adresas"
               />
             </div>
@@ -220,7 +220,7 @@ export function Farms() {
                 type="text"
                 value={formData.contact_person || ''}
                 onChange={(e) => setFormData({ ...formData, contact_person: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="Vardas Pavardė"
               />
             </div>
@@ -233,7 +233,7 @@ export function Farms() {
                 type="text"
                 value={formData.contact_phone || ''}
                 onChange={(e) => setFormData({ ...formData, contact_phone: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="+370 600 00000"
               />
             </div>
@@ -246,7 +246,7 @@ export function Farms() {
                 type="email"
                 value={formData.contact_email || ''}
                 onChange={(e) => setFormData({ ...formData, contact_email: e.target.value })}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                 placeholder="kontaktas@ukis.lt"
               />
             </div>
@@ -262,7 +262,7 @@ export function Farms() {
                     type="text"
                     value={formData.vic_username || ''}
                     onChange={(e) => setFormData({ ...formData, vic_username: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="VIC username"
                   />
                 </div>
@@ -275,7 +275,7 @@ export function Farms() {
                     type="password"
                     value={formData.vic_password || ''}
                     onChange={(e) => setFormData({ ...formData, vic_password: e.target.value })}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="VIC password"
                   />
                 </div>
@@ -288,7 +288,7 @@ export function Farms() {
                   type="checkbox"
                   checked={formData.is_active}
                   onChange={(e) => setFormData({ ...formData, is_active: e.target.checked })}
-                  className="w-4 h-4 text-emerald-600 border-gray-300 rounded focus:ring-emerald-500"
+                  className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">Aktyvus</span>
               </label>
@@ -298,7 +298,7 @@ export function Farms() {
           <div className="flex gap-2 mt-6">
             <button
               onClick={handleSave}
-              className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Save className="w-4 h-4" />
               Išsaugoti
@@ -320,16 +320,16 @@ export function Farms() {
             key={farm.id}
             className={`bg-white rounded-xl shadow-md border-2 p-6 transition-all ${
               farm.is_active 
-                ? 'border-emerald-200 hover:border-emerald-400' 
+                ? 'border-blue-200 hover:border-blue-400' 
                 : 'border-gray-200 opacity-60'
             }`}
           >
             <div className="flex items-start justify-between mb-4">
               <div className="flex items-center gap-3">
                 <div className={`w-12 h-12 rounded-lg flex items-center justify-center ${
-                  farm.is_active ? 'bg-emerald-100' : 'bg-gray-100'
+                  farm.is_active ? 'bg-blue-100' : 'bg-gray-100'
                 }`}>
-                  <Building2 className={`w-6 h-6 ${farm.is_active ? 'text-emerald-600' : 'text-gray-400'}`} />
+                  <Building2 className={`w-6 h-6 ${farm.is_active ? 'text-blue-600' : 'text-gray-400'}`} />
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900">{farm.name}</h3>
@@ -341,7 +341,7 @@ export function Farms() {
               </div>
               <div className="flex items-center gap-2">
                 {farm.is_active ? (
-                  <CheckCircle className="w-5 h-5 text-emerald-500" />
+                  <CheckCircle className="w-5 h-5 text-blue-500" />
                 ) : (
                   <XCircle className="w-5 h-5 text-gray-400" />
                 )}
@@ -389,7 +389,7 @@ export function Farms() {
                 className={`flex items-center gap-1 px-3 py-1.5 rounded-lg transition-colors text-sm font-medium ${
                   farm.is_active
                     ? 'bg-gray-50 text-gray-600 hover:bg-gray-100'
-                    : 'bg-emerald-50 text-emerald-600 hover:bg-emerald-100'
+                    : 'bg-blue-50 text-blue-600 hover:bg-blue-100'
                 }`}
               >
                 {farm.is_active ? (
@@ -415,7 +415,7 @@ export function Farms() {
           <p className="text-gray-600 mb-4">Nėra registruotų ūkių</p>
           <button
             onClick={() => setShowAdd(true)}
-            className="inline-flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 transition-colors"
+            className="inline-flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
             <Plus className="w-5 h-5" />
             Pridėti pirmą ūkį

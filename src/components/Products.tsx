@@ -177,7 +177,7 @@ export function Products() {
             type="text"
             value={formData.name}
             onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Produkto pavadinimas"
           />
         </div>
@@ -200,7 +200,7 @@ export function Products() {
                 withdrawal_days_milk: newCategory === 'medicines' ? '0' : formData.withdrawal_days_milk,
               });
             }}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
             <option value="medicines">Vaistai</option>
             <option value="prevention">Prevencija</option>
@@ -229,7 +229,7 @@ export function Products() {
                   subcategory_2: '',
                 });
               }}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Pasirinkite subkategoriją</option>
               {getSubcategories(formData.category).map(sub => (
@@ -247,7 +247,7 @@ export function Products() {
             <select
               value={formData.subcategory_2}
               onChange={(e) => setFormData({ ...formData, subcategory_2: e.target.value })}
-              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+              className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             >
               <option value="">Pasirinkite detalią subkategoriją</option>
               {getNestedSubcategories(formData.category, formData.subcategory).map(sub2 => (
@@ -266,7 +266,7 @@ export function Products() {
             step="0.01"
             value={formData.primary_pack_size}
             onChange={(e) => setFormData({ ...formData, primary_pack_size: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="100"
           />
           <p className="text-xs text-gray-500 mt-1">Standartinės pakuotės dydis</p>
@@ -279,7 +279,7 @@ export function Products() {
           <select
             value={formData.primary_pack_unit}
             onChange={(e) => setFormData({ ...formData, primary_pack_unit: e.target.value as Unit })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             disabled={formData.category === 'svirkstukai'}
           >
             <option value="ml">ml</option>
@@ -303,7 +303,7 @@ export function Products() {
             step="0.1"
             value={formData.package_weight_g}
             onChange={(e) => setFormData({ ...formData, package_weight_g: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="pvz., 45.5"
           />
           <p className="text-xs text-gray-500 mt-1">
@@ -319,7 +319,7 @@ export function Products() {
             type="text"
             value={formData.active_substance}
             onChange={(e) => setFormData({ ...formData, active_substance: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Pvz: Penicilinas"
           />
         </div>
@@ -367,7 +367,7 @@ export function Products() {
           <textarea
             value={formData.dosage_notes}
             onChange={(e) => setFormData({ ...formData, dosage_notes: e.target.value })}
-            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+            className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             placeholder="Papildomos dozavimo instrukcijos..."
             rows={3}
           />
@@ -400,7 +400,7 @@ export function Products() {
         </button>
         <button
           onClick={handleSave}
-          className="flex items-center gap-1 px-4 py-2 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
+          className="flex items-center gap-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
         >
           <Save className="w-4 h-4" />
           Išsaugoti
@@ -412,7 +412,7 @@ export function Products() {
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
   }
@@ -421,13 +421,13 @@ export function Products() {
     <div className="space-y-4">
       <div className="flex justify-between items-center">
         <div className="flex items-center gap-2">
-          <Pill className="w-5 h-5 text-emerald-600" />
+          <Pill className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-bold text-gray-900">Produktai</h2>
         </div>
         {!showAdd && !editing && (
           <button
             onClick={() => setShowAdd(true)}
-            className="flex items-center gap-1 px-3 py-1.5 bg-emerald-600 text-white rounded-lg hover:bg-emerald-700 text-sm"
+            className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 text-sm"
           >
             <Plus className="w-4 h-4" />
             Naujas

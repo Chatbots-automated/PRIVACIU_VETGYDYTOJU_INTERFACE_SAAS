@@ -434,7 +434,7 @@ export function UserManagement() {
         </div>
         <button
           onClick={() => setShowAddUser(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all shadow-lg"
+          className="flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all shadow-lg"
         >
           <UserPlus className="w-5 h-5" />
           <span>Pridėti Vartotoją</span>
@@ -468,7 +468,7 @@ export function UserManagement() {
                   type="text"
                   value={newUserFullName}
                   onChange={(e) => setNewUserFullName(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   autoComplete="off"
                   autoCorrect="off"
                   autoCapitalize="off"
@@ -484,7 +484,7 @@ export function UserManagement() {
                   type="email"
                   value={newUserEmail}
                   onChange={(e) => setNewUserEmail(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                 />
               </div>
@@ -496,7 +496,7 @@ export function UserManagement() {
                   type="password"
                   value={newUserPassword}
                   onChange={(e) => setNewUserPassword(e.target.value)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                   required
                   minLength={6}
                 />
@@ -508,7 +508,7 @@ export function UserManagement() {
                 <select
                   value={newUserRole}
                   onChange={(e) => setNewUserRole(e.target.value as UserRole)}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                 >
                   <option value="viewer">Stebėtojas (View Only)</option>
                   <option value="tech">Technikas (Limited Access)</option>
@@ -520,7 +520,7 @@ export function UserManagement() {
               <div className="flex gap-3 pt-4">
                 <button
                   type="submit"
-                  className="flex-1 px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 text-white rounded-lg hover:from-emerald-700 hover:to-teal-700 transition-all"
+                  className="flex-1 px-4 py-2 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg hover:from-blue-700 hover:to-indigo-700 transition-all"
                 >
                   Pridėti
                 </button>
@@ -547,7 +547,7 @@ export function UserManagement() {
       <div className="bg-white rounded-xl shadow-lg overflow-hidden">
         {loading ? (
           <div className="flex items-center justify-center py-12">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-emerald-600"></div>
+            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -576,7 +576,7 @@ export function UserManagement() {
                   <tr key={user.id} className={`hover:bg-gray-50 transition-colors ${user.is_frozen ? 'bg-red-50' : ''}`}>
                     <td className="px-6 py-4">
                       <div className="flex items-center gap-3">
-                        <div className="w-10 h-10 bg-gradient-to-br from-emerald-500 to-teal-600 rounded-full flex items-center justify-center">
+                        <div className="w-10 h-10 bg-gradient-to-br from-blue-500 to-indigo-600 rounded-full flex items-center justify-center">
                           <Mail className="w-5 h-5 text-white" />
                         </div>
                         <div>
@@ -591,7 +591,7 @@ export function UserManagement() {
                           <select
                             value={editRole}
                             onChange={(e) => setEditRole(e.target.value as UserRole)}
-                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-emerald-500 focus:border-transparent"
+                            className="w-full px-3 py-1.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                           >
                             <option value="viewer">Stebėtojas</option>
                             <option value="tech">Technikas</option>
@@ -721,7 +721,7 @@ export function UserManagement() {
         )}
       </div>
 
-      <div className="bg-gradient-to-br from-blue-50 to-teal-50 rounded-xl p-6 border border-blue-200">
+      <div className="bg-gradient-to-br from-blue-50 to-indigo-50 rounded-xl p-6 border border-blue-200">
         <h3 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
           <Shield className="w-5 h-5 text-blue-600" />
           Rolių Aprašymas

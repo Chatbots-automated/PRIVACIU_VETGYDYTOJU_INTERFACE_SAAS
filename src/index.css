@@ -33,23 +33,23 @@
 
 @layer components {
   .card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow duration-200;
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 hover:shadow-lg transition-all duration-300 hover:border-blue-300 hover:-translate-y-0.5;
   }
 
   .card-header {
-    @apply px-6 py-4 border-b border-gray-100 bg-gradient-to-r from-gray-50 to-white;
+    @apply px-6 py-4 border-b border-gray-200 bg-gradient-to-r from-blue-50 to-indigo-50;
   }
 
   .btn-primary {
-    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gradient-to-r from-blue-600 to-blue-700 text-white rounded-lg font-semibold shadow-sm hover:shadow-md hover:from-blue-700 hover:to-blue-800 active:scale-95 transition-all duration-150 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none touch-manipulation;
+    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-lg font-semibold shadow-md hover:shadow-lg hover:from-blue-700 hover:to-indigo-700 active:scale-98 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none touch-manipulation;
   }
 
   .btn-secondary {
-    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 active:scale-95 transition-all duration-150 touch-manipulation;
+    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gray-100 text-gray-700 rounded-lg font-semibold hover:bg-gray-200 active:scale-98 transition-all duration-200 touch-manipulation border border-gray-300 hover:border-gray-400;
   }
 
   .btn-success {
-    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gradient-to-r from-emerald-600 to-emerald-700 text-white rounded-lg font-semibold shadow-sm hover:shadow-md hover:from-emerald-700 hover:to-emerald-800 active:scale-95 transition-all duration-150 touch-manipulation;
+    @apply px-6 py-2.5 md:py-3 min-h-[44px] bg-gradient-to-r from-green-600 to-green-700 text-white rounded-lg font-semibold shadow-sm hover:shadow-md hover:from-green-700 hover:to-green-800 active:scale-95 transition-all duration-150 touch-manipulation;
   }
 
   .btn-danger {
@@ -69,7 +69,7 @@
   }
 
   .badge-success {
-    @apply badge bg-emerald-100 text-emerald-700;
+    @apply badge bg-green-100 text-green-700;
   }
 
   .badge-warning {
@@ -85,7 +85,7 @@
   }
 
   .stat-card {
-    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 hover:-translate-y-1;
+    @apply bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg transition-all duration-200 hover:-translate-y-1 hover:border-blue-300;
   }
 }
 
@@ -101,12 +101,12 @@
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb {
-    background: #cbd5e1;
+    background: #93c5fd;
     border-radius: 4px;
   }
 
   .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-    background: #94a3b8;
+    background: #60a5fa;
   }
 
   .text-balance {
@@ -205,12 +205,12 @@
     }
   }
 
-  .scrollbar-thumb-emerald-700::-webkit-scrollbar-thumb {
-    background: #047857;
+  .scrollbar-thumb-blue-700::-webkit-scrollbar-thumb {
+    background: #1d4ed8;
   }
 
-  .scrollbar-track-emerald-900::-webkit-scrollbar-track {
-    background: #064e3b;
+  .scrollbar-track-blue-900::-webkit-scrollbar-track {
+    background: #1e3a8a;
   }
 }
 

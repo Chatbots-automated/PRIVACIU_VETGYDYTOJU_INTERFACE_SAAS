@@ -182,7 +182,7 @@ export function AuditLogViewer() {
     if (action.includes('create')) return 'bg-green-100 text-green-800';
     if (action.includes('update')) return 'bg-blue-100 text-blue-800';
     if (action.includes('delete')) return 'bg-red-100 text-red-800';
-    if (action.includes('login')) return 'bg-emerald-100 text-emerald-800';
+    if (action.includes('login')) return 'bg-blue-100 text-blue-800';
     if (action.includes('logout')) return 'bg-gray-100 text-gray-800';
     if (action.includes('freeze') || action.includes('unfreeze')) return 'bg-orange-100 text-orange-800';
     return 'bg-gray-100 text-gray-800';
