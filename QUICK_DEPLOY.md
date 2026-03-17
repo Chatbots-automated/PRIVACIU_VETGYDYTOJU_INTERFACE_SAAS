@@ -63,17 +63,41 @@ Your site will be live at: `https://[your-site-name].netlify.app`
 
 ## 🆘 Troubleshooting
 
-**Build fails?**
-- Check environment variables are set
+### Error: "Missing Supabase environment variables"
+
+This means environment variables are not set in Netlify. **You MUST add them manually:**
+
+1. Go to Netlify Dashboard
+2. Select your site
+3. Click **Site settings** → **Environment variables**
+4. Click **"Add a variable"** button
+5. Add each variable one by one:
+   - Key: `VITE_SUPABASE_URL`
+   - Value: `https://oxzfztimfabzzqjmsihl.supabase.co`
+   - Click "Create variable"
+6. Repeat for `VITE_SUPABASE_ANON_KEY` and `VITE_SUPABASE_SERVICE_ROLE_KEY`
+7. After adding all 3 variables, click **"Trigger deploy"** → **"Deploy site"**
+
+**Important**: Environment variables are NOT read from `netlify.toml` - they must be set in the Netlify UI!
+
+### Build fails?
+- Run `npm run check-env` locally to verify variables
+- Check Netlify build logs for specific errors
 - Verify Node version is 18
 
-**404 on page refresh?**
+### 404 on page refresh?
 - Redirects should work automatically
 - Check `netlify.toml` is committed
 
-**Need help?**
+### Variables not working after adding them?
+- Make sure you triggered a NEW deploy after adding variables
+- Old deploys don't have the new variables
+- Go to **Deploys** → **Trigger deploy** → **Deploy site**
+
+### Need help?
 - See `NETLIFY_DEPLOYMENT.md` for detailed guide
 - Check Netlify build logs for errors
+- Run `npm run check-env` to verify local setup
 
 ---
 

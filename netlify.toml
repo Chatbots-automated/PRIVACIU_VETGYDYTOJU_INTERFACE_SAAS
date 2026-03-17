@@ -6,10 +6,16 @@
   NODE_VERSION = "18"
   NPM_VERSION = "9"
 
-# Environment variables (these should be set in Netlify UI for security)
-# VITE_SUPABASE_URL = "https://oxzfztimfabzzqjmsihl.supabase.co"
-# VITE_SUPABASE_ANON_KEY = "your-anon-key"
-# VITE_SUPABASE_SERVICE_ROLE_KEY = "your-service-role-key"
+# Environment variables - SET THESE IN NETLIFY UI
+# Go to: Site settings → Environment variables → Add a variable
+# Add all three variables below with their actual values:
+#
+# VITE_SUPABASE_URL
+# VITE_SUPABASE_ANON_KEY  
+# VITE_SUPABASE_SERVICE_ROLE_KEY
+#
+# IMPORTANT: Variables must be set in Netlify UI before deploying!
+# They will NOT work if only defined here as comments.
 
 # Redirect rules for SPA
 [[redirects]]
