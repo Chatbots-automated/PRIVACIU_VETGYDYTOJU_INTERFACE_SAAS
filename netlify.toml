@@ -5,17 +5,9 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
-
-# Environment variables - SET THESE IN NETLIFY UI
-# Go to: Site settings → Environment variables → Add a variable
-# Add all three variables below with their actual values:
-#
-# VITE_SUPABASE_URL
-# VITE_SUPABASE_ANON_KEY  
-# VITE_SUPABASE_SERVICE_ROLE_KEY
-#
-# IMPORTANT: Variables must be set in Netlify UI before deploying!
-# They will NOT work if only defined here as comments.
+  VITE_SUPABASE_URL = "https://oxzfztimfabzzqjmsihl.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94emZ6dGltZmFienpxam1zaWhsIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMyMzc0MTIsImV4cCI6MjA4ODgxMzQxMn0._fJnKP48APEekQ80E_QcUhYapZM9C3vsEaoqVax9OC8"
+  VITE_SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im94emZ6dGltZmFienpxam1zaWhsIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3MzIzNzQxMiwiZXhwIjoyMDg4ODEzNDEyfQ.DCTDHl-aPpEajGndU69nvp-ZHeYv5sIVR1gU_XW_Edk"
 
 # Redirect rules for SPA
 [[redirects]]
