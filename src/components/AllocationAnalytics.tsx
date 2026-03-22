@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { BarChart3, TrendingUp, Building2, Package, Euro, Download } from 'lucide-react';
+import { BarChart3, TrendingUp, Building2, Package, Euro, Download, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
+import { FarmDetailAnalytics } from './FarmDetailAnalytics';
 
 interface FarmAnalytics {
   farm_id: string;
@@ -45,6 +46,7 @@ export function AllocationAnalytics() {
   const [allocationHistory, setAllocationHistory] = useState<AllocationHistory[]>([]);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'farms' | 'products' | 'history'>('farms');
+  const [selectedFarm, setSelectedFarm] = useState<{ id: string; name: string; code: string } | null>(null);
 
   useEffect(() => {
     loadAnalytics();
@@ -124,6 +126,18 @@ export function AllocationAnalytics() {
     );
   }
 
+  // Show farm detail view if a farm is selected
+  if (selectedFarm) {
+    return (
+      <FarmDetailAnalytics
+        farmId={selectedFarm.id}
+        farmName={selectedFarm.name}
+        farmCode={selectedFarm.code}
+        onBack={() => setSelectedFarm(null)}
+      />
+    );
+  }
+
   return (
     <div className="space-y-6">
       <div className="bg-gradient-to-r from-slate-700 to-gray-800 rounded-xl p-6 text-white shadow-lg">
@@ -133,7 +147,7 @@ export function AllocationAnalytics() {
           </div>
           <div>
             <h2 className="text-2xl font-bold">Paskirstymų Analitika</h2>
-            <p className="text-gray-200 mt-1">Statistika apie atsargų paskirstymą ūkiams</p>
+            <p className="text-gray-200 mt-1">Statistika apie atsargų paskirstymą ūkiams • Paspauskite ant ūkio detalesnei informacijai</p>
           </div>
         </div>
       </div>
@@ -214,10 +228,21 @@ export function AllocationAnalytics() {
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {farmAnalytics.map((farm) => (
-                  <tr key={farm.farm_id} className="hover:bg-gray-50">
+                  <tr 
+                    key={farm.farm_id} 
+                    onClick={() => setSelectedFarm({ id: farm.farm_id, name: farm.farm_name, code: farm.farm_code })}
+                    className="hover:bg-blue-50 cursor-pointer transition-colors group"
+                  >
                     <td className="px-6 py-4">
-                      <div className="font-medium text-gray-900">{farm.farm_name}</div>
-                      <div className="text-sm text-gray-500">{farm.farm_code}</div>
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
+                            {farm.farm_name}
+                          </div>
+                          <div className="text-sm text-gray-500">{farm.farm_code}</div>
+                        </div>
+                        <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-blue-600 transition-colors" />
+                      </div>
                     </td>
                     <td className="px-6 py-4">
                       <span className="font-medium text-gray-900">{farm.total_allocations || 0}</span>
