@@ -1,4 +1,7 @@
+import { useState } from 'react';
+import { supabase } from '../lib/supabase';
 import { formatDateLT } from '../lib/formatters';
+import { FileText, X, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
 
 function translateUnit(unit: string): string {
   const translations: Record<string, string> = {
@@ -323,6 +326,11 @@ interface DrugJournalReportProps {
 }
 
 export function DrugJournalReport({ data }: DrugJournalReportProps) {
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  const [invoiceDetails, setInvoiceDetails] = useState<any>(null);
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
+  const [loadingInvoice, setLoadingInvoice] = useState(false);
+
   // Group data by product (medicine)
   const groupedData = data.reduce((acc, row) => {
     const productKey = row.product_id || row.product_name;
@@ -340,6 +348,30 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
   }, {} as Record<string, any>);
 
   const medicines = Object.values(groupedData);
+
+  const loadInvoiceDetails = async (invoiceId: string) => {
+    setLoadingInvoice(true);
+    try {
+      const [invoiceRes, itemsRes] = await Promise.all([
+        supabase.from('invoices').select('*').eq('id', invoiceId).single(),
+        supabase.from('invoice_items').select('*, product:products(name, category)').eq('invoice_id', invoiceId).order('line_no')
+      ]);
+
+      if (invoiceRes.data) setInvoiceDetails(invoiceRes.data);
+      if (itemsRes.data) setInvoiceItems(itemsRes.data);
+      setSelectedInvoiceId(invoiceId);
+    } catch (error) {
+      console.error('Error loading invoice:', error);
+    } finally {
+      setLoadingInvoice(false);
+    }
+  };
+
+  const closeInvoiceModal = () => {
+    setSelectedInvoiceId(null);
+    setInvoiceDetails(null);
+    setInvoiceItems([]);
+  };
 
   return (
     <div className="bg-white">
@@ -400,7 +432,19 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                       <div className="space-y-1">
                         {batch.supplier_name && <div className="font-bold text-gray-900">{batch.supplier_name}</div>}
                         {batch.doc_title && batch.doc_title.toLowerCase() !== 'invoice' && <div className="font-medium text-gray-900">{batch.doc_title}</div>}
-                        {batch.invoice_number && <div className="font-medium text-gray-900">Sąskaita faktūra Nr. {batch.invoice_number}</div>}
+                        <div className="flex items-center gap-2">
+                          {batch.invoice_number && <div className="font-medium text-gray-900">Sąskaita faktūra Nr. {batch.invoice_number}</div>}
+                          {batch.invoice_id && (
+                            <button
+                              onClick={() => loadInvoiceDetails(batch.invoice_id)}
+                              className="inline-flex items-center gap-1 px-2 py-1 bg-blue-100 hover:bg-blue-200 text-blue-700 rounded text-xs font-medium transition-colors no-print"
+                              title="Peržiūrėti sąskaitą"
+                            >
+                              <ExternalLink className="w-3 h-3" />
+                              Peržiūrėti
+                            </button>
+                          )}
+                        </div>
                         {batch.invoice_date && <div className="text-gray-600">{formatDateLT(batch.invoice_date)}</div>}
                         {!batch.supplier_name && !batch.doc_title && !batch.invoice_number && !batch.invoice_date && <span className="text-gray-400">-</span>}
                       </div>
@@ -468,6 +512,103 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
           <p>Viso vaistų: <span className="font-semibold text-gray-900">{medicines.length}</span></p>
           <p>Viso įrašų: <span className="font-semibold text-gray-900">{data.length}</span></p>
           <p>Tiekėjai: <span className="font-medium text-gray-800">{Array.from(new Set(data.map(d => d.supplier_name).filter(Boolean))).join(', ') || 'Nenurodyta'}</span></p>
+        </div>
+      )}
+
+      {/* Invoice Details Modal */}
+      {selectedInvoiceId && invoiceDetails && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4 no-print">
+          <div className="bg-white rounded-xl shadow-2xl max-w-4xl w-full max-h-[90vh] overflow-hidden flex flex-col">
+            <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-6 py-4 flex items-center justify-between">
+              <div className="flex items-center gap-3">
+                <FileText className="w-6 h-6 text-white" />
+                <div>
+                  <h2 className="text-xl font-bold text-white">Sąskaita faktūra</h2>
+                  <p className="text-blue-100 text-sm">{invoiceDetails.invoice_number}</p>
+                </div>
+              </div>
+              <button
+                onClick={closeInvoiceModal}
+                className="text-white hover:bg-white hover:bg-opacity-20 rounded-lg p-2 transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto p-6">
+              {/* Invoice Header */}
+              <div className="grid grid-cols-2 gap-6 mb-6 p-4 bg-gray-50 rounded-lg">
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Tiekėjas</p>
+                  <p className="font-bold text-gray-900">{invoiceDetails.supplier_name}</p>
+                  {invoiceDetails.supplier_code && (
+                    <p className="text-sm text-gray-600 mt-1">Kodas: {invoiceDetails.supplier_code}</p>
+                  )}
+                  {invoiceDetails.supplier_vat && (
+                    <p className="text-sm text-gray-600">PVM: {invoiceDetails.supplier_vat}</p>
+                  )}
+                </div>
+                <div>
+                  <p className="text-xs font-semibold text-gray-600 uppercase mb-1">Sąskaitos informacija</p>
+                  <p className="font-bold text-gray-900">Nr. {invoiceDetails.invoice_number}</p>
+                  <p className="text-sm text-gray-600 mt-1">Data: {formatDateLT(invoiceDetails.invoice_date)}</p>
+                </div>
+              </div>
+
+              {/* Invoice Items */}
+              <div className="mb-6">
+                <h3 className="font-semibold text-gray-900 mb-3">Produktai</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border border-gray-300 px-3 py-2 text-left text-xs font-bold text-gray-700">Produktas</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Kiekis</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Vnt. kaina</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Viso</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {invoiceItems.map((item) => (
+                        <tr key={item.id} className="hover:bg-gray-50">
+                          <td className="border border-gray-300 px-3 py-2 text-sm">
+                            <div className="font-medium text-gray-900">{item.product?.name || item.description}</div>
+                            {item.sku && <div className="text-xs text-gray-500">SKU: {item.sku}</div>}
+                          </td>
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.quantity}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.unit_price.toFixed(4)} {invoiceDetails.currency}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right font-medium">{item.total_price.toFixed(2)} {invoiceDetails.currency}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot>
+                      <tr className="bg-gray-50 font-bold">
+                        <td colSpan={3} className="border border-gray-300 px-3 py-2 text-sm text-right">Tarpinė suma:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-sm text-right">{invoiceDetails.total_net.toFixed(2)} {invoiceDetails.currency}</td>
+                      </tr>
+                      <tr className="bg-gray-50">
+                        <td colSpan={3} className="border border-gray-300 px-3 py-2 text-sm text-right">PVM ({invoiceDetails.vat_rate}%):</td>
+                        <td className="border border-gray-300 px-3 py-2 text-sm text-right">{invoiceDetails.total_vat.toFixed(2)} {invoiceDetails.currency}</td>
+                      </tr>
+                      <tr className="bg-blue-50 font-bold text-lg">
+                        <td colSpan={3} className="border-2 border-gray-400 px-3 py-3 text-right">VISO:</td>
+                        <td className="border-2 border-gray-400 px-3 py-3 text-right text-blue-900">{invoiceDetails.total_gross.toFixed(2)} {invoiceDetails.currency}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              </div>
+            </div>
+
+            <div className="border-t px-6 py-4 bg-gray-50 flex justify-end">
+              <button
+                onClick={closeInvoiceModal}
+                className="px-6 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+              >
+                Uždaryti
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -880,6 +1021,245 @@ export function WithdrawalReport({ data }: WithdrawalReportProps) {
         <div className="mt-4 text-sm text-gray-600 no-print">
           <p>Viso gyvūnų su karencija: <span className="font-semibold text-gray-900">{data.length}</span></p>
         </div>
+      )}
+    </div>
+  );
+}
+
+interface InvoicesReportProps {
+  data: any[];
+}
+
+export function InvoicesReport({ data }: InvoicesReportProps) {
+  const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+
+  const toggleInvoice = (invoiceId: string) => {
+    const newExpanded = new Set(expandedInvoices);
+    if (newExpanded.has(invoiceId)) {
+      newExpanded.delete(invoiceId);
+    } else {
+      newExpanded.add(invoiceId);
+    }
+    setExpandedInvoices(newExpanded);
+  };
+
+  const calculateTotals = () => {
+    const totalNet = data.reduce((sum, inv) => sum + (inv.total_net || 0), 0);
+    const totalVat = data.reduce((sum, inv) => sum + (inv.total_vat || 0), 0);
+    const totalGross = data.reduce((sum, inv) => sum + (inv.total_gross || 0), 0);
+    return { totalNet, totalVat, totalGross };
+  };
+
+  const totals = calculateTotals();
+
+  return (
+    <div className="space-y-4">
+      {data.length === 0 ? (
+        <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+          <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
+          <p className="text-gray-600 font-medium">Sąskaitų nerasta</p>
+          <p className="text-sm text-gray-500 mt-1">Pakeiskite filtrus arba datos intervalą</p>
+        </div>
+      ) : (
+        <>
+          <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-4">
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+              <div key="count">
+                <p className="text-sm text-gray-600 mb-1">Sąskaitų skaičius</p>
+                <p className="text-2xl font-bold text-gray-900">{data.length}</p>
+              </div>
+              <div key="net">
+                <p className="text-sm text-gray-600 mb-1">Suma be PVM</p>
+                <p className="text-2xl font-bold text-blue-700">€{totals.totalNet.toFixed(2)}</p>
+              </div>
+              <div key="vat">
+                <p className="text-sm text-gray-600 mb-1">PVM suma</p>
+                <p className="text-2xl font-bold text-gray-700">€{totals.totalVat.toFixed(2)}</p>
+              </div>
+              <div key="gross">
+                <p className="text-sm text-gray-600 mb-1">Suma su PVM</p>
+                <p className="text-2xl font-bold text-green-700">€{totals.totalGross.toFixed(2)}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="space-y-3">
+            {data.map((invoice) => {
+              const isExpanded = expandedInvoices.has(invoice.id);
+              const itemsCount = invoice.items?.length || 0;
+              
+              return (
+                <div
+                  key={invoice.id}
+                  className="bg-white rounded-lg border-2 border-gray-200 overflow-hidden hover:border-blue-300 transition-colors"
+                >
+                  <button
+                    onClick={() => toggleInvoice(invoice.id)}
+                    className="w-full p-4 flex items-center justify-between hover:bg-gray-50 transition-colors"
+                  >
+                    <div className="flex items-center gap-4 flex-1 text-left">
+                      <div className="bg-blue-100 p-2 rounded-lg">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1 flex-wrap">
+                          <span key={`num-${invoice.id}`} className="font-bold text-gray-900">#{invoice.invoice_number}</span>
+                          <span key={`date-${invoice.id}`} className="text-sm text-gray-500">
+                            {formatDateLT(invoice.invoice_date)}
+                          </span>
+                          <span key={`badge-${invoice.id}`} className={`text-xs px-2 py-0.5 rounded font-medium ${
+                            invoice.farm_id 
+                              ? 'bg-green-100 text-green-700' 
+                              : 'bg-purple-100 text-purple-700'
+                          }`}>
+                            {invoice.farm_id ? invoice.farm?.name || 'Ūkis' : 'Sandėlis'}
+                          </span>
+                        </div>
+                        <div className="flex items-center gap-2 text-sm text-gray-600">
+                          <span key={`supp-${invoice.id}`} className="font-medium">{invoice.supplier_name || invoice.supplier?.name}</span>
+                          {(invoice.supplier_code || invoice.supplier?.code) && (
+                            <span key={`code-${invoice.id}`} className="text-xs text-gray-500">({invoice.supplier_code || invoice.supplier?.code})</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <div key={`total-${invoice.id}`} className="text-xl font-bold text-blue-700">
+                          {invoice.currency} {(invoice.total_gross || 0).toFixed(2)}
+                        </div>
+                        <div key={`count-${invoice.id}`} className="text-xs text-gray-500">
+                          {itemsCount} produktai
+                        </div>
+                      </div>
+                    </div>
+                    <div className="ml-4">
+                      {isExpanded ? (
+                        <ChevronUp className="w-5 h-5 text-gray-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-gray-400" />
+                      )}
+                    </div>
+                  </button>
+
+                  {isExpanded && invoice.items && (
+                    <div className="border-t-2 border-gray-200 bg-gray-50 p-4">
+                      <div className="space-y-3">
+                        {invoice.items.map((item: any) => {
+                          const warehouseBatch = item.warehouse_batch;
+                          const farmBatch = item.batch;
+                          const batchLot = warehouseBatch?.lot || farmBatch?.lot;
+                          
+                          // Determine target farms: if invoice is for a farm, show that farm
+                          // If warehouse invoice, check allocations to see which farms received this product
+                          let targetFarms: any[] = [];
+                          if (invoice.farm_id && invoice.farm) {
+                            targetFarms = [invoice.farm];
+                          } else if (warehouseBatch?.allocations && warehouseBatch.allocations.length > 0) {
+                            targetFarms = warehouseBatch.allocations.map((alloc: any) => ({
+                              name: alloc.farm?.name,
+                              qty: alloc.allocated_qty
+                            }));
+                          } else if (farmBatch?.farm) {
+                            targetFarms = [farmBatch.farm];
+                          }
+
+                          return (
+                            <div
+                              key={item.id}
+                              className="bg-white p-4 rounded-lg border border-gray-200"
+                            >
+                              <div className="flex items-start justify-between gap-4">
+                                <div className="flex-1">
+                                  <div className="flex items-center gap-2 mb-2">
+                                    <span className="text-xs font-medium text-gray-500">#{item.line_no}</span>
+                                    <span className="font-semibold text-gray-900">
+                                      {item.product?.name || item.description}
+                                    </span>
+                                    {item.product && (
+                                      <span className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded">
+                                        {item.product.category}
+                                      </span>
+                                    )}
+                                  </div>
+                                  
+                                  {item.sku && (
+                                    <div className="text-xs text-gray-500 mb-2">SKU: {item.sku}</div>
+                                  )}
+
+                                  <div className="grid grid-cols-2 gap-3 text-sm">
+                                    <div key={`qty-${item.id}`}>
+                                      <span className="text-gray-600">Kiekis:</span>
+                                      <span className="ml-2 font-medium text-gray-900">{item.quantity}</span>
+                                    </div>
+                                    <div key={`price-${item.id}`}>
+                                      <span className="text-gray-600">Vnt. kaina:</span>
+                                      <span className="ml-2 font-medium text-gray-900">
+                                        {invoice.currency} {(item.unit_price || 0).toFixed(2)}
+                                      </span>
+                                    </div>
+                                    {batchLot && (
+                                      <div key={`batch-${item.id}`}>
+                                        <span className="text-gray-600">Serija:</span>
+                                        <span className="ml-2 font-medium text-gray-900">{batchLot}</span>
+                                      </div>
+                                    )}
+                                    <div key={`farm-${item.id}`} className="col-span-2">
+                                      <span className="text-gray-600">Vieta:</span>
+                                      {targetFarms.length > 0 ? (
+                                        <div className="ml-2 inline-flex flex-wrap gap-2">
+                                          {targetFarms.map((farm: any, idx: number) => (
+                                            <span key={`farm-${item.id}-${idx}`} className="px-2 py-0.5 bg-green-100 text-green-700 rounded text-sm font-bold">
+                                              {farm.name}
+                                              {farm.qty && ` (${farm.qty})`}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      ) : (
+                                        <span className="ml-2 font-bold text-purple-700">Sandėlis</span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+                                
+                                <div className="text-right">
+                                  <div className="font-bold text-blue-700 text-lg">
+                                    {invoice.currency} {(item.total_price || 0).toFixed(2)}
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-4 pt-4 border-t-2 border-gray-300 bg-white rounded-lg p-3">
+                        <div className="grid grid-cols-3 gap-4 text-sm">
+                          <div key={`net-${invoice.id}`}>
+                            <span className="text-gray-600">Suma be PVM:</span>
+                            <span className="ml-2 font-bold text-gray-900">
+                              {invoice.currency} {(invoice.total_net || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div key={`vat-${invoice.id}`}>
+                            <span className="text-gray-600">PVM ({invoice.vat_rate || 0}%):</span>
+                            <span className="ml-2 font-bold text-gray-900">
+                              {invoice.currency} {(invoice.total_vat || 0).toFixed(2)}
+                            </span>
+                          </div>
+                          <div key={`gross-${invoice.id}`} className="text-right">
+                            <span className="text-gray-600">Suma su PVM:</span>
+                            <span className="ml-2 font-bold text-green-700 text-lg">
+                              {invoice.currency} {(invoice.total_gross || 0).toFixed(2)}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </>
       )}
     </div>
   );

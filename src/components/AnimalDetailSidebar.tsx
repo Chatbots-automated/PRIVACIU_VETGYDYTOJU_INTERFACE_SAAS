@@ -420,7 +420,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
               : 'text-gray-600 hover:text-gray-900'
           }`}
         >
-          Gydymas
+          Gydymų istorija
         </button>
         <button
           onClick={() => handleTabChange('vaccinations')}
@@ -2110,10 +2110,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
   };
 
   const fetchStockLevel = async (productId: string) => {
+    if (!selectedFarm) return 0;
+    
     const { data: batchesData, error } = await supabase
       .from('batches')
       .select('id, received_qty, qty_left, expiry_date')
-      .eq('product_id', productId);
+      .eq('product_id', productId)
+      .eq('farm_id', selectedFarm.id);
 
     if (error || !batchesData) return 0;
 
@@ -2136,10 +2139,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
   const getOldestBatchWithStock = async (productId: string): Promise<string> => {
     try {
+      if (!selectedFarm) return '';
+      
       const { data: batchesData, error } = await supabase
         .from('batches')
         .select('id, qty_left, expiry_date')
         .eq('product_id', productId)
+        .eq('farm_id', selectedFarm.id)
         .order('expiry_date', { ascending: true });
 
       if (error) {
@@ -2639,10 +2645,16 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
           let futureVisits: any[] = [];
           const todayDate = formData.visit_datetime.split('T')[0];
+          
+          // Check if all medications have quantities (new behavior for bulk entry)
+          const allHaveQuantities = treatmentData.courseMedicationSchedule?.every((daySchedule: any) => 
+            daySchedule.medications.every((med: any) => med.qty && med.batch_id)
+          ) || false;
 
           // If we have a full course schedule (from CourseMedicationScheduler)
           if (treatmentData.courseMedicationSchedule && treatmentData.courseMedicationSchedule.length > 0) {
-            console.log('✅ Using detailed course schedule');
+            console.log('✅ Using detailed course schedule with all quantities filled');
+            console.log('All medications have quantities?', allHaveQuantities);
 
             // Filter out today's date to avoid creating a duplicate visit
             futureVisits = treatmentData.courseMedicationSchedule
@@ -2656,7 +2668,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                 const dailyMedications = daySchedule.medications.map((med: any) => ({
                   product_id: med.product_id,
                   batch_id: med.batch_id || null,
-                  qty: null,
+                  qty: med.qty || null,
                   unit: med.unit,
                   purpose: med.purpose || 'Gydymas',
                   teat: med.teat || null,
@@ -2667,8 +2679,10 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                   animal_id: animalId,
                   visit_datetime: `${daySchedule.date}T10:00:00`,
                   procedures: ['Gydymas'],
-                  status: 'Planuojamas',
-                  notes: `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
+                  status: allHaveQuantities ? 'Baigtas' : 'Planuojamas',
+                  notes: allHaveQuantities 
+                    ? `Gydymo kursas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}`
+                    : `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
                   vet_name: formData.vet_name || null,
                   created_by_user_id: user?.full_name || user?.email || null,
                   next_visit_required: false,
@@ -2676,7 +2690,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                   related_treatment_id: treatmentRecord.id,
                   related_visit_id: visitData.id,
                   planned_medications: dailyMedications,
-                  medications_processed: false,
+                  medications_processed: allHaveQuantities,
                 };
               });
 
@@ -2688,13 +2702,11 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             if (todaySchedule) {
               console.log('✅ Found today\'s medications in course schedule, processing for today');
 
-              // If the visit is being completed (autoComplete), we need to deduct stock for today
-              if (autoComplete) {
+              // If all medications have quantities OR visit is being completed, deduct stock
+              if (allHaveQuantities || autoComplete) {
                 console.log('✅ Visit being completed - creating usage_items for today\'s medications');
 
                 for (const med of todaySchedule.medications) {
-                  // For today's visit when completing, we need batch_id and qty
-                  // These should have been filled by VisitMedicationEditor or similar
                   if (med.batch_id && med.qty) {
                     const { error: usageError } = await supabase
                       .from('usage_items')
@@ -2719,7 +2731,10 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                 // Mark medications as processed
                 await supabase
                   .from('animal_visits')
-                  .update({ medications_processed: true })
+                  .update({ 
+                    medications_processed: true,
+                    status: 'Baigtas'
+                  })
                   .eq('id', visitData.id);
 
                 console.log('✅ Today\'s medications processed and stock deducted');
@@ -2827,15 +2842,52 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
           // Create new visits
           if (visitsToCreate.length > 0) {
-            const { error: createError } = await supabase
+            const { data: createdVisits, error: createError } = await supabase
               .from('animal_visits')
-              .insert(visitsToCreate);
+              .insert(visitsToCreate)
+              .select();
 
             if (createError) {
               console.error('Error creating future visits:', createError);
               showNotification('Įspėjimas: Naujų vizitų sukūrimas nepavyko. Klaida: ' + createError.message, 'warning');
             } else {
               createdCount = visitsToCreate.length;
+              
+              // If visits were created as completed (with quantities), deduct stock immediately
+              if (allHaveQuantities && createdVisits) {
+                console.log('✅ Auto-completing course visits and deducting stock for all days');
+                
+                for (const visit of createdVisits) {
+                  const visitDate = visit.visit_datetime.split('T')[0];
+                  const daySchedule = treatmentData.courseMedicationSchedule.find(
+                    (ds: any) => ds.date === visitDate
+                  );
+                  
+                  if (daySchedule && daySchedule.medications) {
+                    // Create usage_items for this visit
+                    const usageItems = daySchedule.medications.map((med: any) => ({
+                      farm_id: selectedFarm!.id,
+                      treatment_id: treatmentRecord.id,
+                      product_id: med.product_id,
+                      batch_id: med.batch_id,
+                      qty: parseFloat(med.qty),
+                      unit: med.unit,
+                      purpose: med.purpose || 'Gydymas',
+                      teat: med.teat || null,
+                    }));
+                    
+                    const { error: usageError } = await supabase
+                      .from('usage_items')
+                      .insert(usageItems);
+                    
+                    if (usageError) {
+                      console.error(`❌ Error creating usage_items for ${visitDate}:`, usageError);
+                    } else {
+                      console.log(`✅ Stock deducted for visit on ${visitDate}`);
+                    }
+                  }
+                }
+              }
             }
           }
 
@@ -4464,9 +4516,10 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
         </div>
       )}
 
-      {showCourseScheduler && (
+      {showCourseScheduler && selectedFarm && (
         <CourseMedicationScheduler
           animalId={animalId}
+          farmId={selectedFarm.id}
           initialStartDate={formData.visit_datetime.split('T')[0]}
           initialSchedule={treatmentData.courseMedicationSchedule}
           onConfirm={(schedule) => {

@@ -144,6 +144,61 @@ export function StockAllocation() {
       for (const { product, qty } of productsToAllocate) {
         if (!product) continue;
         
+        // First, check if the product exists for this farm, if not create it
+        const { data: existingFarmProduct } = await supabase
+          .from('products')
+          .select('id')
+          .eq('farm_id', allocationForm.farm_id)
+          .eq('name', product.product_name)
+          .maybeSingle();
+        
+        let farmProductId = product.product_id;
+        
+        if (!existingFarmProduct) {
+          console.log(`📦 Product "${product.product_name}" doesn't exist for farm, creating it...`);
+          
+          // Get the warehouse product details
+          const { data: warehouseProduct } = await supabase
+            .from('products')
+            .select('*')
+            .eq('id', product.product_id)
+            .maybeSingle();
+          
+          if (warehouseProduct) {
+            // Create farm-specific product
+            const { data: newFarmProduct, error: productError } = await supabase
+              .from('products')
+              .insert({
+                farm_id: allocationForm.farm_id,
+                name: warehouseProduct.name,
+                category: warehouseProduct.category,
+                primary_pack_unit: warehouseProduct.primary_pack_unit,
+                primary_pack_size: warehouseProduct.primary_pack_size,
+                active_substance: warehouseProduct.active_substance,
+                registration_code: warehouseProduct.registration_code,
+                dosage_notes: warehouseProduct.dosage_notes,
+                withdrawal_days_meat: warehouseProduct.withdrawal_days_meat,
+                withdrawal_days_milk: warehouseProduct.withdrawal_days_milk,
+                subcategory: warehouseProduct.subcategory,
+                subcategory_2: warehouseProduct.subcategory_2,
+                package_weight_g: warehouseProduct.package_weight_g,
+                is_active: true,
+              })
+              .select()
+              .single();
+            
+            if (productError) {
+              console.error('Error creating farm product:', productError);
+              throw new Error(`Nepavyko sukurti produkto ūkyje: ${productError.message}`);
+            }
+            
+            if (newFarmProduct) {
+              farmProductId = newFarmProduct.id;
+              console.log(`✅ Created farm product with ID: ${farmProductId}`);
+            }
+          }
+        }
+        
         let remainingQty = qty;
         const batchesToAllocateFrom = product.batches || [product];
         
@@ -169,12 +224,12 @@ export function StockAllocation() {
 
           if (allocationError) throw allocationError;
 
-          // 2. Create corresponding batch in the farm
+          // 2. Create corresponding batch in the farm (using farm-specific product ID)
           const { error: batchError } = await supabase
             .from('batches')
             .insert({
               farm_id: allocationForm.farm_id,
-              product_id: product.product_id,
+              product_id: farmProductId,
               allocation_id: allocation.id,
               lot: batch.lot,
               expiry_date: batch.expiry_date,

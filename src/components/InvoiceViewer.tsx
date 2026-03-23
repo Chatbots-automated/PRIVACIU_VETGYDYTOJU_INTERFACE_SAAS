@@ -18,6 +18,11 @@ interface Invoice {
   total_gross: number;
   vat_rate: number;
   created_at: string;
+  farm_id: string | null;
+  farm?: {
+    name: string;
+    code: string;
+  };
 }
 
 interface InvoiceItem {
@@ -38,7 +43,11 @@ interface InvoiceItem {
   };
 }
 
-export function InvoiceViewer() {
+interface InvoiceViewerProps {
+  showAllInvoices?: boolean;
+}
+
+export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
   const { selectedFarm } = useFarm();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [selectedInvoice, setSelectedInvoice] = useState<string | null>(null);
@@ -47,22 +56,26 @@ export function InvoiceViewer() {
 
   useEffect(() => {
     loadInvoices();
-  }, [selectedFarm]);
+  }, [selectedFarm, showAllInvoices]);
 
   const loadInvoices = async () => {
     setLoading(true);
     try {
-      if (!selectedFarm) {
-        setInvoices([]);
-        setLoading(false);
-        return;
+      let query = supabase
+        .from('invoices')
+        .select('*, farm:farms(name, code)')
+        .order('invoice_date', { ascending: false });
+
+      // If showAllInvoices is true, don't filter by farm at all
+      if (!showAllInvoices) {
+        if (selectedFarm) {
+          query = query.eq('farm_id', selectedFarm.id);
+        } else {
+          query = query.is('farm_id', null);
+        }
       }
 
-      const { data, error } = await supabase
-        .from('invoices')
-        .select('*')
-        .eq('farm_id', selectedFarm.id)
-        .order('invoice_date', { ascending: false });
+      const { data, error } = await query;
 
       if (error) throw error;
       setInvoices(data || []);
@@ -125,8 +138,20 @@ export function InvoiceViewer() {
         <div className="flex items-center gap-3">
           <FileText className="w-6 h-6 text-blue-600" />
           <div>
-            <h3 className="text-lg font-bold text-gray-900">Sąskaitų Priskirimas</h3>
-            <p className="text-sm text-gray-600">Peržiūrėkite sąskaitas ir jų produktus</p>
+            <h3 className="text-lg font-bold text-gray-900">
+              {showAllInvoices 
+                ? 'Visos Sąskaitos' 
+                : selectedFarm 
+                  ? `${selectedFarm.name} Sąskaitos` 
+                  : 'Sandėlio Sąskaitos'}
+            </h3>
+            <p className="text-sm text-gray-600">
+              {showAllInvoices 
+                ? 'Peržiūrėkite visas sandėlio ir ūkių sąskaitas' 
+                : selectedFarm 
+                  ? 'Peržiūrėkite ūkio sąskaitas ir jų produktus' 
+                  : 'Peržiūrėkite sandėlio sąskaitas ir jų produktus'}
+            </p>
           </div>
         </div>
       </div>
@@ -135,7 +160,13 @@ export function InvoiceViewer() {
         <div className="text-center py-12 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
           <FileText className="w-12 h-12 text-gray-400 mx-auto mb-3" />
           <p className="text-gray-600 font-medium">Sąskaitų nerasta</p>
-          <p className="text-sm text-gray-500 mt-1">Sąskaitos bus rodomos po produktų priėmimo</p>
+          <p className="text-sm text-gray-500 mt-1">
+            {showAllInvoices 
+              ? 'Sąskaitos bus rodomos po produktų priėmimo (Pajamavimas) arba paskirstymo' 
+              : selectedFarm 
+                ? 'Ūkio sąskaitos bus rodomos po produktų paskirstymo' 
+                : 'Sandėlio sąskaitos bus rodomos po produktų priėmimo (Pajamavimas)'}
+          </p>
         </div>
       ) : (
         <div className="space-y-3">
@@ -159,6 +190,15 @@ export function InvoiceViewer() {
                         <Calendar className="w-3 h-3" />
                         {formatDateLT(invoice.invoice_date)}
                       </span>
+                      {showAllInvoices && (
+                        <span className={`text-xs px-2 py-0.5 rounded font-medium ${
+                          invoice.farm_id 
+                            ? 'bg-green-100 text-green-700' 
+                            : 'bg-purple-100 text-purple-700'
+                        }`}>
+                          {invoice.farm_id ? invoice.farm?.name || 'Ūkis' : 'Sandėlis'}
+                        </span>
+                      )}
                     </div>
                     <div className="flex items-center gap-2 text-sm text-gray-600">
                       <Building2 className="w-4 h-4" />

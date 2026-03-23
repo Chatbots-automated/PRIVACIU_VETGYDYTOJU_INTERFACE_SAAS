@@ -4,7 +4,8 @@ import { Product, Supplier } from '../lib/types';
 import { normalizeNumberInput } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
-import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Package } from 'lucide-react';
+import { formatDateLT } from '../lib/formatters';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
 
 export function WarehouseStock() {
@@ -45,6 +46,9 @@ export function WarehouseStock() {
   const [editingHeader, setEditingHeader] = useState(false);
   const [headerData, setHeaderData] = useState<any>(null);
   const [pdfUrls, setPdfUrls] = useState<string[]>([]);
+  const [warehouseInvoices, setWarehouseInvoices] = useState<any[]>([]);
+  const [expandedInvoice, setExpandedInvoice] = useState<string | null>(null);
+  const [invoiceItems, setInvoiceItems] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     product_id: '',
@@ -79,6 +83,7 @@ export function WarehouseStock() {
 
   useEffect(() => {
     loadData();
+    loadWarehouseInvoices();
   }, []);
 
   useRealtimeSubscription({
@@ -100,6 +105,50 @@ export function WarehouseStock() {
 
     if (productsRes.data) setProducts(productsRes.data);
     if (suppliersRes.data) setSuppliers(suppliersRes.data);
+  };
+
+  const loadWarehouseInvoices = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('invoices')
+        .select('*')
+        .is('farm_id', null)
+        .order('invoice_date', { ascending: false })
+        .limit(20);
+
+      if (error) throw error;
+      setWarehouseInvoices(data || []);
+    } catch (error) {
+      console.error('Error loading warehouse invoices:', error);
+    }
+  };
+
+  const loadInvoiceItems = async (invoiceId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('invoice_items')
+        .select(`
+          *,
+          product:products(id, name, category)
+        `)
+        .eq('invoice_id', invoiceId)
+        .order('line_no');
+
+      if (error) throw error;
+      setInvoiceItems(data || []);
+    } catch (error) {
+      console.error('Error loading invoice items:', error);
+    }
+  };
+
+  const toggleInvoice = (invoiceId: string) => {
+    if (expandedInvoice === invoiceId) {
+      setExpandedInvoice(null);
+      setInvoiceItems([]);
+    } else {
+      setExpandedInvoice(invoiceId);
+      loadInvoiceItems(invoiceId);
+    }
   };
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -600,6 +649,7 @@ export function WarehouseStock() {
 
         stockEntries.push({
           product_id: matched.id,
+          invoice_id: invoice.id,
           lot: itemData.batch || bulkReceiveData.lot || null,
           mfg_date: null,
           expiry_date: itemData.expiry || null,
@@ -681,6 +731,7 @@ export function WarehouseStock() {
       });
 
       await loadData();
+      await loadWarehouseInvoices();
     } catch (error: any) {
       alert('Klaida priimant produktus: ' + error.message);
     } finally {
@@ -2290,6 +2341,80 @@ export function WarehouseStock() {
             </button>
           </div>
         </form>
+
+        {/* Warehouse Invoices List */}
+        {!invoiceData && warehouseInvoices.length > 0 && (
+          <div className="mt-8">
+            <div className="flex items-center gap-3 mb-4">
+              <FileText className="w-6 h-6 text-gray-700" />
+              <h3 className="text-xl font-bold text-gray-900">Priimtos sąskaitos</h3>
+            </div>
+            
+            <div className="space-y-3">
+              {warehouseInvoices.map((invoice) => (
+                <div key={invoice.id} className="border border-gray-200 rounded-lg overflow-hidden">
+                  <button
+                    onClick={() => toggleInvoice(invoice.id)}
+                    className="w-full p-4 bg-white hover:bg-gray-50 transition-colors flex items-center justify-between"
+                  >
+                    <div className="flex items-start gap-4 flex-1 text-left">
+                      <div className="bg-blue-100 p-2 rounded-lg">
+                        <FileText className="w-5 h-5 text-blue-600" />
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-3 mb-1">
+                          <h4 className="font-semibold text-gray-900">{invoice.invoice_number}</h4>
+                          <span className="text-sm text-gray-500">{formatDateLT(invoice.invoice_date)}</span>
+                        </div>
+                        <p className="text-sm text-gray-600">{invoice.supplier_name}</p>
+                        <div className="flex items-center gap-4 mt-2">
+                          <span className="text-sm font-medium text-gray-700">
+                            Viso: <span className="text-blue-600">{invoice.total_gross.toFixed(2)} {invoice.currency}</span>
+                          </span>
+                          <span className="text-xs text-gray-500">
+                            PVM: {invoice.total_vat.toFixed(2)} {invoice.currency}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                    {expandedInvoice === invoice.id ? (
+                      <ChevronUp className="w-5 h-5 text-gray-400" />
+                    ) : (
+                      <ChevronDown className="w-5 h-5 text-gray-400" />
+                    )}
+                  </button>
+                  
+                  {expandedInvoice === invoice.id && (
+                    <div className="border-t border-gray-200 bg-gray-50 p-4">
+                      <h5 className="font-semibold text-gray-900 mb-3 flex items-center gap-2">
+                        <Package className="w-4 h-4" />
+                        Produktai
+                      </h5>
+                      {invoiceItems.length > 0 ? (
+                        <div className="space-y-2">
+                          {invoiceItems.map((item) => (
+                            <div key={item.id} className="bg-white p-3 rounded-lg border border-gray-200">
+                              <div className="flex items-start justify-between">
+                                <div className="flex-1">
+                                  <p className="font-medium text-gray-900">{item.product?.name || item.description}</p>
+                                  <p className="text-sm text-gray-600 mt-1">
+                                    Kiekis: {item.quantity} | Kaina: {item.total_price.toFixed(2)} {invoice.currency}
+                                  </p>
+                                </div>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-sm text-gray-500">Kraunama...</p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         </div>
       </div>
     </div>

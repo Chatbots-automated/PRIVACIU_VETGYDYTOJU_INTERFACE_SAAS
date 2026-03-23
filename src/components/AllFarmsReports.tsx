@@ -14,12 +14,13 @@ import {
 import {
   TreatedAnimalsReport,
   DrugJournalReport,
-  WithdrawalReport
+  WithdrawalReport,
+  InvoicesReport
 } from './ReportTemplates';
 import { SearchableSelect } from './SearchableSelect';
 import { exportReportToExcel, getColumnsForReportType, getReportTitle } from '../lib/reportExport';
 
-type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal';
+type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal' | 'invoices';
 
 const getCurrentMonthDates = () => {
   const now = new Date();
@@ -38,8 +39,8 @@ export function AllFarmsReports() {
   const [reportType, setReportType] = useState<ReportType>('drug_journal');
   const [data, setData] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [dateFrom, setDateFrom] = useState(currentMonth.from);
-  const [dateTo, setDateTo] = useState(currentMonth.to);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
   const [showFilters, setShowFilters] = useState(true);
 
   const [filterAnimal, setFilterAnimal] = useState('');
@@ -57,14 +58,27 @@ export function AllFarmsReports() {
 
   useEffect(() => {
     loadFilterOptions();
-    if (reportType !== 'treated_animals') {
-      loadReport();
+    
+    // For invoices, clear date filters
+    if (reportType === 'invoices') {
+      setDateFrom('');
+      setDateTo('');
+    } else if (reportType !== 'treated_animals') {
+      // For other reports, use current month filters
+      const currentMonth = getCurrentMonthDates();
+      setDateFrom(currentMonth.from);
+      setDateTo(currentMonth.to);
     }
   }, [reportType]);
 
-  // Auto-load treated_animals report with current month filters
+  // Auto-load reports when ready
   useEffect(() => {
-    if (reportType === 'treated_animals' && dateFrom && dateTo) {
+    if (reportType === 'invoices') {
+      // Load invoices immediately without date filters
+      loadReport();
+    } else if (reportType === 'treated_animals' && dateFrom && dateTo) {
+      loadReport();
+    } else if (reportType !== 'treated_animals' && dateFrom && dateTo) {
       loadReport();
     }
   }, [reportType, dateFrom, dateTo]);
@@ -154,6 +168,70 @@ export function AllFarmsReports() {
           result = data || [];
           break;
         }
+
+        case 'invoices': {
+          console.log('🔍 Loading invoices with filters:', { dateFrom, dateTo, filterFarm });
+          
+          let query = supabase
+            .from('invoices')
+            .select(`
+              *,
+              farm:farms(name, code),
+              supplier:suppliers(name, code)
+            `)
+            .order('invoice_date', { ascending: false });
+
+          if (dateFrom) query = query.gte('invoice_date', dateFrom);
+          if (dateTo) query = query.lte('invoice_date', dateTo);
+          if (filterFarm) query = query.eq('farm_id', filterFarm);
+
+          const { data: invoicesData, error: invoicesError } = await query;
+          
+          console.log('📦 Invoices loaded:', invoicesData?.length || 0, invoicesData);
+          
+          if (invoicesError) {
+            console.error('❌ Error loading invoices:', invoicesError);
+            throw invoicesError;
+          }
+
+          // Load invoice items separately for each invoice
+          const invoicesWithItems = await Promise.all(
+            (invoicesData || []).map(async (invoice) => {
+              const { data: items, error: itemsError } = await supabase
+                .from('invoice_items')
+                .select(`
+                  *,
+                  product:products(name, category),
+                  batch:batches(lot, farm_id, farm:farms(name, code)),
+                  warehouse_batch:warehouse_batches(
+                    lot,
+                    allocations:farm_stock_allocations(
+                      farm_id,
+                      allocated_qty,
+                      farm:farms(name, code)
+                    )
+                  )
+                `)
+                .eq('invoice_id', invoice.id)
+                .order('line_no');
+
+              if (itemsError) {
+                console.error('❌ Error loading items for invoice:', invoice.id, itemsError);
+              }
+
+              console.log(`📋 Items for invoice ${invoice.invoice_number}:`, items?.length || 0);
+
+              return {
+                ...invoice,
+                items: items || []
+              };
+            })
+          );
+
+          console.log('✅ Final invoices with items:', invoicesWithItems.length);
+          result = invoicesWithItems;
+          break;
+        }
       }
 
       setData(result);
@@ -235,6 +313,17 @@ export function AllFarmsReports() {
           >
             <AlertTriangle className="w-4 h-4" />
             Karencijos žurnalas
+          </button>
+          <button
+            onClick={() => setReportType('invoices')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'invoices'
+                ? 'bg-slate-700 text-white'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Sąskaitos
           </button>
         </div>
 
@@ -420,6 +509,7 @@ export function AllFarmsReports() {
             {reportType === 'drug_journal' && <DrugJournalReport data={data} />}
             {reportType === 'treated_animals' && <TreatedAnimalsReport data={data} />}
             {reportType === 'withdrawal' && <WithdrawalReport data={data} />}
+            {reportType === 'invoices' && <InvoicesReport data={data} />}
           </div>
         )}
       </div>

@@ -28,23 +28,8 @@ export function AuthForm() {
       <div className="w-full max-w-md">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
           <div className="bg-blue-600 px-8 py-10 text-center">
-            <div className="flex items-center justify-center mb-4">
-              <img 
-                src="https://rvac.lt/s/img/wp-content/uploads/RVAC_logo.png" 
-                alt="RVAC Logo" 
-                className="h-20 w-auto"
-                onError={(e) => {
-                  e.currentTarget.style.display = 'none';
-                  const fallback = e.currentTarget.nextElementSibling;
-                  if (fallback) (fallback as HTMLElement).style.display = 'flex';
-                }}
-              />
-              <div className="hidden w-20 h-20 rounded-lg bg-white p-4 items-center justify-center">
-                <Stethoscope className="w-12 h-12 text-blue-600" />
-              </div>
-            </div>
-            <h1 className="text-3xl font-bold text-white mb-2">
-              RVAC
+            <h1 className="text-3xl font-bold text-white mb-4">
+              VET Praktika, UAB
             </h1>
             <p className="text-blue-100">
               Veterinarijos Valdymo Sistema
@@ -141,7 +126,7 @@ export function AuthForm() {
         </div>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <p>© 2026 RVAC · Veterinarijos Valdymo Sistema v1.0.0</p>
+          <p>© 2026 VET Praktika, UAB · Veterinarijos Valdymo Sistema v1.0.0</p>
         </div>
       </div>
     </div>

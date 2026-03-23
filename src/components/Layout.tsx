@@ -99,18 +99,8 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
               </button>
             </div>
             <div className="flex items-center gap-3 xl:gap-4">
-              <div className="flex-shrink-0">
-                <img
-                  src="https://rvac.lt/s/img/wp-content/uploads/RVAC_logo.png"
-                  alt="RVAC"
-                  className="w-12 xl:w-16 h-12 xl:h-16 rounded-lg bg-white p-1 object-contain"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </div>
               <div>
-                <h1 className="font-bold text-base xl:text-xl text-white">RVAC</h1>
+                <h1 className="font-bold text-base xl:text-xl text-white">VET Praktika, UAB</h1>
                 <p className="text-xs text-gray-400 xl:mt-1">Veterinarija Sistema</p>
               </div>
             </div>
@@ -267,7 +257,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
                     e.currentTarget.style.display = 'none';
                   }}
                 />
-                <span>© 2025 RVAC. Visos teisės saugomos.</span>
+                <span>© 2025 VET Praktika, UAB. Visos teisės saugomos.</span>
               </div>
               <div className="text-xs text-gray-500">
                 Veterinarijos Valdymo Sistema · Versija 1.0.0

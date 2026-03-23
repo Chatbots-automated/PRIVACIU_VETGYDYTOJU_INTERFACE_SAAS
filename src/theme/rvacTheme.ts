@@ -1,4 +1,4 @@
-// RVAC Design System - Modern Blue/Indigo Theme
+// VET Praktika, UAB Design System - Modern Blue/Indigo Theme
 // This replaces the emerald/teal theme with a unique blue/indigo palette
 
 export const rvacTheme = {

@@ -55,18 +55,11 @@ export function FarmSelector({ onFarmSelected, onBack }: FarmSelectorProps) {
         </div>
 
         <div className="text-center mb-12">
-          <div className="inline-block mb-6">
-            <img 
-              src="https://rvac.lt/s/img/wp-content/uploads/RVAC_logo.png" 
-              alt="RVAC Logo" 
-              className="h-20 w-auto"
-            />
-          </div>
           <h1 className="text-4xl font-bold text-gray-900 mb-3">
             Pasirinkite Ūkį
           </h1>
           <p className="text-xl text-gray-600">
-            Veterinarijos modulis
+            VET Praktika, UAB - Veterinarijos modulis
           </p>
         </div>
 

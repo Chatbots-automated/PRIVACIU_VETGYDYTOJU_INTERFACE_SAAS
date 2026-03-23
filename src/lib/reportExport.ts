@@ -266,6 +266,49 @@ export const MEDICAL_WASTE_COLUMNS: ExportColumn[] = [
   { key: 'responsible_person', header: 'Atsakingas asmuo', width: 25 },
 ];
 
+const INVOICES_COLUMNS: ExportColumn[] = [
+  {
+    key: 'invoice_number',
+    header: 'Sąskaitos Nr.',
+    width: 15
+  },
+  {
+    key: 'invoice_date',
+    header: 'Data',
+    width: 12,
+    format: (val: string) => val ? formatDateLT(val) : '-'
+  },
+  {
+    key: 'farm_name',
+    header: 'Ūkis/Sandėlis',
+    width: 20,
+    format: (val: string, row: any) => row.farm?.name || 'Sandėlis'
+  },
+  {
+    key: 'supplier_name',
+    header: 'Tiekėjas',
+    width: 25
+  },
+  {
+    key: 'total_net',
+    header: 'Suma be PVM',
+    width: 15,
+    format: (val: number) => `€${val.toFixed(2)}`
+  },
+  {
+    key: 'total_vat',
+    header: 'PVM',
+    width: 12,
+    format: (val: number) => `€${val.toFixed(2)}`
+  },
+  {
+    key: 'total_gross',
+    header: 'Suma su PVM',
+    width: 15,
+    format: (val: number) => `€${val.toFixed(2)}`
+  }
+];
+
 export function getColumnsForReportType(reportType: string): ExportColumn[] {
   switch (reportType) {
     case 'drug_journal':
@@ -278,6 +321,8 @@ export function getColumnsForReportType(reportType: string): ExportColumn[] {
       return INSEMINATION_JOURNAL_COLUMNS;
     case 'medical_waste':
       return MEDICAL_WASTE_COLUMNS;
+    case 'invoices':
+      return INVOICES_COLUMNS;
     default:
       return [];
   }
@@ -290,6 +335,7 @@ export function getReportTitle(reportType: string): string {
     biocide_journal: 'Biocidų žurnalas',
     insemination_journal: 'Sėklinimo žurnalas',
     medical_waste: 'Medicininių atliekų žurnalas',
+    invoices: 'Sąskaitos',
   };
   return titles[reportType] || 'Ataskaita';
 }

@@ -133,4 +133,4 @@ export function parseNumberInput(value: string): number {
   return parseFloat(normalized);
 }
 
-// GEA-related functions removed - no longer needed for RVAC system
+// GEA-related functions removed - no longer needed for VET Praktika, UAB system
