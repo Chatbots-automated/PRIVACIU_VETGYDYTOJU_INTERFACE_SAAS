@@ -564,9 +564,9 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                       <tr className="bg-gray-100">
                         <th className="border border-gray-300 px-3 py-2 text-left text-xs font-bold text-gray-700">Produktas</th>
                         <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Kiekis</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Vnt. kaina (be nuol.)</th>
                         <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Nuolaida %</th>
-                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Vnt. kaina</th>
-                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Viso</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Viso (su nuol.)</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -577,17 +577,71 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                             {item.sku && <div className="text-xs text-gray-500">SKU: {item.sku}</div>}
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.quantity}</td>
-                          <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-600">
-                            {item.discount_percent != null ? `${Number(item.discount_percent).toFixed(2)}%` : '—'}
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right">
+                            {(() => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const totalPrice = parseFloat(item.total_price) || 0;
+                              const discount = parseFloat(item.discount_percent) || 0;
+                              
+                              if (discount > 0 && qty > 0) {
+                                const priceAfterDiscount = totalPrice / qty;
+                                const priceBeforeDiscount = priceAfterDiscount / (1 - discount / 100);
+                                return `${priceBeforeDiscount.toFixed(4)} ${invoiceDetails.currency}`;
+                              }
+                              return `${item.unit_price.toFixed(4)} ${invoiceDetails.currency}`;
+                            })()}
                           </td>
-                          <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.unit_price.toFixed(4)} {invoiceDetails.currency}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right text-amber-700 font-medium">
+                            {item.discount_percent != null && item.discount_percent > 0 ? `${Number(item.discount_percent).toFixed(2)}%` : '—'}
+                          </td>
                           <td className="border border-gray-300 px-3 py-2 text-sm text-right font-medium">{item.total_price.toFixed(2)} {invoiceDetails.currency}</td>
                         </tr>
                       ))}
                     </tbody>
                     <tfoot>
+                      <tr className="bg-amber-50 font-bold">
+                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">Suma prieš nuolaidą:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-700">
+                          {(() => {
+                            const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const totalPrice = parseFloat(item.total_price) || 0;
+                              const discount = parseFloat(item.discount_percent) || 0;
+                              
+                              if (discount > 0 && qty > 0) {
+                                const priceAfterDiscount = totalPrice / qty;
+                                const priceBeforeDiscount = priceAfterDiscount / (1 - discount / 100);
+                                return sum + (priceBeforeDiscount * qty);
+                              }
+                              return sum + totalPrice;
+                            }, 0);
+                            return `${totalBeforeDiscount.toFixed(2)} ${invoiceDetails.currency}`;
+                          })()}
+                        </td>
+                      </tr>
+                      <tr className="bg-amber-50 font-bold">
+                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">Nuolaida:</td>
+                        <td className="border border-gray-300 px-3 py-2 text-sm text-right text-amber-700">
+                          {(() => {
+                            const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
+                              const qty = parseFloat(item.quantity) || 0;
+                              const totalPrice = parseFloat(item.total_price) || 0;
+                              const discount = parseFloat(item.discount_percent) || 0;
+                              
+                              if (discount > 0 && qty > 0) {
+                                const priceAfterDiscount = totalPrice / qty;
+                                const priceBeforeDiscount = priceAfterDiscount / (1 - discount / 100);
+                                return sum + (priceBeforeDiscount * qty);
+                              }
+                              return sum + totalPrice;
+                            }, 0);
+                            const totalDiscount = totalBeforeDiscount - invoiceDetails.total_net;
+                            return `- ${totalDiscount.toFixed(2)} ${invoiceDetails.currency}`;
+                          })()}
+                        </td>
+                      </tr>
                       <tr className="bg-gray-50 font-bold">
-                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">Tarpinė suma:</td>
+                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">Tarpinė suma (su nuolaida):</td>
                         <td className="border border-gray-300 px-3 py-2 text-sm text-right">{invoiceDetails.total_net.toFixed(2)} {invoiceDetails.currency}</td>
                       </tr>
                       <tr className="bg-gray-50">
@@ -1200,11 +1254,30 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                                       <span className="ml-2 font-medium text-gray-900">{item.quantity}</span>
                                     </div>
                                     <div key={`price-${item.id}`}>
-                                      <span className="text-gray-600">Vnt. kaina:</span>
+                                      <span className="text-gray-600">Vnt. kaina (be nuol.):</span>
                                       <span className="ml-2 font-medium text-gray-900">
-                                        {invoice.currency} {(item.unit_price || 0).toFixed(2)}
+                                        {(() => {
+                                          const qty = parseFloat(item.quantity) || 0;
+                                          const totalPrice = parseFloat(item.total_price) || 0;
+                                          const discount = parseFloat(item.discount_percent) || 0;
+                                          
+                                          if (discount > 0 && qty > 0) {
+                                            const priceAfterDiscount = totalPrice / qty;
+                                            const priceBeforeDiscount = priceAfterDiscount / (1 - discount / 100);
+                                            return `${invoice.currency} ${priceBeforeDiscount.toFixed(4)}`;
+                                          }
+                                          return `${invoice.currency} ${(item.unit_price || 0).toFixed(4)}`;
+                                        })()}
                                       </span>
                                     </div>
+                                    {item.discount_percent != null && item.discount_percent > 0 && (
+                                      <div key={`price-after-${item.id}`}>
+                                        <span className="text-gray-600">Vnt. kaina (su nuol.):</span>
+                                        <span className="ml-2 font-medium text-green-700">
+                                          {invoice.currency} {(item.unit_price || 0).toFixed(4)}
+                                        </span>
+                                      </div>
+                                    )}
                                     {batchLot && (
                                       <div key={`batch-${item.id}`}>
                                         <span className="text-gray-600">Serija:</span>

@@ -23,6 +23,8 @@ interface AllocatedStockSummary {
   total_used_qty: number;
   remaining_qty: number;
   avg_purchase_price: number;
+  avg_price_before_discount: number;
+  total_discount: number;
   total_value: number;
 }
 
@@ -40,7 +42,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
     try {
       setLoading(true);
 
-      // Load allocated stock with warehouse batch prices via farm_stock_allocations
+      // Load allocated stock with warehouse batch prices and invoice items for discount info
       let query = supabase
         .from('farm_stock_allocations')
         .select(`
@@ -50,7 +52,8 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           warehouse_batch_id,
           warehouse_batches (
             purchase_price,
-            received_qty
+            received_qty,
+            invoice_id
           ),
           products (
             name,
@@ -63,14 +66,35 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       if (dateFrom) query = query.gte('created_at', dateFrom);
       if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
 
-      const { data: allocationsData } = await query;
+      const { data: allocationsData, error: allocError } = await query;
+      
+      if (allocError) {
+        console.error('Error loading allocations:', allocError);
+        throw allocError;
+      }
 
       // Also get usage data for allocated stock
-      const { data: batchesData } = await supabase
+      const { data: batchesData, error: batchError } = await supabase
         .from('batches')
         .select('product_id, received_qty, qty_left, allocation_id')
         .eq('farm_id', farmId)
         .not('allocation_id', 'is', null);
+      
+      if (batchError) {
+        console.error('Error loading batches:', batchError);
+      }
+
+      // Get invoice items with discount info for all warehouse batches
+      const invoiceIds = [...new Set(allocationsData?.map(a => (a.warehouse_batches as any)?.invoice_id).filter(Boolean))];
+      let invoiceItemsData: any[] = [];
+      
+      if (invoiceIds.length > 0) {
+        const { data } = await supabase
+          .from('invoice_items')
+          .select('invoice_id, product_id, discount_percent, unit_price, quantity, total_price')
+          .in('invoice_id', invoiceIds);
+        invoiceItemsData = data || [];
+      }
 
       if (allocationsData) {
         // Group by product and calculate totals
@@ -84,8 +108,20 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           const productName = product.name;
           const allocatedQty = parseFloat(allocation.allocated_qty) || 0;
           const purchasePrice = parseFloat(warehouseBatch.purchase_price) || 0;
-          const warehouseReceivedQty = parseFloat(warehouseBatch.received_qty) || 1; // Avoid division by 0
+          const warehouseReceivedQty = parseFloat(warehouseBatch.received_qty) || 1;
           const unitPrice = purchasePrice / warehouseReceivedQty;
+
+          // Find invoice item to get discount info
+          const invoiceItem = invoiceItemsData?.find(
+            ii => ii.invoice_id === warehouseBatch.invoice_id && ii.product_id === product.id
+          );
+          
+          const discount = invoiceItem?.discount_percent ? parseFloat(invoiceItem.discount_percent) : 0;
+          let unitPriceBeforeDiscount = unitPrice;
+          
+          if (discount > 0) {
+            unitPriceBeforeDiscount = unitPrice / (1 - discount / 100);
+          }
 
           // Find corresponding farm batch to get usage
           const farmBatch = batchesData?.find(b => b.allocation_id === allocation.id);
@@ -98,9 +134,11 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
             existing.total_used_qty += usedQty;
             existing.remaining_qty += qtyLeft;
             
-            // Weighted average price
+            // Weighted average prices
             const prevTotalQty = existing.total_allocated_qty - allocatedQty;
             existing.avg_purchase_price = ((existing.avg_purchase_price * prevTotalQty) + (unitPrice * allocatedQty)) / existing.total_allocated_qty;
+            existing.avg_price_before_discount = ((existing.avg_price_before_discount * prevTotalQty) + (unitPriceBeforeDiscount * allocatedQty)) / existing.total_allocated_qty;
+            existing.total_discount = (existing.avg_price_before_discount - existing.avg_purchase_price) * existing.total_allocated_qty;
             existing.total_value = existing.remaining_qty * existing.avg_purchase_price;
           } else {
             productMap.set(productName, {
@@ -111,6 +149,8 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
               total_used_qty: usedQty,
               remaining_qty: qtyLeft,
               avg_purchase_price: unitPrice,
+              avg_price_before_discount: unitPriceBeforeDiscount,
+              total_discount: (unitPriceBeforeDiscount - unitPrice) * allocatedQty,
               total_value: qtyLeft * unitPrice
             });
           }
@@ -134,7 +174,9 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       'Paskirstyta': item.total_allocated_qty,
       'Sunaudota': item.total_used_qty,
       'Vienetas': item.unit,
-      'Vid. kaina': item.avg_purchase_price.toFixed(2),
+      'Kaina (be nuol.)': item.avg_price_before_discount.toFixed(4),
+      'Kaina (su nuol.)': item.avg_purchase_price.toFixed(4),
+      'Nuolaida': item.total_discount.toFixed(2),
       'Bendra vertė': item.total_value.toFixed(2)
     }));
 
@@ -245,7 +287,9 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                   <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700 uppercase">Kategorija</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Paskirstyta</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Sunaudota</th>
-                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Vid. kaina</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Kaina (be nuol.)</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Kaina (su nuol.)</th>
+                  <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Nuolaida</th>
                   <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700 uppercase">Vertė</th>
                 </tr>
               </thead>
@@ -264,8 +308,14 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                     <td className="px-4 py-3 text-sm text-right text-gray-900">
                       {item.total_used_qty.toFixed(2)} {item.unit}
                     </td>
-                    <td className="px-4 py-3 text-sm text-right text-gray-900">
-                      €{item.avg_purchase_price.toFixed(2)}
+                    <td className="px-4 py-3 text-sm text-right text-gray-700">
+                      €{item.avg_price_before_discount.toFixed(4)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right text-green-700 font-medium">
+                      €{item.avg_purchase_price.toFixed(4)}
+                    </td>
+                    <td className="px-4 py-3 text-sm text-right text-amber-700 font-medium">
+                      {item.total_discount > 0 ? `- €${item.total_discount.toFixed(2)}` : '—'}
                     </td>
                     <td className="px-4 py-3 text-sm text-right font-bold text-gray-900">
                       €{item.total_value.toFixed(2)}
@@ -274,9 +324,18 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                 ))}
               </tbody>
               <tfoot>
+                <tr className="bg-amber-50 border-t-2 border-amber-200">
+                  <td colSpan={6} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                    Bendra nuolaida:
+                  </td>
+                  <td className="px-4 py-3 text-sm font-bold text-amber-700 text-right">
+                    - €{allocatedStock.reduce((sum, item) => sum + item.total_discount, 0).toFixed(2)}
+                  </td>
+                  <td className="px-4 py-3"></td>
+                </tr>
                 <tr className="bg-gray-50 border-t-2 border-gray-300">
-                  <td colSpan={5} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                    Bendra vertė:
+                  <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                    Bendra vertė (su nuolaida):
                   </td>
                   <td className="px-4 py-3 text-sm font-bold text-green-600 text-right">
                     €{totalStockValue.toFixed(2)}
