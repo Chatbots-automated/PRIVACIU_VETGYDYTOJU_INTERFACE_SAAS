@@ -194,7 +194,7 @@ export function WarehouseStock() {
     const arrayBuffer = await file.arrayBuffer();
     const sanitizedFilename = sanitizeFilename(file.name);
 
-    const response = await fetch('https://n8n-up8s.onrender.com/webhook/36549f46-a08b-4790-bf56-40cdc919e4c0', {
+    const response = await fetch('https://n8n-up8s.onrender.com/webhook/36549f46-a08b-4790-bf56-40cdc919e121as', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/pdf',
@@ -665,6 +665,11 @@ export function WarehouseStock() {
         });
 
         // Store invoice item data for later insertion (use webhook's original values)
+        const discountPct =
+          itemData.discount != null && itemData.discount !== ''
+            ? parseFloat(String(itemData.discount))
+            : null;
+
         invoiceItemsEntries.push({
           farm_id: null,
           invoice_id: invoice.id,
@@ -675,6 +680,7 @@ export function WarehouseStock() {
           quantity: qty,
           unit_price: unitPrice,
           total_price: totalPrice,
+          discount_percent: discountPct != null && Number.isFinite(discountPct) ? discountPct : null,
         });
       }
 
@@ -1247,7 +1253,7 @@ export function WarehouseStock() {
                       </div>
 
                       <div className="space-y-2 text-xs mb-2">
-                        <div className="grid grid-cols-4 gap-2">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-2">
                           <div>
                             <span className="text-gray-600">SKU:</span>{' '}
                             <input
@@ -1255,6 +1261,25 @@ export function WarehouseStock() {
                               value={getItemData(item, index).sku}
                               onChange={(e) => handleItemEdit(index, 'sku', e.target.value)}
                               className="w-16 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                            />
+                          </div>
+                          <div>
+                            <span className="text-gray-600">Nuolaida %:</span>{' '}
+                            <input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="100"
+                              value={(() => {
+                                const d = getItemData(item, index).discount;
+                                return d != null && d !== '' ? String(d) : '';
+                              })()}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                handleItemEdit(index, 'discount', v === '' ? null : v);
+                              }}
+                              className="w-14 px-1 py-0.5 border border-gray-300 rounded text-xs"
+                              placeholder="0"
                             />
                           </div>
                           <div>
@@ -2398,7 +2423,11 @@ export function WarehouseStock() {
                                 <div className="flex-1">
                                   <p className="font-medium text-gray-900">{item.product?.name || item.description}</p>
                                   <p className="text-sm text-gray-600 mt-1">
-                                    Kiekis: {item.quantity} | Kaina: {item.total_price.toFixed(2)} {invoice.currency}
+                                    Kiekis: {item.quantity}
+                                    {item.discount_percent != null && (
+                                      <> | Nuolaida: {Number(item.discount_percent).toFixed(2)}%</>
+                                    )}
+                                    {' '}| Kaina: {item.total_price.toFixed(2)} {invoice.currency}
                                   </p>
                                 </div>
                               </div>

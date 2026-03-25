@@ -564,6 +564,7 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                       <tr className="bg-gray-100">
                         <th className="border border-gray-300 px-3 py-2 text-left text-xs font-bold text-gray-700">Produktas</th>
                         <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Kiekis</th>
+                        <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Nuolaida %</th>
                         <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Vnt. kaina</th>
                         <th className="border border-gray-300 px-3 py-2 text-right text-xs font-bold text-gray-700">Viso</th>
                       </tr>
@@ -576,6 +577,9 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                             {item.sku && <div className="text-xs text-gray-500">SKU: {item.sku}</div>}
                           </td>
                           <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.quantity}</td>
+                          <td className="border border-gray-300 px-3 py-2 text-sm text-right text-gray-600">
+                            {item.discount_percent != null ? `${Number(item.discount_percent).toFixed(2)}%` : '—'}
+                          </td>
                           <td className="border border-gray-300 px-3 py-2 text-sm text-right">{item.unit_price.toFixed(4)} {invoiceDetails.currency}</td>
                           <td className="border border-gray-300 px-3 py-2 text-sm text-right font-medium">{item.total_price.toFixed(2)} {invoiceDetails.currency}</td>
                         </tr>
@@ -583,15 +587,15 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
                     </tbody>
                     <tfoot>
                       <tr className="bg-gray-50 font-bold">
-                        <td colSpan={3} className="border border-gray-300 px-3 py-2 text-sm text-right">Tarpinė suma:</td>
+                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">Tarpinė suma:</td>
                         <td className="border border-gray-300 px-3 py-2 text-sm text-right">{invoiceDetails.total_net.toFixed(2)} {invoiceDetails.currency}</td>
                       </tr>
                       <tr className="bg-gray-50">
-                        <td colSpan={3} className="border border-gray-300 px-3 py-2 text-sm text-right">PVM ({invoiceDetails.vat_rate}%):</td>
+                        <td colSpan={4} className="border border-gray-300 px-3 py-2 text-sm text-right">PVM ({invoiceDetails.vat_rate}%):</td>
                         <td className="border border-gray-300 px-3 py-2 text-sm text-right">{invoiceDetails.total_vat.toFixed(2)} {invoiceDetails.currency}</td>
                       </tr>
                       <tr className="bg-blue-50 font-bold text-lg">
-                        <td colSpan={3} className="border-2 border-gray-400 px-3 py-3 text-right">VISO:</td>
+                        <td colSpan={4} className="border-2 border-gray-400 px-3 py-3 text-right">VISO:</td>
                         <td className="border-2 border-gray-400 px-3 py-3 text-right text-blue-900">{invoiceDetails.total_gross.toFixed(2)} {invoiceDetails.currency}</td>
                       </tr>
                     </tfoot>
@@ -1183,6 +1187,11 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                                   
                                   {item.sku && (
                                     <div className="text-xs text-gray-500 mb-2">SKU: {item.sku}</div>
+                                  )}
+                                  {item.discount_percent != null && (
+                                    <div className="text-xs text-amber-700 font-medium mb-2">
+                                      Nuolaida: {Number(item.discount_percent).toFixed(2)}%
+                                    </div>
                                   )}
 
                                   <div className="grid grid-cols-2 gap-3 text-sm">

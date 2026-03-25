@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -2311,6 +2311,7 @@ export type Database = {
           batch_id: string | null
           created_at: string | null
           description: string | null
+          discount_percent: number | null
           id: string
           invoice_id: string
           line_no: number | null
@@ -2325,6 +2326,7 @@ export type Database = {
           batch_id?: string | null
           created_at?: string | null
           description?: string | null
+          discount_percent?: number | null
           id?: string
           invoice_id: string
           line_no?: number | null
@@ -2339,6 +2341,7 @@ export type Database = {
           batch_id?: string | null
           created_at?: string | null
           description?: string | null
+          discount_percent?: number | null
           id?: string
           invoice_id?: string
           line_no?: number | null

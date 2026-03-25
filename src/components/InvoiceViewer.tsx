@@ -35,6 +35,7 @@ interface InvoiceItem {
   quantity: number;
   unit_price: number;
   total_price: number;
+  discount_percent: number | null;
   batch_id: string;
   product?: {
     id: string;
@@ -253,6 +254,11 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                             </div>
                             {item.sku && (
                               <div className="text-xs text-gray-500">SKU: {item.sku}</div>
+                            )}
+                            {item.discount_percent != null && (
+                              <div className="text-xs text-amber-700 font-medium mt-0.5">
+                                Nuolaida: {Number(item.discount_percent).toFixed(2)}%
+                              </div>
                             )}
                           </div>
                           <div className="text-right">
