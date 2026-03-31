@@ -281,6 +281,7 @@ export function BulkTreatment() {
             qty: parseFloat(med.qty),
             unit: med.unit,
             purpose: med.purpose,
+            administered_date: formData.treatment_date,
           }));
 
           const { error: usageError } = await supabase

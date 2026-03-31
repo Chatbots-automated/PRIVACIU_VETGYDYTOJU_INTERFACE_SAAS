@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Calendar, CheckCircle2, Circle, Clock, Syringe, AlertCircle, Plus, X, Edit2 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
+import { useFarm } from '../contexts/FarmContext';
 import {
   SynchronizationProtocol,
   AnimalSynchronization,
@@ -23,9 +24,13 @@ interface StepWithProductSelection extends SynchronizationStep {
 }
 
 export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }: SynchronizationProtocolProps) {
+  const { selectedFarm } = useFarm();
+  const isApsek = false; // GEA pregnancy check removed
+  
   const [protocols, setProtocols] = useState<SynchronizationProtocol[]>([]);
   const [activeSync, setActiveSync] = useState<AnimalSynchronizationWithDetails | null>(null);
   const [showCreateForm, setShowCreateForm] = useState(false);
+  const [showCustomProtocolForm, setShowCustomProtocolForm] = useState(false);
   const [selectedProtocolId, setSelectedProtocolId] = useState('');
   const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
   const [loading, setLoading] = useState(false);
@@ -34,6 +39,21 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
   const [todayStepData, setTodayStepData] = useState<{[key: number]: {batchId: string, dosage: string, unit: string}}>({});
   const [globalDosage, setGlobalDosage] = useState<string>('');
   const [globalUnit, setGlobalUnit] = useState<string>('ml');
+  
+  // Custom protocol state
+  const [customProtocol, setCustomProtocol] = useState({
+    name: '',
+    description: '',
+    steps: [] as Array<{
+      step: number;
+      medication: string;
+      productId: string;
+      days_after_previous: number;
+      time: string;
+      dosage: string;
+      unit: string;
+    }>
+  });
   // GEA status removed - no longer tracking pregnancy status from GEA system
 
   useEffect(() => {
@@ -42,7 +62,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
     loadProducts();
     loadBatches();
     // GEA status loading removed
-  }, [animalId]);
+  }, [animalId, selectedFarm]);
 
   // Set default dosages for G7G and GGPG protocols
   useEffect(() => {
@@ -133,20 +153,31 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
   const loadProducts = async () => {
     const { data } = await supabase
       .from('products')
-      .select('*')
+      .select('id, name, primary_pack_unit, category, withdrawal_days_meat, withdrawal_days_milk, withdrawal_iv_meat, withdrawal_iv_milk, withdrawal_im_meat, withdrawal_im_milk, withdrawal_sc_meat, withdrawal_sc_milk, withdrawal_iu_meat, withdrawal_iu_milk, withdrawal_imm_meat, withdrawal_imm_milk, withdrawal_pos_meat, withdrawal_pos_milk')
       .eq('is_active', true)
       .order('name');
 
-    if (data) setProducts(data);
+    if (data) {
+      setProducts(data as Product[]);
+    }
   };
 
   const loadBatches = async () => {
-    const { data } = await supabase
+    if (!selectedFarm) return;
+    
+    const { data, error } = await supabase
       .from('stock_by_batch')
-      .select('*')
+      .select('batch_id, farm_id, product_id, on_hand, expiry_date, lot, batch_number, product_name, product_category')
+      .eq('farm_id', selectedFarm.id)
       .gt('on_hand', 0);
 
+    if (error) {
+      console.error('❌ Error loading batches:', error);
+      return;
+    }
+
     if (data) {
+      console.log('📦 Loaded batches for synchronization:', data.length, data);
       setBatches(data);
     }
   };
@@ -182,11 +213,18 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
 
     setLoading(true);
 
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      setLoading(false);
+      return;
+    }
+
     try {
       // Create the animal synchronization record
       const { data: createdSync, error: syncError } = await supabase
         .from('animal_synchronizations')
         .insert({
+          farm_id: selectedFarm.id,
           animal_id: animalId,
           protocol_id: selectedProtocolId,
           start_date: startDate,
@@ -203,13 +241,14 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
         const stepDate = new Date(startDate);
         stepDate.setDate(stepDate.getDate() + step.day_offset);
 
-        // Find the medication product
-        const medicationProduct = products.find(p =>
-          p.name.toLowerCase() === step.medication.toLowerCase()
-        );
+        // Find the medication product - use product_id from protocol if available, otherwise search by name
+        const medicationProduct = (step as any).product_id 
+          ? products.find(p => p.id === (step as any).product_id)
+          : products.find(p => p.name.toLowerCase() === step.medication.toLowerCase());
 
         return {
           synchronization_id: createdSync.id,
+          farm_id: selectedFarm.id,
           step_number: step.step,
           step_name: step.medication,
           scheduled_date: stepDate.toISOString().split('T')[0],
@@ -271,6 +310,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
 
         for (const step of steps) {
           const visitData = {
+            farm_id: selectedFarm.id,
             animal_id: animalId,
             visit_datetime: new Date(step.scheduled_date).toISOString(),
             procedures: ['Sinchronizacijos protokolas'],
@@ -333,6 +373,82 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
     }
   };
 
+  const handleCreateCustomProtocol = async () => {
+    if (!customProtocol.name) {
+      alert('Įveskite protokolo pavadinimą');
+      return;
+    }
+
+    if (customProtocol.steps.length === 0) {
+      alert('Pridėkite bent vieną žingsnį');
+      return;
+    }
+
+    // Validate all steps
+    for (let i = 0; i < customProtocol.steps.length; i++) {
+      const step = customProtocol.steps[i];
+      if (!step.productId || !step.dosage) {
+        alert(`Užpildykite visus žingsnio ${step.step} laukus (medikamentą ir dozę)`);
+        return;
+      }
+    }
+
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      setLoading(false);
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // Create protocol steps with cumulative day_offset and product_id
+      const protocolSteps = customProtocol.steps.map((step, index) => {
+        // Calculate cumulative days from start
+        let cumulativeDays = 0;
+        for (let i = 0; i <= index; i++) {
+          cumulativeDays += customProtocol.steps[i].days_after_previous;
+        }
+        
+        return {
+          step: step.step,
+          medication: step.medication,
+          product_id: step.productId,
+          day_offset: cumulativeDays,
+          is_evening: step.time >= '18:00'
+        };
+      });
+
+      const { data: createdProtocol, error: protocolError } = await supabase
+        .from('synchronization_protocols')
+        .insert({
+          farm_id: selectedFarm.id,
+          name: customProtocol.name,
+          description: customProtocol.description || null,
+          steps: protocolSteps,
+          is_active: true
+        })
+        .select('id')
+        .single();
+
+      if (protocolError) throw protocolError;
+      if (!createdProtocol) throw new Error('Failed to create protocol');
+
+      // Protocol template created successfully
+      alert(`Protokolas "${customProtocol.name}" sukurtas! Dabar galite jį pasirinkti ir pradėti.`);
+      
+      setShowCustomProtocolForm(false);
+      setCustomProtocol({ name: '', description: '', steps: [] });
+      setShowCreateForm(true); // Show the form to select and start the protocol
+      loadProtocols(); // Reload protocols to include the new one
+    } catch (error: any) {
+      console.error('Error creating custom protocol:', error);
+      alert('Klaida kuriant protokolą: ' + error.message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCancelProtocol = async () => {
     if (!activeSync || !confirm('Ar tikrai norite atšaukti šį protokolą?')) return;
 
@@ -345,8 +461,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
       alert('Klaida atšaukiant protokolą: ' + error.message);
     } else {
       alert('Protokolas atšauktas');
-      setActiveSync(null);
-      onProtocolCreated?.();
+      loadActiveSync();
     }
   };
 
@@ -568,9 +683,10 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
                   </div>
 
                   {showCompleteForm === step.id && (() => {
-                    const medicationProduct = products.find(p =>
-                      p.name.toLowerCase() === step.step_name.toLowerCase()
-                    );
+                    // Use medication_product_id from the step if available, otherwise search by name
+                    const medicationProduct = step.medication_product_id
+                      ? products.find(p => p.id === step.medication_product_id)
+                      : products.find(p => p.name.toLowerCase() === step.step_name.toLowerCase());
 
                     return (
                       <div className="mt-3 p-3 bg-white rounded-lg border-2 border-purple-300 space-y-3">
@@ -582,23 +698,39 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Pakuotė</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Serija</label>
                           <select
                             value={completeFormData.batchId}
                             onChange={(e) => setCompleteFormData({ ...completeFormData, batchId: e.target.value })}
                             className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-purple-500"
                           >
-                            <option value="">Pasirinkite pakuotę</option>
-                            {batches
-                              .filter((b) => {
-                                if (!medicationProduct) return false;
-                                return b.product_id === medicationProduct.id && b.on_hand > 0;
-                              })
-                              .map((b) => (
-                                <option key={b.batch_id} value={b.batch_id}>
-                                  {b.lot || 'N/A'} (Likutis: {b.on_hand} {medicationProduct.primary_pack_unit})
-                                </option>
-                              ))}
+                            <option value="">Pasirinkite seriją</option>
+                            {(() => {
+                              console.log('🔍 Complete step batch filter:', {
+                                stepName: step.step_name,
+                                medicationProductId: step.medication_product_id,
+                                medicationProduct: medicationProduct ? { id: medicationProduct.id, name: medicationProduct.name } : null,
+                                totalBatches: batches.length,
+                                batchesForProduct: batches.filter(b => 
+                                  b.product_id === medicationProduct?.id || 
+                                  b.product_name?.toLowerCase() === step.step_name.toLowerCase()
+                                ).length
+                              });
+                              
+                              return batches
+                                .filter((b) => {
+                                  if (!medicationProduct) return false;
+                                  // Match by product ID or name
+                                  return (b.product_id === medicationProduct.id || 
+                                          b.product_name?.toLowerCase() === step.step_name.toLowerCase()) && 
+                                         b.on_hand > 0;
+                                })
+                                .map((b) => (
+                                  <option key={b.batch_id} value={b.batch_id}>
+                                    {b.lot || 'N/A'} (Likutis: {b.on_hand} {medicationProduct?.primary_pack_unit || ''})
+                                  </option>
+                                ));
+                            })()}
                           </select>
                           {!medicationProduct && (
                             <p className="text-xs text-red-600 mt-1">
@@ -712,24 +844,36 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
     );
   }
 
-  const isApsek = false; // GEA pregnancy check removed
-
   return (
     <div className="space-y-4">
-      {!showCreateForm ? (
-        <button
-          onClick={() => setShowCreateForm(true)}
-          disabled={isApsek}
-          className={`w-full px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium ${
-            isApsek
-              ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-              : 'bg-purple-600 text-white hover:bg-purple-700'
-          }`}
-        >
-          <Plus className="w-5 h-5" />
-          Pradėti sinchronizacijos protokolą
-        </button>
-      ) : (
+      {!showCreateForm && !showCustomProtocolForm ? (
+        <div className="space-y-2">
+          <button
+            onClick={() => setShowCreateForm(true)}
+            disabled={isApsek}
+            className={`w-full px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium ${
+              isApsek
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-purple-600 text-white hover:bg-purple-700'
+            }`}
+          >
+            <Plus className="w-5 h-5" />
+            Pasirinkti esamą protokolą
+          </button>
+          <button
+            onClick={() => setShowCustomProtocolForm(true)}
+            disabled={isApsek}
+            className={`w-full px-4 py-3 rounded-lg flex items-center justify-center gap-2 font-medium ${
+              isApsek
+                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                : 'bg-indigo-600 text-white hover:bg-indigo-700'
+            }`}
+          >
+            <Plus className="w-5 h-5" />
+            Sukurti individualų protokolą
+          </button>
+        </div>
+      ) : showCreateForm ? (
         <div className="bg-purple-50 border-2 border-purple-300 rounded-lg p-4 space-y-4">
           <div className="flex items-center justify-between mb-2">
             <h3 className="font-bold text-gray-900">Naujas protokolas</h3>
@@ -743,18 +887,46 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Protokolas</label>
-            <select
-              value={selectedProtocolId}
-              onChange={(e) => setSelectedProtocolId(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-            >
-              <option value="">Pasirinkite protokolą</option>
-              {protocols.map((protocol) => (
-                <option key={protocol.id} value={protocol.id}>
-                  {protocol.name}
-                </option>
-              ))}
-            </select>
+            <div className="flex gap-2">
+              <select
+                value={selectedProtocolId}
+                onChange={(e) => setSelectedProtocolId(e.target.value)}
+                className="flex-1 px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
+              >
+                <option value="">Pasirinkite protokolą</option>
+                {protocols.map((protocol) => (
+                  <option key={protocol.id} value={protocol.id}>
+                    {protocol.name}
+                  </option>
+                ))}
+              </select>
+              {selectedProtocolId && (
+                <button
+                  onClick={async () => {
+                    if (!confirm(`Ar tikrai norite ištrinti protokolą "${selectedProtocol?.name}"?`)) return;
+                    
+                    try {
+                      const { error } = await supabase
+                        .from('synchronization_protocols')
+                        .delete()
+                        .eq('id', selectedProtocolId);
+                      
+                      if (error) throw error;
+                      
+                      alert('Protokolas ištrintas!');
+                      setSelectedProtocolId('');
+                      loadProtocols();
+                    } catch (error: any) {
+                      alert('Klaida trinant protokolą: ' + error.message);
+                    }
+                  }}
+                  className="px-3 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 flex items-center gap-1"
+                  title="Ištrinti protokolą"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              )}
+            </div>
             {selectedProtocol && (
               <p className="text-sm text-gray-600 mt-1">{selectedProtocol.description}</p>
             )}
@@ -779,10 +951,10 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
                 const isToday = stepDate.toISOString().split('T')[0] === new Date(startDate).toISOString().split('T')[0];
                 const stepData = todayStepData[step.step] || { batchId: '', dosage: '', unit: 'ml' };
 
-                // Find the product by exact medication name match
-                const medicationProduct = products.find(p =>
-                  p.name.toLowerCase() === step.medication.toLowerCase()
-                );
+                // Find the product - use product_id from protocol if available, otherwise search by name
+                const medicationProduct = (step as any).product_id 
+                  ? products.find(p => p.id === (step as any).product_id)
+                  : products.find(p => p.name.toLowerCase() === step.medication.toLowerCase());
 
                 return (
                   <div key={step.step} className={`p-3 rounded-lg border-2 ${isToday ? 'bg-yellow-50 border-yellow-300' : 'bg-gray-50 border-gray-200'}`}>
@@ -805,7 +977,7 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
                         </div>
 
                         <div>
-                          <label className="block text-xs font-medium text-gray-700 mb-1">Pakuotė *</label>
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Serija *</label>
                           <select
                             value={stepData.batchId}
                             onChange={(e) => {
@@ -816,17 +988,32 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
                             }}
                             className="w-full px-2 py-1.5 text-xs border border-gray-300 rounded focus:ring-2 focus:ring-yellow-500"
                           >
-                            <option value="">Pasirinkite pakuotę</option>
-                            {batches
-                              .filter((b) => {
-                                if (!medicationProduct) return false;
-                                return b.product_id === medicationProduct.id && b.on_hand > 0;
-                              })
-                              .map((b) => (
-                                <option key={b.batch_id} value={b.batch_id}>
-                                  {b.lot || 'N/A'} (Likutis: {b.on_hand} {medicationProduct.primary_pack_unit})
-                                </option>
-                              ))}
+                            <option value="">Pasirinkite seriją</option>
+                            {(() => {
+                              console.log('🔍 Today step batch filter:', {
+                                stepMedication: step.medication,
+                                medicationProduct: medicationProduct ? { id: medicationProduct.id, name: medicationProduct.name } : null,
+                                totalBatches: batches.length,
+                                batchesForProduct: batches.filter(b => 
+                                  b.product_id === medicationProduct?.id || 
+                                  b.product_name?.toLowerCase() === step.medication.toLowerCase()
+                                ).length
+                              });
+                              
+                              return batches
+                                .filter((b) => {
+                                  if (!medicationProduct) return false;
+                                  // Try matching by product ID first, then by name
+                                  return (b.product_id === medicationProduct.id || 
+                                          b.product_name?.toLowerCase() === step.medication.toLowerCase()) && 
+                                         b.on_hand > 0;
+                                })
+                                .map((b) => (
+                                  <option key={b.batch_id} value={b.batch_id}>
+                                    {b.lot || 'N/A'} (Likutis: {b.on_hand} {medicationProduct?.primary_pack_unit || ''})
+                                  </option>
+                                ));
+                            })()}
                           </select>
                           {!medicationProduct && (
                             <p className="text-xs text-red-600 mt-1">
@@ -889,7 +1076,211 @@ export function SynchronizationProtocolComponent({ animalId, onProtocolCreated }
             {loading ? 'Kuriama...' : 'Pradėti protokolą'}
           </button>
         </div>
-      )}
+      ) : showCustomProtocolForm ? (
+        <div className="bg-indigo-50 border-2 border-indigo-300 rounded-lg p-4 space-y-4">
+          <div className="flex items-center justify-between mb-2">
+            <h3 className="font-bold text-gray-900">Individualus protokolas</h3>
+            <button
+              onClick={() => {
+                setShowCustomProtocolForm(false);
+                setCustomProtocol({ name: '', description: '', steps: [] });
+              }}
+              className="text-gray-600 hover:text-gray-900"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Protokolo pavadinimas *</label>
+            <input
+              type="text"
+              value={customProtocol.name}
+              onChange={(e) => setCustomProtocol({ ...customProtocol, name: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              placeholder="Pvz., Individualus protokolas - Karvė 123"
+            />
+          </div>
+
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Aprašymas</label>
+            <textarea
+              value={customProtocol.description}
+              onChange={(e) => setCustomProtocol({ ...customProtocol, description: e.target.value })}
+              className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500"
+              rows={2}
+              placeholder="Protokolo aprašymas..."
+            />
+          </div>
+
+          <div className="bg-blue-50 border border-blue-300 rounded-lg p-3">
+            <p className="text-sm text-blue-900">
+              <strong>Pastaba:</strong> Čia kuriate protokolo šabloną. Datos ir serijos bus pasirinktos vėliau, kai pradėsite protokolą gyvūnui.
+            </p>
+          </div>
+
+          <div className="border-t border-indigo-200 pt-4">
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="font-semibold text-gray-900">Protokolo žingsniai</h4>
+              <button
+                onClick={() => {
+                  const newStep = {
+                    step: customProtocol.steps.length + 1,
+                    medication: '',
+                    productId: '',
+                    days_after_previous: customProtocol.steps.length === 0 ? 0 : 1,
+                    time: '09:00',
+                    dosage: '',
+                    unit: 'ml'
+                  };
+                  setCustomProtocol({ ...customProtocol, steps: [...customProtocol.steps, newStep] });
+                }}
+                className="px-3 py-1.5 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 text-sm flex items-center gap-1"
+              >
+                <Plus className="w-4 h-4" />
+                Pridėti žingsnį
+              </button>
+            </div>
+
+            {customProtocol.steps.length === 0 && (
+              <div className="text-center py-8 text-gray-500 text-sm">
+                Pridėkite bent vieną žingsnį protokolui
+              </div>
+            )}
+
+            <div className="space-y-3">
+              {customProtocol.steps.map((step, index) => (
+                <div key={index} className="bg-white border-2 border-indigo-200 rounded-lg p-3 space-y-3">
+                  <div className="flex items-center justify-between">
+                    <span className="font-semibold text-gray-900">Žingsnis {step.step}</span>
+                    <button
+                      onClick={() => {
+                        const newSteps = customProtocol.steps.filter((_, i) => i !== index);
+                        const renumbered = newSteps.map((s, i) => ({ ...s, step: i + 1 }));
+                        setCustomProtocol({ ...customProtocol, steps: renumbered });
+                      }}
+                      className="text-red-600 hover:text-red-700"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">Medikamentas *</label>
+                    <select
+                      value={step.productId}
+                      onChange={(e) => {
+                        const product = products.find(p => p.id === e.target.value);
+                        const newSteps = [...customProtocol.steps];
+                        newSteps[index] = {
+                          ...step,
+                          productId: e.target.value,
+                          medication: product?.name || '',
+                          unit: product?.primary_pack_unit || 'ml'
+                        };
+                        setCustomProtocol({ ...customProtocol, steps: newSteps });
+                      }}
+                      className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="">Pasirinkite medikamentą</option>
+                      {(() => {
+                        // Group products by name and show unique products
+                        const uniqueProducts = products.reduce((acc, product) => {
+                          if (!acc.find(p => p.name === product.name)) {
+                            acc.push(product);
+                          }
+                          return acc;
+                        }, [] as Product[]);
+                        
+                        return uniqueProducts.map((product) => (
+                          <option key={product.id} value={product.id}>
+                            {product.name}
+                          </option>
+                        ));
+                      })()}
+                    </select>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">
+                        {index === 0 ? 'Pradžia (0 d.)' : `Dienų po ${index}. žingsnio *`}
+                      </label>
+                      <input
+                        type="number"
+                        min="0"
+                        value={step.days_after_previous}
+                        onChange={(e) => {
+                          const newSteps = [...customProtocol.steps];
+                          newSteps[index] = { ...step, days_after_previous: parseInt(e.target.value) || 0 };
+                          setCustomProtocol({ ...customProtocol, steps: newSteps });
+                        }}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        placeholder={index === 0 ? "0" : "1"}
+                        disabled={index === 0}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Laikas *</label>
+                      <input
+                        type="time"
+                        value={step.time}
+                        onChange={(e) => {
+                          const newSteps = [...customProtocol.steps];
+                          newSteps[index] = { ...step, time: e.target.value };
+                          setCustomProtocol({ ...customProtocol, steps: newSteps });
+                        }}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Dozė *</label>
+                      <input
+                        type="number"
+                        step="0.1"
+                        value={step.dosage}
+                        onChange={(e) => {
+                          const newSteps = [...customProtocol.steps];
+                          newSteps[index] = { ...step, dosage: e.target.value };
+                          setCustomProtocol({ ...customProtocol, steps: newSteps });
+                        }}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        placeholder="Pvz., 3"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-medium text-gray-700 mb-1">Vienetas</label>
+                      <input
+                        type="text"
+                        value={step.unit}
+                        onChange={(e) => {
+                          const newSteps = [...customProtocol.steps];
+                          newSteps[index] = { ...step, unit: e.target.value };
+                          setCustomProtocol({ ...customProtocol, steps: newSteps });
+                        }}
+                        className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded focus:ring-2 focus:ring-indigo-500"
+                        placeholder="ml"
+                      />
+                    </div>
+                  </div>
+
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <button
+            onClick={handleCreateCustomProtocol}
+            disabled={loading || !customProtocol.name || customProtocol.steps.length === 0}
+            className="w-full px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:bg-gray-300 disabled:cursor-not-allowed font-medium"
+          >
+            {loading ? 'Kuriama...' : 'Sukurti protokolo šabloną'}
+          </button>
+        </div>
+      ) : null}
     </div>
   );
 }

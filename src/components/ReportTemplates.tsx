@@ -177,7 +177,7 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
                 </td>
                 
                 {/* Column 9: Tests performed */}
-                <td className="border-2 border-gray-300 px-2 py-2 text-[11px] text-gray-900">
+                <td className="border-2 border-gray-300 px-2 py-2 text-[11px] text-gray-900 whitespace-pre-line">
                   {row.tests || '-'}
                 </td>
                 
@@ -992,7 +992,7 @@ export function WithdrawalReport({ data }: WithdrawalReportProps) {
     <div className="bg-white">
       <div className="text-center mb-6 no-print">
         <h1 className="text-3xl font-bold text-gray-900 mb-2">IŠLAUKŲ ATASKAITA</h1>
-        <p className="text-sm text-gray-500">Gyvūnai su aktyvia karencija</p>
+        <p className="text-sm text-gray-500">Gyvūnai su karencijos laikotarpiu</p>
         <p className="text-sm text-gray-500">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
       </div>
 
@@ -1007,6 +1007,7 @@ export function WithdrawalReport({ data }: WithdrawalReportProps) {
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gradient-to-r from-red-50 to-orange-50">
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Ūkis</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Gyvūno žymė</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Rūšis</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Gydymo data</th>
@@ -1020,6 +1021,16 @@ export function WithdrawalReport({ data }: WithdrawalReportProps) {
             <tbody>
               {data.map((row, idx) => (
                 <tr key={idx} className="hover:bg-red-50 transition-colors print-break-avoid">
+                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
+                    <div className="flex items-center gap-1">
+                      <span>{row.farm_name || '-'}</span>
+                      {row.is_eco_farm && (
+                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">
+                          ECO
+                        </span>
+                      )}
+                    </div>
+                  </td>
                   <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
                     <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700">
                       {row.animal_tag || '-'}

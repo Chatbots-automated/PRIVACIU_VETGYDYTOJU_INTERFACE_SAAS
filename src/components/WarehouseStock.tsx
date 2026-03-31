@@ -783,6 +783,42 @@ export function WarehouseStock() {
         if (manualProductForm.withdrawal_days_milk) {
           productData.withdrawal_days_milk = parseInt(manualProductForm.withdrawal_days_milk);
         }
+        if (manualProductForm.withdrawal_iv_meat) {
+          productData.withdrawal_iv_meat = parseInt(manualProductForm.withdrawal_iv_meat);
+        }
+        if (manualProductForm.withdrawal_iv_milk) {
+          productData.withdrawal_iv_milk = parseInt(manualProductForm.withdrawal_iv_milk);
+        }
+        if (manualProductForm.withdrawal_im_meat) {
+          productData.withdrawal_im_meat = parseInt(manualProductForm.withdrawal_im_meat);
+        }
+        if (manualProductForm.withdrawal_im_milk) {
+          productData.withdrawal_im_milk = parseInt(manualProductForm.withdrawal_im_milk);
+        }
+        if (manualProductForm.withdrawal_sc_meat) {
+          productData.withdrawal_sc_meat = parseInt(manualProductForm.withdrawal_sc_meat);
+        }
+        if (manualProductForm.withdrawal_sc_milk) {
+          productData.withdrawal_sc_milk = parseInt(manualProductForm.withdrawal_sc_milk);
+        }
+        if (manualProductForm.withdrawal_iu_meat) {
+          productData.withdrawal_iu_meat = parseInt(manualProductForm.withdrawal_iu_meat);
+        }
+        if (manualProductForm.withdrawal_iu_milk) {
+          productData.withdrawal_iu_milk = parseInt(manualProductForm.withdrawal_iu_milk);
+        }
+        if (manualProductForm.withdrawal_imm_meat) {
+          productData.withdrawal_imm_meat = parseInt(manualProductForm.withdrawal_imm_meat);
+        }
+        if (manualProductForm.withdrawal_imm_milk) {
+          productData.withdrawal_imm_milk = parseInt(manualProductForm.withdrawal_imm_milk);
+        }
+        if (manualProductForm.withdrawal_pos_meat) {
+          productData.withdrawal_pos_meat = parseInt(manualProductForm.withdrawal_pos_meat);
+        }
+        if (manualProductForm.withdrawal_pos_milk) {
+          productData.withdrawal_pos_milk = parseInt(manualProductForm.withdrawal_pos_milk);
+        }
 
         const { data: newProduct, error: productError } = await supabase
           .from('products')
@@ -2217,6 +2253,135 @@ export function WarehouseStock() {
                         placeholder="0"
                       />
                     </div>
+
+                    {/* Route-specific withdrawal periods */}
+                    {(manualProductForm.category === 'medicines' || manualProductForm.category === 'svirkstukai') && (
+                      <div className="md:col-span-2 bg-gray-50 border border-gray-300 rounded-lg p-4">
+                        <h4 className="text-sm font-bold text-gray-900 mb-3">Karencijos pagal būdą (dienomis)</h4>
+                        <div className="grid grid-cols-2 gap-3">
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.v (į veną) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_iv_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_iv_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.v - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_iv_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_iv_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.m (į raumenį) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_im_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_im_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.m - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_im_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_im_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">s.c (po oda) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_sc_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_sc_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">s.c - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_sc_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_sc_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.u (į gimdą) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_iu_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_iu_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.u - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_iu_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_iu_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.mm (į spenį) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_imm_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_imm_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">i.mm - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_imm_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_imm_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">p.o.s (per burną) - Mėsa</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_pos_meat}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_pos_meat: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-xs font-medium text-gray-700 mb-1">p.o.s - Pienas</label>
+                            <input
+                              type="number"
+                              value={manualProductForm.withdrawal_pos_milk}
+                              onChange={(e) => setManualProductForm({ ...manualProductForm, withdrawal_pos_milk: e.target.value })}
+                              className="w-full px-2 py-1.5 border border-gray-300 rounded text-sm"
+                              placeholder="0"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

@@ -14,6 +14,7 @@ interface Farm {
   vic_username?: string;
   vic_password?: string;
   is_active: boolean;
+  is_eco_farm?: boolean;
 }
 
 export function Farms() {
@@ -33,6 +34,7 @@ export function Farms() {
     vic_username: '',
     vic_password: '',
     is_active: true,
+    is_eco_farm: false,
   };
 
   const [formData, setFormData] = useState<Farm>(emptyFarm);
@@ -78,6 +80,7 @@ export function Farms() {
             vic_username: formData.vic_username || null,
             vic_password: formData.vic_password || null,
             is_active: formData.is_active,
+            is_eco_farm: formData.is_eco_farm || false,
           })
           .eq('id', editing);
 
@@ -96,6 +99,7 @@ export function Farms() {
             vic_username: formData.vic_username || null,
             vic_password: formData.vic_password || null,
             is_active: formData.is_active,
+            is_eco_farm: formData.is_eco_farm || false,
           }]);
 
         if (error) throw error;
@@ -282,7 +286,7 @@ export function Farms() {
               </div>
             </div>
 
-            <div className="flex items-center">
+            <div className="flex flex-col gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
                   type="checkbox"
@@ -291,6 +295,16 @@ export function Farms() {
                   className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                 />
                 <span className="text-sm font-medium text-gray-700">Aktyvus</span>
+              </label>
+              
+              <label className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={formData.is_eco_farm || false}
+                  onChange={(e) => setFormData({ ...formData, is_eco_farm: e.target.checked })}
+                  className="w-4 h-4 text-green-600 border-gray-300 rounded focus:ring-green-500"
+                />
+                <span className="text-sm font-medium text-gray-700">Ekoūkis (karencija x2)</span>
               </label>
             </div>
           </div>
@@ -333,9 +347,16 @@ export function Farms() {
                 </div>
                 <div>
                   <h3 className="font-bold text-gray-900">{farm.name}</h3>
-                  <div className="flex items-center gap-1 text-sm text-gray-500">
-                    <Hash className="w-3 h-3" />
-                    {farm.code}
+                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1 text-sm text-gray-500">
+                      <Hash className="w-3 h-3" />
+                      {farm.code}
+                    </div>
+                    {farm.is_eco_farm && (
+                      <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full font-medium">
+                        ECO
+                      </span>
+                    )}
                   </div>
                 </div>
               </div>

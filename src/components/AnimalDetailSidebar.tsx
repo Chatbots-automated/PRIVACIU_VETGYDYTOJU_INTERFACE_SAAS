@@ -2714,6 +2714,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                   purpose: med.purpose ? med.purpose : null,
                   teat: med.teat || null,
                   administration_route: med.administration_route || null,
+                  administered_date: formData.visit_datetime.split('T')[0],
                 });
 
               if (usageError) {
@@ -2860,6 +2861,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                         unit: med.unit,
                         purpose: med.purpose || 'Gydymas',
                         teat: med.teat || null,
+                        administered_date: todayDate,
                       });
 
                     if (usageError) {
@@ -3702,14 +3704,29 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Ligos baigtis (data)</label>
-                <input
-                  type="date"
-                  value={treatmentData.outcome_date}
-                  onChange={(e) => setTreatmentData({ ...treatmentData, outcome_date: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
-                />
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ligos baigtis</label>
+                  <select
+                    value={treatmentData.outcome}
+                    onChange={(e) => setTreatmentData({ ...treatmentData, outcome: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  >
+                    <option value="">Pasirinkite</option>
+                    <option value="Pasveiko">Pasveiko</option>
+                    <option value="Mirė">Mirė</option>
+                    <option value="Gydomas">Gydomas</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">Ligos baigtis (data)</label>
+                  <input
+                    type="date"
+                    value={treatmentData.outcome_date}
+                    onChange={(e) => setTreatmentData({ ...treatmentData, outcome_date: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
               </div>
 
               {/* SECTION 1: SINGLE-USE TREATMENT (TODAY ONLY) */}
@@ -3811,10 +3828,10 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                           </button>
                         </div>
 
-                        {/* Administration Route Buttons */}
-                        {selectedProduct && (
+                        {/* Administration Route Buttons - Only show if product has withdrawal periods */}
+                        {selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
                           <div className="space-y-2">
-                            <label className="block text-xs font-medium text-gray-700">Būdas</label>
+                            <label className="block text-xs font-medium text-gray-700">Būdas *</label>
                             <div className="flex flex-wrap gap-1.5">
                               {[
                                 { code: 'iv', label: 'i.v' },
@@ -4048,9 +4065,12 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               <SynchronizationProtocolComponent
                 animalId={animalId}
                 onProtocolCreated={() => {
-                  loadVisits();
                   setShowVisitModal(false);
-                  showNotification('Sinchronizacijos protokolas sukurtas! Vizitai automatiškai sukurti ir medikamentai atimti iš atsargų.', 'success');
+                  showNotification('Sinchronizacijos protokolas sukurtas! Vizitai automatiškai sukurti.', 'success');
+                  // Reload visits after a short delay to ensure DB has updated
+                  setTimeout(() => {
+                    loadVisits();
+                  }, 500);
                 }}
               />
             </div>

@@ -248,14 +248,6 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
           <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div className="flex items-center gap-2">
-                <img
-                  src="https://rekvizitai.vz.lt/logos/berciunai-16440-447.jpg"
-                  alt="ŽŪB"
-                  className="w-6 h-6 rounded object-contain"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
                 <span>© 2025 VET Praktika, UAB. Visos teisės saugomos.</span>
               </div>
               <div className="text-xs text-gray-500">

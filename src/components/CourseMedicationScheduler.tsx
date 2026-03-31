@@ -472,10 +472,10 @@ export function CourseMedicationScheduler({
                               </div>
                             </div>
 
-                            {/* Administration Route Buttons */}
-                            {selectedProduct && (
+                            {/* Administration Route Buttons - Only show if product has withdrawal periods */}
+                            {selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
                               <div className="mt-3 space-y-2">
-                                <label className="block text-xs font-medium text-gray-700">Būdas</label>
+                                <label className="block text-xs font-medium text-gray-700">Būdas *</label>
                                 <div className="flex flex-wrap gap-1.5">
                                   {[
                                     { code: 'iv', label: 'i.v' },
@@ -498,6 +498,38 @@ export function CourseMedicationScheduler({
                                       {route.label}
                                     </button>
                                   ))}
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Withdrawal Display */}
+                            {selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && med.administration_route && (
+                              <div className="mt-3 text-xs bg-amber-50 border-2 border-amber-300 rounded px-3 py-2">
+                                <div className="flex items-center gap-1 mb-1">
+                                  <AlertCircle className="w-4 h-4 text-amber-600" />
+                                  <span className="font-bold text-amber-900">Karencinės dienos:</span>
+                                </div>
+                                <div className="flex gap-4">
+                                  {(() => {
+                                    const meatDays = selectedProduct[`withdrawal_${med.administration_route}_meat` as keyof Product] || selectedProduct.withdrawal_days_meat;
+                                    const milkDays = selectedProduct[`withdrawal_${med.administration_route}_milk` as keyof Product] || selectedProduct.withdrawal_days_milk;
+                                    return (
+                                      <>
+                                        {meatDays !== null && meatDays !== undefined && (
+                                          <div>
+                                            <span className="font-semibold text-amber-900">Mėsa:</span>
+                                            <span className="ml-1 text-amber-800">{meatDays} d.</span>
+                                          </div>
+                                        )}
+                                        {milkDays !== null && milkDays !== undefined && (
+                                          <div>
+                                            <span className="font-semibold text-amber-900">Pienas:</span>
+                                            <span className="ml-1 text-amber-800">{milkDays} d.</span>
+                                          </div>
+                                        )}
+                                      </>
+                                    );
+                                  })()}
                                 </div>
                               </div>
                             )}

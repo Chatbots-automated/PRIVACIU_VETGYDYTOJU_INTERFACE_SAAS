@@ -345,14 +345,11 @@ SELECT
     t.clinical_diagnosis,
     COALESCE(t.animal_condition, 'Patenkinama') AS animal_condition,
     COALESCE(t.first_symptoms_date, t.reg_date) AS first_symptoms_date,
-    COALESCE(
-        t.tests,
-        CASE 
-            WHEN av.temperature IS NOT NULL 
-            THEN 'Temperatūra: ' || av.temperature::text || '°C'
-            ELSE NULL
-        END
-    ) AS tests,
+    TRIM(CONCAT_WS(E'\n',
+        CASE WHEN av.temperature IS NOT NULL THEN 'Temperatūra: ' || av.temperature::text || '°C' ELSE NULL END,
+        NULLIF(TRIM(t.clinical_diagnosis), ''),
+        NULLIF(TRIM(t.tests), '')
+    )) AS tests,
     t.services,
     p.name AS medicine_name,
     p.id AS medicine_id,
@@ -412,14 +409,11 @@ SELECT
     t.clinical_diagnosis,
     COALESCE(t.animal_condition, 'Patenkinama') AS animal_condition,
     COALESCE(t.first_symptoms_date, t.reg_date) AS first_symptoms_date,
-    COALESCE(
-        t.tests,
-        CASE 
-            WHEN av.temperature IS NOT NULL 
-            THEN 'Temperatūra: ' || av.temperature::text || '°C'
-            ELSE NULL
-        END
-    ) AS tests,
+    TRIM(CONCAT_WS(E'\n',
+        CASE WHEN av.temperature IS NOT NULL THEN 'Temperatūra: ' || av.temperature::text || '°C' ELSE NULL END,
+        NULLIF(TRIM(t.clinical_diagnosis), ''),
+        NULLIF(TRIM(t.tests), '')
+    )) AS tests,
     t.services,
     p.name AS medicine_name,
     p.id AS medicine_id,
@@ -478,14 +472,11 @@ SELECT
     t.clinical_diagnosis,
     COALESCE(t.animal_condition, 'Patenkinama') AS animal_condition,
     COALESCE(t.first_symptoms_date, t.reg_date) AS first_symptoms_date,
-    COALESCE(
-        t.tests,
-        CASE 
-            WHEN av.temperature IS NOT NULL 
-            THEN 'Temperatūra: ' || av.temperature::text || '°C'
-            ELSE NULL
-        END
-    ) AS tests,
+    TRIM(CONCAT_WS(E'\n',
+        CASE WHEN av.temperature IS NOT NULL THEN 'Temperatūra: ' || av.temperature::text || '°C' ELSE NULL END,
+        NULLIF(TRIM(t.clinical_diagnosis), ''),
+        NULLIF(TRIM(t.tests), '')
+    )) AS tests,
     t.services,
     p.name AS medicine_name,
     p.id AS medicine_id,
@@ -547,14 +538,11 @@ SELECT
     t.clinical_diagnosis,
     COALESCE(t.animal_condition, 'Patenkinama') AS animal_condition,
     COALESCE(t.first_symptoms_date, t.reg_date) AS first_symptoms_date,
-    COALESCE(
-        t.tests,
-        CASE 
-            WHEN av.temperature IS NOT NULL 
-            THEN 'Temperatūra: ' || av.temperature::text || '°C'
-            ELSE NULL
-        END
-    ) AS tests,
+    TRIM(CONCAT_WS(E'\n',
+        CASE WHEN av.temperature IS NOT NULL THEN 'Temperatūra: ' || av.temperature::text || '°C' ELSE NULL END,
+        NULLIF(TRIM(t.clinical_diagnosis), ''),
+        NULLIF(TRIM(t.tests), '')
+    )) AS tests,
     t.services,
     p.name AS medicine_name,
     p.id AS medicine_id,
