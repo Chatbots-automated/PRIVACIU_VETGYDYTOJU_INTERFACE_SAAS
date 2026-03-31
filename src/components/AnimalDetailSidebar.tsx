@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { supabase } from '../lib/supabase';
 import { Animal, AnimalVisit, VisitProcedure, VisitStatus, Treatment, Product, UsageItem, HoofLeg, HoofClaw, HoofConditionCode, Unit } from '../lib/types';
-import { X, Calendar, Thermometer, Pill, Syringe, FileText, Plus, CheckCircle, CheckCircle2, XCircle, Clock, AlertCircle, Package, Check, Filter, Search, ExternalLink, Milk, Activity } from 'lucide-react';
+import { X, Calendar, Thermometer, Pill, Syringe, FileText, Plus, CheckCircle, CheckCircle2, XCircle, Clock, AlertCircle, Package, Check, Filter, Search, ExternalLink, Milk, Activity, Trash2 } from 'lucide-react';
 import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
@@ -146,6 +146,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
 
   const [treatmentDateFrom, setTreatmentDateFrom] = useState('');
   const [treatmentDateTo, setTreatmentDateTo] = useState('');
+  const [deletingTreatmentId, setDeletingTreatmentId] = useState<string | null>(null);
   const [treatmentSearch, setTreatmentSearch] = useState('');
 
   const [vaccinationDateFrom, setVaccinationDateFrom] = useState('');
@@ -269,6 +270,117 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
     loadVisits();
   };
 
+  // Calculate age in months from birth date
+  const calculateAgeMonths = (birthDate: string | null): number | null => {
+    if (!birthDate) return null;
+    const birth = new Date(birthDate);
+    const today = new Date();
+    const months = (today.getFullYear() - birth.getFullYear()) * 12 + 
+                   (today.getMonth() - birth.getMonth());
+    return Math.max(0, months);
+  };
+
+  // Get display age - prioritize calculated from birth_date, fallback to stored age_months
+  const getDisplayAge = (): string => {
+    if (animal.birth_date) {
+      const calculatedAge = calculateAgeMonths(animal.birth_date);
+      return calculatedAge !== null ? `${calculatedAge} mėn.` : '-';
+    }
+    return animal.age_months ? `${animal.age_months} mėn.` : '-';
+  };
+
+  const handleDeleteTreatment = async (treatmentId: string) => {
+    if (!confirm(`Ar tikrai norite ištrinti šį gydymą gyvūnui ${animal.tag_no}?\n\nŠis veiksmas:\n• Ištrina gydymo įrašą\n• Grąžina panaudotus vaistus į atsargas\n• Pašalina karencijos laikotarpius\n• Negali būti atšauktas`)) {
+      return;
+    }
+
+    setDeletingTreatmentId(treatmentId);
+
+    try {
+      // Step 1: Get all usage_items for this treatment to revert stock
+      const { data: usageItems, error: usageError } = await supabase
+        .from('usage_items')
+        .select('id, batch_id, qty')
+        .eq('treatment_id', treatmentId);
+
+      if (usageError) throw usageError;
+
+      // Step 2: Revert stock for each usage item
+      if (usageItems && usageItems.length > 0) {
+        for (const item of usageItems) {
+          // Get current batch qty_left
+          const { data: batch, error: batchError } = await supabase
+            .from('batches')
+            .select('qty_left, status')
+            .eq('id', item.batch_id)
+            .single();
+
+          if (batchError) {
+            console.error('Error fetching batch:', batchError);
+            continue;
+          }
+
+          // Add quantity back to batch
+          const newQtyLeft = (batch.qty_left || 0) + item.qty;
+          const newStatus = batch.status === 'depleted' && newQtyLeft > 0 ? 'active' : batch.status;
+
+          const { error: updateError } = await supabase
+            .from('batches')
+            .update({ 
+              qty_left: newQtyLeft,
+              status: newStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.batch_id);
+
+          if (updateError) {
+            console.error('Error updating batch:', updateError);
+          }
+        }
+      }
+
+      // Step 3: Delete treatment_courses (will cascade to course_doses)
+      const { error: coursesError } = await supabase
+        .from('treatment_courses')
+        .delete()
+        .eq('treatment_id', treatmentId);
+
+      if (coursesError) {
+        console.error('Error deleting courses:', coursesError);
+      }
+
+      // Step 4: Delete usage_items
+      const { error: deleteUsageError } = await supabase
+        .from('usage_items')
+        .delete()
+        .eq('treatment_id', treatmentId);
+
+      if (deleteUsageError) throw deleteUsageError;
+
+      // Step 5: Delete the treatment itself
+      const { error: deleteTreatmentError } = await supabase
+        .from('treatments')
+        .delete()
+        .eq('id', treatmentId);
+
+      if (deleteTreatmentError) throw deleteTreatmentError;
+
+      // Show success message
+      showNotification(
+        `Gydymas ištrintas! Grąžinta produktų į atsargas: ${usageItems?.length || 0}`,
+        'success'
+      );
+
+      // Reload treatments
+      await loadTreatments();
+    } catch (error: any) {
+      console.error('Error deleting treatment:', error);
+      showNotification(`Klaida trinant gydymą: ${error.message}`, 'error');
+    } finally {
+      setDeletingTreatmentId(null);
+    }
+  };
+
   // Categorize all visits by time
   const todayVisits = visits.filter(v => {
     const visitDate = new Date(v.visit_datetime);
@@ -380,7 +492,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
             {animal.tag_no || 'Nenurodytas ID'}
           </h2>
           <p className="text-xs xl:text-sm text-gray-600">
-            {animal.species} {animal.sex && `• ${animal.sex}`} {animal.age_months && `• ${animal.age_months}`}<span className="xl:hidden">m</span><span className="hidden xl:inline"> mėn.</span>
+            {animal.species} {animal.sex && `• ${animal.sex}`} {getDisplayAge() !== '-' && `• ${getDisplayAge()}`}
           </p>
         </div>
         <button
@@ -448,21 +560,11 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
         {activeTab === 'overview' && (
           <div className="space-y-6">
             <div className="bg-blue-50 border border-blue-200 rounded-lg p-5">
-              <div className="flex items-center justify-between mb-4">
+              <div className="mb-4">
                 <h3 className="font-bold text-gray-900 text-lg flex items-center gap-2">
                   <FileText className="w-5 h-5 text-blue-600" />
                   Gyvūno informacija
                 </h3>
-                <button
-                  onClick={() => {
-                    const url = `https://app.brolisherdline.com/animals#search=${encodeURIComponent(animal.tag_no || '')}`;
-                    window.open(url, '_blank');
-                  }}
-                  className="flex items-center gap-2 px-3 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium hover:bg-blue-700 transition-colors"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  Atidaryti brolio sistemą
-                </button>
               </div>
               
               {/* Ausies numeris - centered at top */}
@@ -497,7 +599,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
                     <span className="text-xs text-gray-500 block mb-1">Amžius</span>
-                    <span className="font-bold text-gray-900 text-base">{animal.age_months ? `${animal.age_months} mėn.` : '-'}</span>
+                    <span className="font-bold text-gray-900 text-base">{getDisplayAge()}</span>
                   </div>
                 </div>
               </div>
@@ -1419,18 +1521,31 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       <div className="font-semibold text-gray-900">{treatment.disease_name}</div>
                       <div className="text-xs text-gray-500 mt-1">{formatDateLT(treatment.reg_date)}</div>
                     </div>
-                    {treatment.outcome && (
-                      <span className={`px-2 py-1 rounded text-xs font-medium ${
-                        treatment.outcome === 'recovered' ? 'bg-green-100 text-green-800' :
-                        treatment.outcome === 'ongoing' ? 'bg-yellow-100 text-yellow-800' :
-                        treatment.outcome === 'deceased' ? 'bg-red-100 text-red-800' :
-                        'bg-gray-100 text-gray-800'
-                      }`}>
-                        {treatment.outcome === 'recovered' ? 'Pasveiko' :
-                         treatment.outcome === 'ongoing' ? 'Gydoma' :
-                         treatment.outcome === 'deceased' ? 'Kritęs' : treatment.outcome}
-                      </span>
-                    )}
+                    <div className="flex items-center gap-2">
+                      {treatment.outcome && (
+                        <span className={`px-2 py-1 rounded text-xs font-medium ${
+                          treatment.outcome === 'recovered' ? 'bg-green-100 text-green-800' :
+                          treatment.outcome === 'ongoing' ? 'bg-yellow-100 text-yellow-800' :
+                          treatment.outcome === 'deceased' ? 'bg-red-100 text-red-800' :
+                          'bg-gray-100 text-gray-800'
+                        }`}>
+                          {treatment.outcome === 'recovered' ? 'Pasveiko' :
+                           treatment.outcome === 'ongoing' ? 'Gydoma' :
+                           treatment.outcome === 'deceased' ? 'Kritęs' : treatment.outcome}
+                        </span>
+                      )}
+                      <button
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleDeleteTreatment(treatment.id);
+                        }}
+                        disabled={deletingTreatmentId === treatment.id}
+                        className="p-1.5 rounded-lg hover:bg-red-50 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Ištrinti gydymą"
+                      >
+                        <Trash2 className={`w-4 h-4 ${deletingTreatmentId === treatment.id ? 'text-gray-400' : 'text-gray-400 group-hover:text-red-600'}`} />
+                      </button>
+                    </div>
                   </div>
 
                   {((treatment.usage_items && treatment.usage_items.length > 0) || (treatment.treatment_courses && treatment.treatment_courses.length > 0)) && (
@@ -2183,7 +2298,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
     }
   };
 
-  const allProcedures: VisitProcedure[] = ['Temperatūra', 'Apžiūra', 'Profilaktika', 'Gydymas', 'Vakcina', 'Sinchronizacijos protokolas', 'Nagai', 'Kita'];
+  const allProcedures: VisitProcedure[] = ['Apžiūra', 'Profilaktika', 'Gydymas', 'Vakcina', 'Sinchronizacijos protokolas', 'Nagai', 'Kita'];
 
   const toggleProcedure = (proc: VisitProcedure) => {
     const isAdding = !formData.procedures.includes(proc);
@@ -2208,7 +2323,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
         if (proc === 'Gydymas') targetRef = treatmentSectionRef;
         else if (proc === 'Vakcina') targetRef = vaccinationSectionRef;
         else if (proc === 'Profilaktika') targetRef = preventionSectionRef;
-        else if (proc === 'Temperatūra') targetRef = temperatureSectionRef;
         else if (proc === 'Nagai') targetRef = hoofSectionRef;
 
         if (targetRef?.current && modalContentRef.current) {
@@ -2400,14 +2514,31 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
         let treatmentRecord;
 
         if (isEditMode && visitToEdit) {
-          // Check if treatment exists for this visit
-          const { data: existingTreatment } = await supabase
-            .from('treatments')
-            .select('id')
-            .eq('visit_id', visitToEdit.id)
-            .maybeSingle();
+          // Check if treatment exists for this visit using related_treatment_id or visit_id
+          let existingTreatment = null;
+          
+          // First, try to get treatment by related_treatment_id if it exists
+          if ((visitToEdit as any).related_treatment_id) {
+            const { data } = await supabase
+              .from('treatments')
+              .select('id')
+              .eq('id', (visitToEdit as any).related_treatment_id)
+              .maybeSingle();
+            existingTreatment = data;
+          }
+          
+          // If not found by related_treatment_id, try by visit_id
+          if (!existingTreatment) {
+            const { data } = await supabase
+              .from('treatments')
+              .select('id')
+              .eq('visit_id', visitToEdit.id)
+              .maybeSingle();
+            existingTreatment = data;
+          }
 
           if (existingTreatment) {
+            console.log('✏️ Updating existing treatment:', existingTreatment.id);
             // Update existing treatment
             const { data, error: treatmentError } = await supabase
               .from('treatments')
@@ -2433,11 +2564,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             if (treatmentError) throw treatmentError;
             treatmentRecord = data;
 
-            // Delete existing medications and courses
+            // Delete existing medications and courses to replace with new ones
+            console.log('🗑️ Deleting old medications/courses for treatment:', existingTreatment.id);
             await supabase.from('usage_items').delete().eq('treatment_id', existingTreatment.id);
             await supabase.from('treatment_courses').delete().eq('treatment_id', existingTreatment.id);
             await supabase.from('treatment_medications').delete().eq('treatment_id', existingTreatment.id);
           } else {
+            console.log('➕ Creating new treatment for visit:', visitToEdit.id);
             // Create new treatment
             const { data, error: treatmentError } = await supabase
               .from('treatments')
@@ -3392,34 +3525,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             </div>
           </div>
 
-          {formData.procedures.includes('Temperatūra') && (
-            <div ref={temperatureSectionRef} className="grid grid-cols-2 gap-4 p-4 bg-red-50 border border-red-200 rounded-lg">
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Temperatūra (°C)
-                </label>
-                <input
-                  type="number"
-                  step="0.1"
-                  value={formData.temperature}
-                  onChange={(e) => setFormData({ ...formData, temperature: normalizeNumberInput(e.target.value) })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                  placeholder="38.5"
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Matavimo laikas
-                </label>
-                <input
-                  type="datetime-local"
-                  value={formData.temperature_measured_at}
-                  onChange={(e) => setFormData({ ...formData, temperature_measured_at: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-red-500"
-                />
-              </div>
-            </div>
-          )}
 
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-2">
@@ -3537,6 +3642,32 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1 flex items-center gap-1">
+                    <Thermometer className="w-4 h-4 text-red-500" />
+                    Temperatūra (°C)
+                  </label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    value={formData.temperature}
+                    onChange={(e) => setFormData({ ...formData, temperature: normalizeNumberInput(e.target.value) })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                    placeholder="38.5"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Matavimo laikas
+                  </label>
+                  <input
+                    type="datetime-local"
+                    value={formData.temperature_measured_at}
+                    onChange={(e) => setFormData({ ...formData, temperature_measured_at: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500"
+                  />
+                </div>
               </div>
 
               <div>

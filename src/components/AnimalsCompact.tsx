@@ -25,10 +25,30 @@ export function AnimalsCompact() {
     tag_no: '',
     species: 'bovine',
     sex: '',
+    breed: '',
+    birth_date: '',
     age_months: '',
     holder_name: '',
     holder_address: '',
   });
+
+  // Calculate age in months from birth date
+  const calculateAgeMonths = (birthDate: string): number => {
+    if (!birthDate) return 0;
+    const birth = new Date(birthDate);
+    const today = new Date();
+    const months = (today.getFullYear() - birth.getFullYear()) * 12 + 
+                   (today.getMonth() - birth.getMonth());
+    return Math.max(0, months);
+  };
+
+  // Update age when birth_date changes
+  useEffect(() => {
+    if (formData.birth_date) {
+      const calculatedAge = calculateAgeMonths(formData.birth_date);
+      setFormData(prev => ({ ...prev, age_months: calculatedAge.toString() }));
+    }
+  }, [formData.birth_date]);
 
   // Update holder info when farm changes
   useEffect(() => {
@@ -153,6 +173,8 @@ export function AnimalsCompact() {
           tag_no: formData.tag_no || null,
           species: formData.species,
           sex: formData.sex || null,
+          breed: formData.breed || null,
+          birth_date: formData.birth_date || null,
           age_months: formData.age_months ? parseInt(formData.age_months) : null,
           holder_name: formData.holder_name || null,
           holder_address: formData.holder_address || null,
@@ -168,6 +190,8 @@ export function AnimalsCompact() {
         tag_no: '',
         species: 'bovine',
         sex: '',
+        breed: '',
+        birth_date: '',
         age_months: '',
         holder_name: selectedFarm.name,
         holder_address: selectedFarm.address || '',
@@ -189,6 +213,8 @@ export function AnimalsCompact() {
           tag_no: animal.tag_no || null,
           species: animal.species,
           sex: animal.sex || null,
+          breed: animal.breed || null,
+          birth_date: animal.birth_date || null,
           age_months: animal.age_months,
           holder_name: animal.holder_name || null,
           holder_address: animal.holder_address || null,
@@ -203,6 +229,8 @@ export function AnimalsCompact() {
         tag_no: '',
         species: 'bovine',
         sex: '',
+        breed: '',
+        birth_date: '',
         age_months: '',
         holder_name: selectedFarm?.name || '',
         holder_address: selectedFarm?.address || '',
@@ -455,16 +483,40 @@ export function AnimalsCompact() {
                   type="text"
                   value={formData.sex}
                   onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
+                  placeholder="Karvė, Telyčaitė, Bulius..."
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">Amžius (mėn.)</label>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Veislė</label>
+                <input
+                  type="text"
+                  value={formData.breed}
+                  onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
+                  placeholder="Holšteinas, Limuzinas..."
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Gimimo data</label>
+                <input
+                  type="date"
+                  value={formData.birth_date}
+                  onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Amžius (mėn.) {formData.birth_date && <span className="text-blue-600 text-xs">- Auto</span>}
+                </label>
                 <input
                   type="number"
                   value={formData.age_months}
-                  onChange={(e) => setFormData({ ...formData, age_months: e.target.value })}
-                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  readOnly={!!formData.birth_date}
+                  onChange={(e) => !formData.birth_date && setFormData({ ...formData, age_months: e.target.value })}
+                  className={`w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 ${formData.birth_date ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                  placeholder={formData.birth_date ? 'Automatiškai' : 'Įveskite amžių'}
                 />
               </div>
               <div>
@@ -494,6 +546,8 @@ export function AnimalsCompact() {
                     tag_no: '',
                     species: 'bovine',
                     sex: '',
+                    breed: '',
+                    birth_date: '',
                     age_months: '',
                     holder_name: selectedFarm?.name || '',
                     holder_address: selectedFarm?.address || '',

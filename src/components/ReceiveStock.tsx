@@ -418,58 +418,8 @@ export function ReceiveStock() {
 
       if (error) throw error;
 
-      // Automatically create a batch if we have package/quantity data from invoice
-      if (creatingProduct && (newProductForm.package_count || newProductForm.total_quantity)) {
-        if (!selectedFarm) {
-          alert('Pasirinkite ūkį');
-          return;
-        }
-
-        const batchData: any = {
-          farm_id: selectedFarm.id,
-          product_id: newProduct.id,
-          lot: creatingProduct.batch || null,
-          expiry_date: creatingProduct.expiry || null,
-          mfg_date: null,
-          supplier_id: invoiceData?.invoice?.supplier_id || null,
-          doc_title: invoiceData?.invoice?.doc_number || 'Sukurta iš sąskaitos',
-          doc_number: invoiceData?.invoice?.doc_number || null,
-          doc_date: invoiceData?.invoice?.doc_date || null,
-          purchase_price: creatingProduct.unit_price ? parseFloat(creatingProduct.unit_price) : null,
-          currency: invoiceData?.invoice?.currency || 'EUR',
-        };
-
-        // Calculate received quantity from package data or use total quantity
-        if (newProductForm.primary_pack_size && newProductForm.package_count) {
-          batchData.package_size = parseFloat(newProductForm.primary_pack_size);
-          batchData.package_count = parseFloat(newProductForm.package_count);
-          batchData.received_qty = parseFloat(newProductForm.primary_pack_size) * parseFloat(newProductForm.package_count);
-        } else if (newProductForm.total_quantity) {
-          batchData.received_qty = parseFloat(newProductForm.total_quantity);
-          batchData.package_size = null;
-          batchData.package_count = null;
-        }
-
-        const { error: batchError } = await supabase.from('batches').insert(batchData);
-
-        if (batchError) {
-          console.error('Error creating initial batch:', batchError);
-          alert('Produktas sukurtas, bet nepavyko pridėti pradinių atsargų. Galite jas pridėti rankiniu būdu.');
-        } else {
-          await logAction(
-            'receive_stock',
-            'batches',
-            null,
-            null,
-            {
-              product_id: newProduct.id,
-              lot: batchData.lot,
-              received_qty: batchData.received_qty,
-              doc_number: batchData.doc_number,
-            }
-          );
-        }
-      }
+      // Do NOT insert batches here: masinis priėmimas / priėmimas iš sąskaitos jau kuria partijas.
+      // Auto-creating stock on product save caused duplicate batches and doubled quantities.
 
       await loadData();
 
@@ -497,7 +447,7 @@ export function ReceiveStock() {
         package_count: '',
         total_quantity: '',
       });
-      alert('Produktas sėkmingai sukurtas!');
+      alert('Produktas sėkmingai sukurtas! Atsargas įkelkite paspaudę „Masinis priėmimas“ (arba vieną eilutę – Priimti).');
     } catch (error: any) {
       alert('Klaida kuriant produktą: ' + error.message);
     }

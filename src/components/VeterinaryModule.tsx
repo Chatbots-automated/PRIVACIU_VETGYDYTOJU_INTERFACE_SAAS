@@ -14,7 +14,6 @@ import { OwnerMeds } from './OwnerMeds';
 import { MedicalWaste } from './MedicalWaste';
 import { Reports } from './Reports';
 import { UserManagement } from './UserManagement';
-import { Vaccinations } from './Vaccinations';
 import { BulkTreatment } from './BulkTreatment';
 import { TreatmentHistory } from './TreatmentHistory';
 import { TreatmentCostTab } from './TreatmentCostTab';
@@ -38,8 +37,6 @@ export function VeterinaryModule({ onBackToModules }: VeterinaryModuleProps) {
         return <TreatmentHistory />;
       case 'treatment-costs':
         return <TreatmentCostTab />;
-      case 'vaccinations':
-        return <Vaccinations />;
       case 'bulk-treatment':
         return <BulkTreatment />;
       case 'products':

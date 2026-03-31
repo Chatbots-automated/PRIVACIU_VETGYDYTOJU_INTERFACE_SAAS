@@ -32,12 +32,32 @@ export function Animals() {
     tag_no: '',
     species: 'bovine',
     sex: '',
+    breed: '',
+    birth_date: '',
     age_months: '',
     holder_name: '',
     holder_address: '',
   };
 
   const [formData, setFormData] = useState(emptyAnimal);
+
+  // Calculate age in months from birth date
+  const calculateAgeMonths = (birthDate: string): number => {
+    if (!birthDate) return 0;
+    const birth = new Date(birthDate);
+    const today = new Date();
+    const months = (today.getFullYear() - birth.getFullYear()) * 12 + 
+                   (today.getMonth() - birth.getMonth());
+    return Math.max(0, months);
+  };
+
+  // Update age when birth_date changes
+  useEffect(() => {
+    if (formData.birth_date) {
+      const calculatedAge = calculateAgeMonths(formData.birth_date);
+      setFormData(prev => ({ ...prev, age_months: calculatedAge.toString() }));
+    }
+  }, [formData.birth_date]);
 
   useEffect(() => {
     loadData();
@@ -159,6 +179,8 @@ export function Animals() {
         tag_no: formData.tag_no || null,
         species: formData.species,
         sex: formData.sex || null,
+        breed: formData.breed || null,
+        birth_date: formData.birth_date || null,
         age_months: formData.age_months ? parseInt(formData.age_months) : null,
         holder_name: formData.holder_name || null,
         holder_address: formData.holder_address || null,
@@ -216,6 +238,8 @@ export function Animals() {
       tag_no: animal.tag_no || '',
       species: animal.species,
       sex: animal.sex || '',
+      breed: animal.breed || '',
+      birth_date: animal.birth_date || '',
       age_months: animal.age_months?.toString() || '',
       holder_name: animal.holder_name || '',
       holder_address: animal.holder_address || '',
@@ -962,12 +986,36 @@ export function Animals() {
             </select>
 
             <input
-              type="number"
-              placeholder="Amžius (mėn.)"
-              value={formData.age_months}
-              onChange={(e) => setFormData({ ...formData, age_months: e.target.value })}
+              type="text"
+              placeholder="Veislė"
+              value={formData.breed}
+              onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
               className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">Gimimo data</label>
+              <input
+                type="date"
+                value={formData.birth_date}
+                onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              />
+            </div>
+
+            <div>
+              <label className="block text-xs font-medium text-gray-700 mb-1">
+                Amžius (mėn.) {formData.birth_date && <span className="text-blue-600">- Automatiškai apskaičiuota</span>}
+              </label>
+              <input
+                type="number"
+                placeholder="Amžius (mėn.)"
+                value={formData.age_months}
+                readOnly={!!formData.birth_date}
+                onChange={(e) => !formData.birth_date && setFormData({ ...formData, age_months: e.target.value })}
+                className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent ${formData.birth_date ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+              />
+            </div>
 
             <input
               type="text"
@@ -1048,12 +1096,31 @@ export function Animals() {
                             <option value="female">Patelė</option>
                           </select>
                           <input
-                            type="number"
-                            value={formData.age_months}
-                            onChange={(e) => setFormData({ ...formData, age_months: e.target.value })}
+                            type="text"
+                            value={formData.breed}
+                            onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
                             className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Amžius (mėn.)"
+                            placeholder="Veislė"
                           />
+                          <div>
+                            <input
+                              type="date"
+                              value={formData.birth_date}
+                              onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg w-full"
+                              placeholder="Gimimo data"
+                            />
+                          </div>
+                          <div>
+                            <input
+                              type="number"
+                              value={formData.age_months}
+                              readOnly={!!formData.birth_date}
+                              onChange={(e) => !formData.birth_date && setFormData({ ...formData, age_months: e.target.value })}
+                              className={`px-4 py-2 border border-gray-300 rounded-lg w-full ${formData.birth_date ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                              placeholder={formData.birth_date ? 'Auto-apskaičiuota' : 'Amžius (mėn.)'}
+                            />
+                          </div>
                           <input
                             type="text"
                             value={formData.holder_name}

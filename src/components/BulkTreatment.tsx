@@ -18,6 +18,9 @@ interface SelectedMedication {
   qty: string;
   unit: Unit;
   purpose: string;
+  category: 'medicines' | 'prevention' | 'vakcina';
+  dose_number?: string;
+  next_booster_date?: string;
 }
 
 interface AgeGroup {
@@ -34,6 +37,11 @@ const AGE_GROUPS: AgeGroup[] = [
 ];
 
 export function BulkTreatment() {
+  // Group products by category for easier selection
+  const getMedicineProducts = () => products.filter(p => p.category === 'medicines');
+  const getVaccineProducts = () => products.filter(p => p.category === 'vakcina');
+  const getPreventionProducts = () => products.filter(p => p.category === 'prevention');
+
   const { user, logAction } = useAuth();
   const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<SelectedAnimal[]>([]);
@@ -42,7 +50,7 @@ export function BulkTreatment() {
   const [batches, setBatches] = useState<StockByBatch[]>([]);
   const [selectedAnimals, setSelectedAnimals] = useState<SelectedAnimal[]>([]);
   const [selectedMedications, setSelectedMedications] = useState<SelectedMedication[]>([
-    { id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'prevention' }
+    { id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }
   ]);
   const [vetNames, setVetNames] = useState<string[]>([]);
 
@@ -83,7 +91,7 @@ export function BulkTreatment() {
 
     const [animalsRes, productsRes, batchesRes, vetsRes] = await Promise.all([
       supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
-      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
+      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).in('category', ['medicines', 'prevention', 'vakcina']),
       supabase.from('stock_by_batch').select('*').eq('farm_id', selectedFarm.id).gt('on_hand', 0),
       supabase.from('treatments').select('vet_name').eq('farm_id', selectedFarm.id).not('vet_name', 'is', null),
     ]);
@@ -163,7 +171,7 @@ export function BulkTreatment() {
   const addMedication = () => {
     setSelectedMedications([
       ...selectedMedications,
-      { id: Date.now().toString(), product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'prevention' }
+      { id: Date.now().toString(), product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }
     ]);
   };
 
@@ -228,7 +236,7 @@ export function BulkTreatment() {
     );
 
     if (validMedications.length === 0) {
-      alert('Prašome pridėti bent vieną vaistą su kiekiu');
+      alert('Prašome pridėti bent vieną produktą su kiekiu');
       return;
     }
 
@@ -240,40 +248,100 @@ export function BulkTreatment() {
     setLoading(true);
 
     try {
-      // For each animal, create a treatment record (not a visit)
+      // Group medications by category
+      const treatments = validMedications.filter(m => m.category === 'medicines');
+      const vaccinations = validMedications.filter(m => m.category === 'vakcina');
+      const preventions = validMedications.filter(m => m.category === 'prevention');
+
       for (const animal of selectedAnimals) {
-        // Create treatment
-        const { data: treatment, error: treatmentError } = await supabase
-          .from('treatments')
-          .insert({
+        // Handle treatments (medicines)
+        if (treatments.length > 0) {
+          const { data: treatment, error: treatmentError } = await supabase
+            .from('treatments')
+            .insert({
+              farm_id: selectedFarm.id,
+              reg_date: formData.treatment_date,
+              animal_id: animal.id,
+              vet_name: formData.vet_name,
+              notes: formData.notes,
+              clinical_diagnosis: 'Masinis gydymas',
+              animal_condition: 'Patenkinama',
+            })
+            .select()
+            .single();
+
+          if (treatmentError) throw treatmentError;
+
+          // Add all medicines to this treatment
+          const usageItems = treatments.map(med => ({
             farm_id: selectedFarm.id,
-            reg_date: formData.treatment_date,
-            animal_id: animal.id,
-            vet_name: formData.vet_name,
-            notes: formData.notes,
-            clinical_diagnosis: 'Masinis gydymas',
-          })
-          .select()
-          .single();
+            treatment_id: treatment.id,
+            product_id: med.product_id,
+            batch_id: med.batch_id,
+            qty: parseFloat(med.qty),
+            unit: med.unit,
+            purpose: med.purpose,
+          }));
 
-        if (treatmentError) throw treatmentError;
+          const { error: usageError } = await supabase
+            .from('usage_items')
+            .insert(usageItems);
 
-        // Add all medications to this treatment
-        const usageItems = validMedications.map(med => ({
-          farm_id: selectedFarm.id,
-          treatment_id: treatment.id,
-          product_id: med.product_id,
-          batch_id: med.batch_id,
-          qty: parseFloat(med.qty),
-          unit: med.unit,
-          purpose: med.purpose,
-        }));
+          if (usageError) throw usageError;
+        }
 
-        const { error: usageError } = await supabase
-          .from('usage_items')
-          .insert(usageItems);
+        // Handle vaccinations
+        for (const vac of vaccinations) {
+          const { error: vacError } = await supabase
+            .from('vaccinations')
+            .insert({
+              farm_id: selectedFarm.id,
+              animal_id: animal.id,
+              product_id: vac.product_id,
+              batch_id: vac.batch_id,
+              vaccination_date: formData.treatment_date,
+              dose_amount: parseFloat(vac.qty),
+              unit: vac.unit,
+              dose_number: parseInt(vac.dose_number || '1'),
+              next_booster_date: vac.next_booster_date || null,
+              administered_by: formData.vet_name,
+              notes: formData.notes,
+            });
 
-        if (usageError) throw usageError;
+          if (vacError) throw vacError;
+        }
+
+        // Handle preventions
+        for (const prev of preventions) {
+          const { data: preventionData, error: prevError } = await supabase
+            .from('preventions')
+            .insert({
+              farm_id: selectedFarm.id,
+              animal_id: animal.id,
+              application_date: formData.treatment_date,
+              administered_by: formData.vet_name,
+              notes: formData.notes,
+            })
+            .select()
+            .single();
+
+          if (prevError) throw prevError;
+
+          // Add usage item for prevention
+          const { error: usageError } = await supabase
+            .from('usage_items')
+            .insert({
+              farm_id: selectedFarm.id,
+              biocide_usage_id: preventionData.id,
+              product_id: prev.product_id,
+              batch_id: prev.batch_id,
+              qty: parseFloat(prev.qty),
+              unit: prev.unit,
+              purpose: 'prevention',
+            });
+
+          if (usageError) throw usageError;
+        }
       }
 
       await logAction('bulk_treatment_create', null, null, null, {
@@ -287,7 +355,7 @@ export function BulkTreatment() {
         setSuccess(false);
         // Reset form
         setSelectedAnimals([]);
-        setSelectedMedications([{ id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'prevention' }]);
+        setSelectedMedications([{ id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }]);
         setFormData({
           treatment_date: new Date().toISOString().split('T')[0],
           vet_name: user?.full_name || user?.email || '',
@@ -297,7 +365,7 @@ export function BulkTreatment() {
       }, 2000);
     } catch (error) {
       console.error('Error saving bulk treatment:', error);
-      alert('Klaida išsaugant gydymą');
+      alert('Klaida išsaugant duomenis');
     } finally {
       setLoading(false);
     }
@@ -323,8 +391,8 @@ export function BulkTreatment() {
             <Users className="w-7 h-7 text-white" />
           </div>
           <div>
-            <h2 className="text-2xl font-bold text-gray-900">Masinis Gydymas</h2>
-            <p className="text-sm text-gray-600">Gydyti kelis gyvūnus vienu metu</p>
+            <h2 className="text-2xl font-bold text-gray-900">Masinis Gydymas ir Vakcinacijos</h2>
+            <p className="text-sm text-gray-600">Pritaikykite gydymą, vakcinaciją ar profilaktiką keliems gyvūnams vienu metu</p>
           </div>
         </div>
 
@@ -391,7 +459,7 @@ export function BulkTreatment() {
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
               <Package className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Vaistai ir prevencija</h3>
+              <h3 className="text-lg font-semibold text-gray-900">Produktai (Vaistai / Vakcinos / Profilaktika)</h3>
             </div>
             <button
               type="button"
@@ -399,14 +467,41 @@ export function BulkTreatment() {
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
-              Pridėti vaistą
+              Pridėti produktą
             </button>
           </div>
 
           <div className="space-y-3">
-            {selectedMedications.map((med, index) => (
-              <div key={med.id} className="flex gap-3 items-start bg-gray-50 p-4 rounded-lg">
-                <div className="flex-1 grid grid-cols-1 md:grid-cols-5 gap-3">
+            {selectedMedications.map((med, index) => {
+              const selectedProduct = products.find(p => p.id === med.product_id);
+              const medicineProducts = products.filter(p => p.category === 'medicines');
+              const vaccineProducts = products.filter(p => p.category === 'vakcina');
+              const preventionProducts = products.filter(p => p.category === 'prevention');
+
+              return (
+              <div key={med.id} className="flex gap-3 items-start bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
+                <div className="flex-1 grid grid-cols-1 md:grid-cols-6 gap-3">
+                  <div>
+                    <label className="block text-xs font-medium text-gray-700 mb-1">
+                      Kategorija
+                    </label>
+                    <select
+                      value={med.category}
+                      onChange={(e) => {
+                        const category = e.target.value as 'medicines' | 'prevention' | 'vakcina';
+                        updateMedication(med.id, 'category', category);
+                        updateMedication(med.id, 'product_id', '');
+                        updateMedication(med.id, 'batch_id', '');
+                        updateMedication(med.id, 'purpose', category === 'medicines' ? 'treatment' : category === 'vakcina' ? 'vaccination' : 'prevention');
+                      }}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    >
+                      <option value="medicines">Vaistai</option>
+                      <option value="vakcina">Vakcinos</option>
+                      <option value="prevention">Profilaktika</option>
+                    </select>
+                  </div>
+
                   <div className="md:col-span-2">
                     <label className="block text-xs font-medium text-gray-700 mb-1">
                       Produktas
@@ -418,15 +513,14 @@ export function BulkTreatment() {
                       required
                     >
                       <option value="">Pasirinkite produktą</option>
-                      {products.filter(p =>
-                        p.category === 'medicines' ||
-                        p.category === 'prevention' ||
-                        p.category === 'hygiene' ||
-                        p.category === 'vakcina'
-                      ).map(product => (
-                        <option key={product.id} value={product.id}>
-                          {product.name} ({product.category})
-                        </option>
+                      {med.category === 'medicines' && medicineProducts.map(product => (
+                        <option key={product.id} value={product.id}>{product.name}</option>
+                      ))}
+                      {med.category === 'vakcina' && vaccineProducts.map(product => (
+                        <option key={product.id} value={product.id}>{product.name}</option>
+                      ))}
+                      {med.category === 'prevention' && preventionProducts.map(product => (
+                        <option key={product.id} value={product.id}>{product.name}</option>
                       ))}
                     </select>
                   </div>
@@ -485,6 +579,35 @@ export function BulkTreatment() {
                       </select>
                     </div>
                   </div>
+
+                  {/* Vaccine-specific fields */}
+                  {med.category === 'vakcina' && (
+                    <>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Dozės Nr.
+                        </label>
+                        <input
+                          type="number"
+                          value={med.dose_number || '1'}
+                          onChange={(e) => updateMedication(med.id, 'dose_number', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="1"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">
+                          Kitas skiepas
+                        </label>
+                        <input
+                          type="date"
+                          value={med.next_booster_date || ''}
+                          onChange={(e) => updateMedication(med.id, 'next_booster_date', e.target.value)}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                      </div>
+                    </>
+                  )}
                 </div>
 
                 {selectedMedications.length > 1 && (
@@ -497,7 +620,8 @@ export function BulkTreatment() {
                   </button>
                 )}
               </div>
-            ))}
+            );
+            })}
           </div>
         </div>
 

@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useFarm } from '../contexts/FarmContext';
-import { Activity, Calendar, FileText, Pill, Syringe, AlertCircle, ChevronDown, ChevronUp, Filter, Search } from 'lucide-react';
+import { Activity, Calendar, FileText, Pill, Syringe, AlertCircle, ChevronDown, ChevronUp, Filter, Search, Trash2 } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 import { Animal } from '../lib/types';
 import { AnimalDetailSidebar } from './AnimalDetailSidebar';
@@ -52,6 +52,7 @@ export function TreatmentHistory() {
   const [dateTo, setDateTo] = useState('');
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnimal, setSelectedAnimal] = useState<Animal | null>(null);
+  const [deletingTreatmentId, setDeletingTreatmentId] = useState<string | null>(null);
 
   useEffect(() => {
     loadTreatments();
@@ -88,6 +89,95 @@ export function TreatmentHistory() {
       newExpanded.add(treatmentId);
     }
     setExpandedTreatments(newExpanded);
+  };
+
+  const handleDeleteTreatment = async (treatmentId: string, animalTag: string) => {
+    if (!confirm(`Ar tikrai norite ištrinti šį gydymą gyvūnui ${animalTag}?\n\nŠis veiksmas:\n• Ištrina gydymo įrašą\n• Grąžina panaudotus vaistus į atsargas\n• Pašalina karencijos laikotarpius\n• Negali būti atšauktas`)) {
+      return;
+    }
+
+    setDeletingTreatmentId(treatmentId);
+
+    try {
+      // Step 1: Get all usage_items for this treatment to revert stock
+      const { data: usageItems, error: usageError } = await supabase
+        .from('usage_items')
+        .select('id, batch_id, qty')
+        .eq('treatment_id', treatmentId);
+
+      if (usageError) throw usageError;
+
+      // Step 2: Revert stock for each usage item
+      if (usageItems && usageItems.length > 0) {
+        for (const item of usageItems) {
+          // Get current batch qty_left
+          const { data: batch, error: batchError } = await supabase
+            .from('batches')
+            .select('qty_left, status')
+            .eq('id', item.batch_id)
+            .single();
+
+          if (batchError) {
+            console.error('Error fetching batch:', batchError);
+            continue;
+          }
+
+          // Add quantity back to batch
+          const newQtyLeft = (batch.qty_left || 0) + item.qty;
+          const newStatus = batch.status === 'depleted' && newQtyLeft > 0 ? 'active' : batch.status;
+
+          const { error: updateError } = await supabase
+            .from('batches')
+            .update({ 
+              qty_left: newQtyLeft,
+              status: newStatus,
+              updated_at: new Date().toISOString()
+            })
+            .eq('id', item.batch_id);
+
+          if (updateError) {
+            console.error('Error updating batch:', updateError);
+          }
+        }
+      }
+
+      // Step 3: Delete treatment_courses (will cascade to course_doses)
+      const { error: coursesError } = await supabase
+        .from('treatment_courses')
+        .delete()
+        .eq('treatment_id', treatmentId);
+
+      if (coursesError) {
+        console.error('Error deleting courses:', coursesError);
+      }
+
+      // Step 4: Delete usage_items
+      const { error: deleteUsageError } = await supabase
+        .from('usage_items')
+        .delete()
+        .eq('treatment_id', treatmentId);
+
+      if (deleteUsageError) throw deleteUsageError;
+
+      // Step 5: Delete the treatment itself
+      const { error: deleteTreatmentError } = await supabase
+        .from('treatments')
+        .delete()
+        .eq('id', treatmentId);
+
+      if (deleteTreatmentError) throw deleteTreatmentError;
+
+      // Show success message
+      alert(`Gydymas sėkmingai ištrintas!\n\nGrąžinta produktų į atsargas: ${usageItems?.length || 0}`);
+
+      // Reload treatments
+      await loadTreatments();
+    } catch (error: any) {
+      console.error('Error deleting treatment:', error);
+      alert(`Klaida trinant gydymą: ${error.message}`);
+    } finally {
+      setDeletingTreatmentId(null);
+    }
   };
 
   const filteredTreatments = treatments.filter(treatment => {
@@ -480,16 +570,29 @@ export function TreatmentHistory() {
                           )}
                         </div>
 
-                        <button
-                          onClick={() => toggleExpanded(treatment.treatment_id)}
-                          className="ml-4 p-2 rounded-lg hover:bg-gray-100 transition-colors"
-                        >
-                          {isExpanded ? (
-                            <ChevronUp className="w-5 h-5 text-gray-500" />
-                          ) : (
-                            <ChevronDown className="w-5 h-5 text-gray-500" />
-                          )}
-                        </button>
+                        <div className="ml-4 flex items-center gap-2">
+                          <button
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleDeleteTreatment(treatment.treatment_id, treatment.animal_tag);
+                            }}
+                            disabled={deletingTreatmentId === treatment.treatment_id}
+                            className="p-2 rounded-lg hover:bg-red-50 transition-colors group disabled:opacity-50 disabled:cursor-not-allowed"
+                            title="Ištrinti gydymą"
+                          >
+                            <Trash2 className={`w-5 h-5 ${deletingTreatmentId === treatment.treatment_id ? 'text-gray-400' : 'text-gray-400 group-hover:text-red-600'}`} />
+                          </button>
+                          <button
+                            onClick={() => toggleExpanded(treatment.treatment_id)}
+                            className="p-2 rounded-lg hover:bg-gray-100 transition-colors"
+                          >
+                            {isExpanded ? (
+                              <ChevronUp className="w-5 h-5 text-gray-500" />
+                            ) : (
+                              <ChevronDown className="w-5 h-5 text-gray-500" />
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   );
