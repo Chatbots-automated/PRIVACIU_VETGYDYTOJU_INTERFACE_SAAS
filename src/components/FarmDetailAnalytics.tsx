@@ -76,7 +76,37 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         throw allocError;
       }
 
-      // Also get usage data for allocated stock
+      // Load directly assigned batches (from invoices assigned directly to this farm)
+      let directBatchQuery = supabase
+        .from('batches')
+        .select(`
+          id,
+          product_id,
+          received_qty,
+          qty_left,
+          purchase_price,
+          invoice_id,
+          created_at,
+          allocation_id,
+          products (
+            name,
+            category,
+            primary_pack_unit
+          )
+        `)
+        .eq('farm_id', farmId)
+        .not('invoice_id', 'is', null);
+
+      if (dateFrom) directBatchQuery = directBatchQuery.gte('created_at', dateFrom);
+      if (dateTo) directBatchQuery = directBatchQuery.lte('created_at', dateTo + 'T23:59:59');
+
+      const { data: directBatchesData, error: directBatchError } = await directBatchQuery;
+      
+      if (directBatchError) {
+        console.error('Error loading direct batches:', directBatchError);
+      }
+
+      // Also get usage data for allocated stock (from warehouse)
       const { data: batchesData, error: batchError } = await supabase
         .from('batches')
         .select('product_id, received_qty, qty_left, allocation_id')
@@ -102,6 +132,23 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         }
         
         invoiceItemsData = data || [];
+      }
+
+      // Get invoice items for directly assigned batches
+      const directBatchIds = [...new Set(directBatchesData?.map(b => b.id).filter(Boolean))];
+      let directInvoiceItemsData: any[] = [];
+      
+      if (directBatchIds.length > 0) {
+        const { data, error: directItemsError } = await supabase
+          .from('invoice_items')
+          .select('batch_id, product_id, discount_percent, unit_price, quantity, total_price')
+          .in('batch_id', directBatchIds);
+        
+        if (directItemsError) {
+          console.error('Error loading direct invoice items:', directItemsError);
+        }
+        
+        directInvoiceItemsData = data || [];
       }
 
       if (allocationsData) {
@@ -172,6 +219,66 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
             });
           }
         });
+
+        // Process directly assigned batches (from invoices assigned directly to farm)
+        if (directBatchesData) {
+          directBatchesData.forEach(batch => {
+            const product = batch.products as any;
+            if (!product) return;
+
+            const productName = product.name;
+            const receivedQty = parseFloat(batch.received_qty) || 0;
+            const qtyLeft = parseFloat(batch.qty_left) || 0;
+            const usedQty = receivedQty - qtyLeft;
+            const purchasePrice = parseFloat(batch.purchase_price) || 0;
+
+            // Find invoice item for this batch
+            const invoiceItem = directInvoiceItemsData?.find(
+              (ii) => ii.batch_id === batch.id && ii.product_id === batch.product_id
+            );
+
+            const { unitAfterDiscount, unitBeforeDiscount } = allocationUnitPricesFromBatchAndInvoice({
+              purchasePrice,
+              receivedQty,
+              invoiceItem,
+            });
+
+            const lineDiscountAmount = (unitBeforeDiscount - unitAfterDiscount) * receivedQty;
+
+            if (productMap.has(productName)) {
+              const existing = productMap.get(productName)!;
+              existing.total_allocated_qty += receivedQty;
+              existing.total_used_qty += usedQty;
+              existing.remaining_qty += qtyLeft;
+              existing.total_discount += lineDiscountAmount;
+
+              const prevTotalQty = existing.total_allocated_qty - receivedQty;
+              existing.avg_purchase_price =
+                ((existing.avg_purchase_price * prevTotalQty) + (unitAfterDiscount * receivedQty)) /
+                existing.total_allocated_qty;
+              existing.avg_price_before_discount =
+                ((existing.avg_price_before_discount * prevTotalQty) + (unitBeforeDiscount * receivedQty)) /
+                existing.total_allocated_qty;
+              existing.total_value = existing.remaining_qty * existing.avg_purchase_price;
+              existing.remaining_value_before_discount =
+                existing.remaining_qty * existing.avg_price_before_discount;
+            } else {
+              productMap.set(productName, {
+                product_name: productName,
+                category: product.category || 'N/A',
+                unit: product.primary_pack_unit || 'ml',
+                total_allocated_qty: receivedQty,
+                total_used_qty: usedQty,
+                remaining_qty: qtyLeft,
+                avg_purchase_price: unitAfterDiscount,
+                avg_price_before_discount: unitBeforeDiscount,
+                total_discount: lineDiscountAmount,
+                total_value: qtyLeft * unitAfterDiscount,
+                remaining_value_before_discount: qtyLeft * unitBeforeDiscount,
+              });
+            }
+          });
+        }
 
         productMap.forEach((row) => {
           row.remaining_value_before_discount = row.remaining_qty * row.avg_price_before_discount;
