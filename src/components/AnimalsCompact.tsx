@@ -21,6 +21,9 @@ export function AnimalsCompact() {
   const [showAdd, setShowAdd] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [deletingAnimalId, setDeletingAnimalId] = useState<string | null>(null);
+  const [speciesList, setSpeciesList] = useState<Array<{ id: string; code: string; name_lt: string }>>([]);
+  const [showAddSpecies, setShowAddSpecies] = useState(false);
+  const [newSpeciesForm, setNewSpeciesForm] = useState({ code: '', name_lt: '' });
 
   const [formData, setFormData] = useState({
     tag_no: '',
@@ -97,33 +100,31 @@ export function AnimalsCompact() {
       if (!selectedFarm) {
         setAnimals([]);
         setVisitSummaries(new Map());
+        setSpeciesList([]);
         setLoading(false);
         return;
       }
 
-      // Fetch animals for the selected farm only
-      const { data: allAnimals, error: animalsError } = await supabase
-        .from('animals')
-        .select('*')
-        .eq('farm_id', selectedFarm.id)
-        .order('tag_no');
+      // Fetch animals and species for the selected farm
+      const [animalsRes, summariesRes, speciesRes] = await Promise.all([
+        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('animal_visit_summary').select('*').eq('farm_id', selectedFarm.id),
+        supabase.from('species').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name_lt'),
+      ]);
 
-      if (animalsError) throw animalsError;
+      if (animalsRes.error) throw animalsRes.error;
 
-      // Fetch visit summaries for the selected farm
-      const { data: summariesData, error: summariesError } = await supabase
-        .from('animal_visit_summary')
-        .select('*')
-        .eq('farm_id', selectedFarm.id);
+      const allAnimals = animalsRes.data || [];
 
-      if (summariesError) throw summariesError;
+      if (summariesRes.error) throw summariesRes.error;
 
       console.log('🐄 Animals loaded for farm:', selectedFarm.name, allAnimals?.length || 0);
 
       setAnimals(allAnimals || []);
+      setSpeciesList(speciesRes.data || []);
 
       const summaryMap = new Map<string, AnimalVisitSummary>();
-      (summariesData || []).forEach((summary: AnimalVisitSummary) => {
+      (summariesRes.data || []).forEach((summary: AnimalVisitSummary) => {
         summaryMap.set(summary.animal_id, summary);
       });
       setVisitSummaries(summaryMap);
@@ -157,6 +158,61 @@ export function AnimalsCompact() {
       alert('Klaida atnaujinant gyvūnus');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const getSpeciesDisplayName = (speciesCode: string): string => {
+    const species = speciesList.find(s => s.code === speciesCode);
+    return species ? species.name_lt : speciesCode;
+  };
+
+  const handleAddSpecies = async () => {
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      return;
+    }
+
+    if (!newSpeciesForm.name_lt) {
+      alert('Įveskite rūšies pavadinimą');
+      return;
+    }
+
+    try {
+      // Auto-generate code from Lithuanian name
+      const generatedCode = newSpeciesForm.name_lt
+        .toLowerCase()
+        .trim()
+        .replace(/ą/g, 'a')
+        .replace(/č/g, 'c')
+        .replace(/ę/g, 'e')
+        .replace(/ė/g, 'e')
+        .replace(/į/g, 'i')
+        .replace(/š/g, 's')
+        .replace(/ų/g, 'u')
+        .replace(/ū/g, 'u')
+        .replace(/ž/g, 'z')
+        .replace(/[^a-z0-9]/g, '');
+
+      const { data, error } = await supabase
+        .from('species')
+        .insert({
+          farm_id: selectedFarm.id,
+          code: generatedCode,
+          name_lt: newSpeciesForm.name_lt.trim(),
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSpeciesList(prev => [...prev, data].sort((a, b) => a.name_lt.localeCompare(b.name_lt)));
+      setFormData({ ...formData, species: data.code });
+      setNewSpeciesForm({ code: '', name_lt: '' });
+      setShowAddSpecies(false);
+      alert('Rūšis sėkmingai sukurta!');
+    } catch (error: any) {
+      alert('Klaida kuriant rūšį: ' + error.message);
     }
   };
 
@@ -470,7 +526,7 @@ export function AnimalsCompact() {
                           {animal.tag_no}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          {animal.sex || animal.species}
+                          {animal.sex || getSpeciesDisplayName(animal.species)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {animal.age_months ? `${animal.age_months} mėn.` : '-'}
@@ -552,15 +608,22 @@ export function AnimalsCompact() {
                 <label className="block text-sm font-medium text-gray-700 mb-2">Rūšis</label>
                 <select
                   value={formData.species}
-                  onChange={(e) => setFormData({ ...formData, species: e.target.value })}
+                  onChange={(e) => {
+                    if (e.target.value === '__add_new__') {
+                      setShowAddSpecies(true);
+                    } else {
+                      setFormData({ ...formData, species: e.target.value });
+                    }
+                  }}
                   className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="bovine">Galvijas</option>
-                  <option value="porcine">Kiaulė</option>
-                  <option value="ovine">Avis</option>
-                  <option value="caprine">Ožka</option>
-                  <option value="equine">Arklys</option>
-                  <option value="other">Kita</option>
+                  <option value="">Pasirinkite rūšį...</option>
+                  {speciesList.map(species => (
+                    <option key={species.id} value={species.code}>
+                      {species.name_lt}
+                    </option>
+                  ))}
+                  <option value="__add_new__" className="font-bold text-blue-600">+ Pridėti naują rūšį</option>
                 </select>
               </div>
               <div>
@@ -662,6 +725,51 @@ export function AnimalsCompact() {
             loadData();
           }}
         />
+      )}
+
+      {showAddSpecies && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Pridėti naują rūšį</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rūšies pavadinimas *
+                </label>
+                <input
+                  type="text"
+                  value={newSpeciesForm.name_lt}
+                  onChange={(e) => setNewSpeciesForm({ ...newSpeciesForm, name_lt: e.target.value })}
+                  placeholder="pvz: Šuo, Katė, Triušis, Arklys"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Įveskite rūšies pavadinimą lietuviškai
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddSpecies(false);
+                    setNewSpeciesForm({ code: '', name_lt: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Atšaukti
+                </button>
+                <button
+                  onClick={handleAddSpecies}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Sukurti
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

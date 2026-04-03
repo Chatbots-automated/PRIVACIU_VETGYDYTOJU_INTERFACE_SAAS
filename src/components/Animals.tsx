@@ -28,6 +28,9 @@ export function Animals() {
   const [products, setProducts] = useState<Product[]>([]);
   const [diseases, setDiseases] = useState<Disease[]>([]);
   const [deletingAnimalId, setDeletingAnimalId] = useState<string | null>(null);
+  const [speciesList, setSpeciesList] = useState<Array<{ id: string; code: string; name_lt: string }>>([]);
+  const [showAddSpecies, setShowAddSpecies] = useState(false);
+  const [newSpeciesForm, setNewSpeciesForm] = useState({ code: '', name_lt: '' });
 
   const emptyAnimal = {
     tag_no: '',
@@ -70,19 +73,22 @@ export function Animals() {
         setAnimals([]);
         setProducts([]);
         setDiseases([]);
+        setSpeciesList([]);
         setLoading(false);
         return;
       }
 
-      const [animalsRes, productsRes, diseasesRes] = await Promise.all([
+      const [animalsRes, productsRes, diseasesRes, speciesRes] = await Promise.all([
         supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
         supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
         supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id),
+        supabase.from('species').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name_lt'),
       ]);
 
       setAnimals(animalsRes.data || []);
       setProducts(productsRes.data || []);
       setDiseases(diseasesRes.data || []);
+      setSpeciesList(speciesRes.data || []);
     } catch (error) {
       console.error('Error loading data:', error);
     } finally {
@@ -113,6 +119,61 @@ export function Animals() {
       alert('Klaida atnaujinant gyvūnus');
     } finally {
       setRefreshing(false);
+    }
+  };
+
+  const getSpeciesDisplayName = (speciesCode: string): string => {
+    const species = speciesList.find(s => s.code === speciesCode);
+    return species ? species.name_lt : speciesCode;
+  };
+
+  const handleAddSpecies = async () => {
+    if (!selectedFarm) {
+      alert('Pasirinkite ūkį');
+      return;
+    }
+
+    if (!newSpeciesForm.name_lt) {
+      alert('Įveskite rūšies pavadinimą');
+      return;
+    }
+
+    try {
+      // Auto-generate code from Lithuanian name
+      const generatedCode = newSpeciesForm.name_lt
+        .toLowerCase()
+        .trim()
+        .replace(/ą/g, 'a')
+        .replace(/č/g, 'c')
+        .replace(/ę/g, 'e')
+        .replace(/ė/g, 'e')
+        .replace(/į/g, 'i')
+        .replace(/š/g, 's')
+        .replace(/ų/g, 'u')
+        .replace(/ū/g, 'u')
+        .replace(/ž/g, 'z')
+        .replace(/[^a-z0-9]/g, '');
+
+      const { data, error } = await supabase
+        .from('species')
+        .insert({
+          farm_id: selectedFarm.id,
+          code: generatedCode,
+          name_lt: newSpeciesForm.name_lt.trim(),
+          is_active: true,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setSpeciesList(prev => [...prev, data].sort((a, b) => a.name_lt.localeCompare(b.name_lt)));
+      setFormData({ ...formData, species: data.code });
+      setNewSpeciesForm({ code: '', name_lt: '' });
+      setShowAddSpecies(false);
+      alert('Rūšis sėkmingai sukurta!');
+    } catch (error: any) {
+      alert('Klaida kuriant rūšį: ' + error.message);
     }
   };
 
@@ -1038,13 +1099,28 @@ export function Animals() {
               className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
             />
 
-            <input
-              type="text"
-              placeholder="Rūšis"
-              value={formData.species}
-              onChange={(e) => setFormData({ ...formData, species: e.target.value })}
-              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-            />
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">Rūšis</label>
+              <select
+                value={formData.species}
+                onChange={(e) => {
+                  if (e.target.value === '__add_new__') {
+                    setShowAddSpecies(true);
+                  } else {
+                    setFormData({ ...formData, species: e.target.value });
+                  }
+                }}
+                className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              >
+                <option value="">Pasirinkite rūšį...</option>
+                {speciesList.map(species => (
+                  <option key={species.id} value={species.code}>
+                    {species.name_lt}
+                  </option>
+                ))}
+                <option value="__add_new__" className="font-bold text-blue-600">+ Pridėti naują rūšį</option>
+              </select>
+            </div>
 
             <select
               value={formData.sex}
@@ -1150,13 +1226,25 @@ export function Animals() {
                             className="px-4 py-2 border border-gray-300 rounded-lg"
                             placeholder="Ženklo numeris"
                           />
-                          <input
-                            type="text"
+                          <select
                             value={formData.species}
-                            onChange={(e) => setFormData({ ...formData, species: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Rūšis"
-                          />
+                            onChange={(e) => {
+                              if (e.target.value === '__add_new__') {
+                                setShowAddSpecies(true);
+                              } else {
+                                setFormData({ ...formData, species: e.target.value });
+                              }
+                            }}
+                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                          >
+                            <option value="">Pasirinkite rūšį...</option>
+                            {speciesList.map(species => (
+                              <option key={species.id} value={species.code}>
+                                {species.name_lt}
+                              </option>
+                            ))}
+                            <option value="__add_new__" className="font-bold text-blue-600">+ Pridėti naują rūšį</option>
+                          </select>
                           <select
                             value={formData.sex}
                             onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
@@ -1234,7 +1322,7 @@ export function Animals() {
                         </button>
                       </td>
                       <td className="px-6 py-4 text-sm text-gray-600">{(animal as any).neck_no || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{animal.sex || animal.species}</td>
+                      <td className="px-6 py-4 text-sm text-gray-600">{animal.sex || getSpeciesDisplayName(animal.species)}</td>
                       <td className="px-6 py-4 text-sm text-gray-600">
                         {animal.age_months ? `${animal.age_months} mėn.` : 'N/A'}
                       </td>
@@ -1281,6 +1369,51 @@ export function Animals() {
           </div>
         )}
       </div>
+
+      {showAddSpecies && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-md w-full p-6">
+            <h3 className="text-xl font-bold text-gray-900 mb-4">Pridėti naują rūšį</h3>
+            
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Rūšies pavadinimas *
+                </label>
+                <input
+                  type="text"
+                  value={newSpeciesForm.name_lt}
+                  onChange={(e) => setNewSpeciesForm({ ...newSpeciesForm, name_lt: e.target.value })}
+                  placeholder="pvz: Šuo, Katė, Triušis, Arklys"
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  autoFocus
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Įveskite rūšies pavadinimą lietuviškai
+                </p>
+              </div>
+
+              <div className="flex gap-3 pt-4">
+                <button
+                  onClick={() => {
+                    setShowAddSpecies(false);
+                    setNewSpeciesForm({ code: '', name_lt: '' });
+                  }}
+                  className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
+                >
+                  Atšaukti
+                </button>
+                <button
+                  onClick={handleAddSpecies}
+                  className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium"
+                >
+                  Sukurti
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
