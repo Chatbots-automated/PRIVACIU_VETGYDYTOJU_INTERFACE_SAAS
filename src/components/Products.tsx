@@ -9,9 +9,14 @@ import { Plus, Edit2, Save, X, Pill, AlertTriangle } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
 import { showNotification } from './NotificationToast';
 
-export function Products() {
+interface ProductsProps {
+  showAllFarms?: boolean; // When true, shows all products from all farms (Vetpraktika module)
+}
+
+export function Products({ showAllFarms = false }: ProductsProps = {}) {
   const { logAction } = useAuth();
-  const { selectedFarm } = useFarm();
+  const { selectedFarm: contextFarm } = useFarm();
+  const selectedFarm = showAllFarms ? null : contextFarm;
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
@@ -51,7 +56,7 @@ export function Products() {
 
   useRealtimeSubscription({
     table: 'products',
-    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : undefined,
+    filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : null,
     enabled: true,
     onInsert: useCallback((payload) => {
       setProducts(prev => sortByLithuanian([...prev, payload.new], 'name'));
@@ -89,13 +94,19 @@ export function Products() {
 
   const handleSave = async () => {
     try {
-      if (!selectedFarm) {
+      // When editing, use the product's existing farm_id
+      // When creating new, require selectedFarm
+      const farmId = editing 
+        ? products.find(p => p.id === editing)?.farm_id 
+        : selectedFarm?.id;
+
+      if (!farmId) {
         alert('Pasirinkite ūkį');
         return;
       }
 
       const productData = {
-        farm_id: selectedFarm.id,
+        farm_id: farmId,
         name: formData.name,
         category: formData.category,
         subcategory: formData.subcategory || null,
@@ -585,6 +596,11 @@ export function Products() {
         <div className="flex items-center gap-2">
           <Pill className="w-5 h-5 text-blue-600" />
           <h2 className="text-lg font-bold text-gray-900">Produktai</h2>
+          {!selectedFarm && (
+            <span className="text-xs text-gray-500 italic">
+              (visi ūkiai)
+            </span>
+          )}
         </div>
         {!showAdd && !editing && selectedFarm && (
           <button
@@ -594,11 +610,6 @@ export function Products() {
             <Plus className="w-4 h-4" />
             Naujas
           </button>
-        )}
-        {!selectedFarm && (
-          <div className="text-xs text-gray-500 italic">
-            Peržiūros režimas - redagavimas galimas tik ūkio modulyje
-          </div>
         )}
       </div>
 
@@ -679,17 +690,13 @@ export function Products() {
                     )}
                   </td>
                   <td className="px-3 py-2 text-right">
-                    {selectedFarm ? (
-                      <button
-                        onClick={() => handleEdit(product)}
-                        className="text-blue-600 hover:text-blue-800 p-1"
-                        title="Redaguoti"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                      </button>
-                    ) : (
-                      <span className="text-xs text-gray-400">-</span>
-                    )}
+                    <button
+                      onClick={() => handleEdit(product)}
+                      className="text-blue-600 hover:text-blue-800 p-1"
+                      title="Redaguoti"
+                    >
+                      <Edit2 className="w-4 h-4" />
+                    </button>
                   </td>
                 </tr>
               )

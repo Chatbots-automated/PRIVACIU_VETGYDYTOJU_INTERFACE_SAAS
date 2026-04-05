@@ -55,7 +55,7 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
       case 'allocate-stock':
         return <StockAllocation />;
       case 'products':
-        return <Products />;
+        return <Products showAllFarms={true} />;
       case 'reports':
         return <AllFarmsReports />;
       case 'analytics':
