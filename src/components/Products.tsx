@@ -77,13 +77,31 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
       // If no selectedFarm, load all products (Vetpraktika module)
       if (selectedFarm) {
         query = query.eq('farm_id', selectedFarm.id);
+      } else {
+        // In Vetpraktika module, only show products that have a valid farm_id
+        query = query.not('farm_id', 'is', null);
       }
 
       const { data, error } = await query;
 
       if (error) throw error;
+      
+      let finalData = data || [];
+      
+      // In Vetpraktika module (no selectedFarm), deduplicate by product name
+      // Keep only the first occurrence of each product name
+      if (!selectedFarm) {
+        const uniqueProducts = new Map<string, any>();
+        finalData.forEach(product => {
+          if (!uniqueProducts.has(product.name)) {
+            uniqueProducts.set(product.name, product);
+          }
+        });
+        finalData = Array.from(uniqueProducts.values());
+      }
+      
       // Sort by Lithuanian alphabet
-      const sortedData = sortByLithuanian(data || [], 'name');
+      const sortedData = sortByLithuanian(finalData, 'name');
       setProducts(sortedData);
     } catch (error) {
       console.error('Error loading products:', error);
@@ -625,7 +643,6 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
           <thead className="bg-gray-50 border-b border-gray-200">
             <tr>
               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Pavadinimas</th>
-              {!selectedFarm && <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Ūkis</th>}
               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Kategorija</th>
               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">Pakuotė</th>
               <th className="px-3 py-2 text-left text-xs font-semibold text-gray-700">V. medžiaga</th>
@@ -637,20 +654,13 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
             {products.map((product) => (
               editing === product.id ? (
                 <tr key={product.id} className="bg-amber-50">
-                  <td colSpan={!selectedFarm ? 7 : 6} className="px-3 py-3">
+                  <td colSpan={6} className="px-3 py-3">
                     {formFields}
                   </td>
                 </tr>
               ) : (
                 <tr key={product.id} className="hover:bg-gray-50">
                   <td className="px-3 py-2 font-medium text-gray-900">{product.name}</td>
-                  {!selectedFarm && (
-                    <td className="px-3 py-2 text-gray-600">
-                      <span className="text-xs font-medium text-blue-600">
-                        {(product as any).farm?.code || '-'}
-                      </span>
-                    </td>
-                  )}
                   <td className="px-3 py-2 text-gray-600">
                     {product.category === 'medicines' && 'Vaistai'}
                     {product.category === 'prevention' && 'Prevencija'}
