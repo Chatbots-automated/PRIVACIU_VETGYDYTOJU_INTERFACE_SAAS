@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDateLT } from '../lib/formatters';
-import { FileText, X, ExternalLink, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle } from 'lucide-react';
 
 function translateUnit(unit: string): string {
   const translations: Record<string, string> = {
@@ -985,9 +985,55 @@ export function InseminationJournalReport({ data }: InseminationJournalReportPro
 
 interface WithdrawalReportProps {
   data: any[];
+  onDataChange?: () => void;
 }
 
-export function WithdrawalReport({ data }: WithdrawalReportProps) {
+export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) {
+  const [editingRow, setEditingRow] = useState<string | null>(null);
+  const [editValues, setEditValues] = useState<{
+    withdrawal_until_meat: string;
+    withdrawal_until_milk: string;
+  }>({ withdrawal_until_meat: '', withdrawal_until_milk: '' });
+  const [saving, setSaving] = useState(false);
+
+  const handleEdit = (row: any) => {
+    setEditingRow(row.treatment_id);
+    setEditValues({
+      withdrawal_until_meat: row.withdrawal_until_meat || '',
+      withdrawal_until_milk: row.withdrawal_until_milk || '',
+    });
+  };
+
+  const handleCancel = () => {
+    setEditingRow(null);
+    setEditValues({ withdrawal_until_meat: '', withdrawal_until_milk: '' });
+  };
+
+  const handleSave = async (treatmentId: string) => {
+    setSaving(true);
+    try {
+      const { error } = await supabase
+        .from('treatments')
+        .update({
+          withdrawal_until_meat: editValues.withdrawal_until_meat || null,
+          withdrawal_until_milk: editValues.withdrawal_until_milk || null,
+        })
+        .eq('id', treatmentId);
+
+      if (error) throw error;
+
+      setEditingRow(null);
+      if (onDataChange) {
+        onDataChange();
+      }
+    } catch (error) {
+      console.error('Error updating withdrawal dates:', error);
+      alert('Klaida atnaujinant karencijos datas');
+    } finally {
+      setSaving(false);
+    }
+  };
+
   return (
     <div className="bg-white">
       <div className="text-center mb-6 no-print">
@@ -1016,71 +1062,119 @@ export function WithdrawalReport({ data }: WithdrawalReportProps) {
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Karencija (mėsa)</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Karencija (pienas)</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Veterinaras</th>
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700 no-print">Veiksmai</th>
               </tr>
             </thead>
             <tbody>
-              {data.map((row, idx) => (
-                <tr key={idx} className="hover:bg-red-50 transition-colors print-break-avoid">
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                    <div className="flex items-center gap-1">
-                      <span>{row.farm_name || '-'}</span>
-                      {row.is_eco_farm && (
-                        <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">
-                          ECO
-                        </span>
+              {data.map((row, idx) => {
+                const isEditing = editingRow === row.treatment_id;
+                return (
+                  <tr key={idx} className="hover:bg-red-50 transition-colors print-break-avoid">
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
+                      <div className="flex items-center gap-1">
+                        <span>{row.farm_name || '-'}</span>
+                        {row.is_eco_farm && (
+                          <span className="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded-full font-bold">
+                            ECO
+                          </span>
+                        )}
+                      </div>
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
+                      <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700">
+                        {row.animal_tag || '-'}
+                      </span>
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
+                      {row.species || '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-900">
+                      {row.treatment_date ? formatDateLT(row.treatment_date) : '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">
+                      {row.disease_name || '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
+                      {row.medicines_used || '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editValues.withdrawal_until_meat}
+                          onChange={(e) => setEditValues({ ...editValues, withdrawal_until_meat: e.target.value })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        />
+                      ) : row.withdrawal_until_meat ? (
+                        <div className="space-y-1">
+                          <div className={`font-bold ${row.withdrawal_days_meat > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {row.withdrawal_days_meat > 0 ? `${row.withdrawal_days_meat} d.` : 'Pasibaigė'}
+                          </div>
+                          <div className="text-[10px] text-gray-600">
+                            iki {formatDateLT(row.withdrawal_until_meat)}
+                          </div>
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
                       )}
-                    </div>
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
-                    <span className="inline-flex items-center px-2 py-1 rounded-md text-xs font-bold bg-blue-100 text-blue-700">
-                      {row.animal_tag || '-'}
-                    </span>
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                    {row.species || '-'}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-900">
-                    {row.treatment_date ? formatDateLT(row.treatment_date) : '-'}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-900">
-                    {row.disease_name || '-'}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                    {row.medicines_used || '-'}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
-                    {row.withdrawal_until_meat ? (
-                      <div className="space-y-1">
-                        <div className={`font-bold ${row.withdrawal_days_meat > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                          {row.withdrawal_days_meat > 0 ? `${row.withdrawal_days_meat} d.` : 'Pasibaigė'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
+                      {isEditing ? (
+                        <input
+                          type="date"
+                          value={editValues.withdrawal_until_milk}
+                          onChange={(e) => setEditValues({ ...editValues, withdrawal_until_milk: e.target.value })}
+                          className="w-full px-2 py-1 border border-gray-300 rounded text-xs"
+                        />
+                      ) : row.withdrawal_until_milk ? (
+                        <div className="space-y-1">
+                          <div className={`font-bold ${row.withdrawal_days_milk > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {row.withdrawal_days_milk > 0 ? `${row.withdrawal_days_milk} d.` : 'Pasibaigė'}
+                          </div>
+                          <div className="text-[10px] text-gray-600">
+                            iki {formatDateLT(row.withdrawal_until_milk)}
+                          </div>
                         </div>
-                        <div className="text-[10px] text-gray-600">
-                          iki {formatDateLT(row.withdrawal_until_meat)}
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
+                      {row.veterinarian || '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center no-print">
+                      {isEditing ? (
+                        <div className="flex items-center justify-center gap-1">
+                          <button
+                            onClick={() => handleSave(row.treatment_id)}
+                            disabled={saving}
+                            className="p-1 text-green-600 hover:bg-green-50 rounded disabled:opacity-50"
+                            title="Išsaugoti"
+                          >
+                            <Check className="w-4 h-4" />
+                          </button>
+                          <button
+                            onClick={handleCancel}
+                            disabled={saving}
+                            className="p-1 text-red-600 hover:bg-red-50 rounded disabled:opacity-50"
+                            title="Atšaukti"
+                          >
+                            <XCircle className="w-4 h-4" />
+                          </button>
                         </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
-                    {row.withdrawal_until_milk ? (
-                      <div className="space-y-1">
-                        <div className={`font-bold ${row.withdrawal_days_milk > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                          {row.withdrawal_days_milk > 0 ? `${row.withdrawal_days_milk} d.` : 'Pasibaigė'}
-                        </div>
-                        <div className="text-[10px] text-gray-600">
-                          iki {formatDateLT(row.withdrawal_until_milk)}
-                        </div>
-                      </div>
-                    ) : (
-                      <span className="text-gray-400">-</span>
-                    )}
-                  </td>
-                  <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                    {row.veterinarian || '-'}
-                  </td>
-                </tr>
-              ))}
+                      ) : (
+                        <button
+                          onClick={() => handleEdit(row)}
+                          className="p-1 text-blue-600 hover:bg-blue-50 rounded"
+                          title="Redaguoti karencijos datas"
+                        >
+                          <Edit2 className="w-4 h-4" />
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

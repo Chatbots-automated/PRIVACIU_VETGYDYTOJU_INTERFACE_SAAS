@@ -787,7 +787,7 @@ export function Reports() {
       case 'drug_journal':
         return <DrugJournalReport data={data} />;
       case 'withdrawal':
-        return <WithdrawalReport data={data} />;
+        return <WithdrawalReport data={data} onDataChange={loadReport} />;
       case 'biocide_journal':
         return <BiocideJournalReport data={data} />;
       case 'insemination_journal':
