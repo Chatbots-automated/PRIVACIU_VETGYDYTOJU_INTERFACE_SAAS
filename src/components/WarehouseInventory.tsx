@@ -43,6 +43,8 @@ export function WarehouseInventory() {
         .select('*')
         .order('created_at', { ascending: false });
 
+      console.log('📦 Warehouse inventory raw data:', data?.length || 0, data);
+
       if (error) throw error;
       
       // Group by product

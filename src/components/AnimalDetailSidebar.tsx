@@ -250,16 +250,48 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
   };
 
   const loadProducts = async () => {
-    const { data, error } = await supabase
+    if (!selectedFarm) return;
+    
+    // Get products that have batches with stock at this farm
+    // Use the product_id from batches (which may be warehouse products)
+    // This ensures dropdown shows products that actually have stock
+    const { data: batchesData, error: batchError } = await supabase
+      .from('batches')
+      .select('product_id')
+      .eq('farm_id', selectedFarm.id)
+      .gt('qty_left', 0);
+    
+    if (batchError) {
+      console.error('Error loading batches:', batchError);
+      return;
+    }
+    
+    // Get unique product IDs that have stock
+    const productIds = [...new Set((batchesData || []).map((b: any) => b.product_id))];
+    
+    if (productIds.length === 0) {
+      setProducts([]);
+      return;
+    }
+    
+    // Load full product details for these IDs
+    // Don't filter by is_active here since batches might reference inactive products
+    const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
-      .eq('is_active', true);
-
-    if (!error && data) {
-      // Sort by Lithuanian alphabet
-      const sortedData = sortByLithuanian(data, 'name');
-      setProducts(sortedData);
+      .in('id', productIds);
+    
+    if (productsError) {
+      console.error('Error loading products:', productsError);
+      return;
     }
+    
+    console.log('📦 Products with stock at farm:', productsData?.length || 0, productsData);
+    console.log('📦 Product IDs from batches:', productIds);
+    
+    // Sort by Lithuanian alphabet and set as available products
+    const sortedData = sortByLithuanian(productsData || [], 'name');
+    setProducts(sortedData);
   };
 
   const handleApsekStatusChange = () => {
@@ -2238,7 +2270,36 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
       .eq('product_id', productId)
       .eq('farm_id', selectedFarm.id);
 
-    if (error || !batchesData) return 0;
+    if (error) {
+      console.error('Error fetching stock level:', error);
+      return 0;
+    }
+    
+    // If no batches found, try to find by product name (handles product_id mismatch)
+    if (!batchesData || batchesData.length === 0) {
+      const { data: productData } = await supabase
+        .from('products')
+        .select('name')
+        .eq('id', productId)
+        .single();
+      
+      if (productData) {
+        const { data: batchesByName } = await supabase
+          .from('batches')
+          .select('id, received_qty, qty_left, expiry_date, products!inner(name)')
+          .eq('farm_id', selectedFarm.id)
+          .eq('products.name', productData.name);
+        
+        if (batchesByName && batchesByName.length > 0) {
+          console.log(`📊 Found stock by product name "${productData.name}":`, batchesByName);
+          const total = batchesByName
+            .filter(b => !b.expiry_date || new Date(b.expiry_date) >= new Date())
+            .reduce((sum, batch) => sum + (batch.qty_left || 0), 0);
+          return total;
+        }
+      }
+      return 0;
+    }
 
     const today = new Date();
     today.setHours(0, 0, 0, 0);
@@ -2261,12 +2322,46 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
     try {
       if (!selectedFarm) return '';
       
+      // First, check if this product exists for this farm
+      const { data: productCheck } = await supabase
+        .from('products')
+        .select('id, name, farm_id')
+        .eq('id', productId)
+        .single();
+      
+      console.log(`🔍 Product check for ${productId}:`, productCheck);
+      
       const { data: batchesData, error } = await supabase
         .from('batches')
-        .select('id, qty_left, expiry_date')
+        .select('id, qty_left, expiry_date, lot, product_id')
         .eq('product_id', productId)
         .eq('farm_id', selectedFarm.id)
         .order('expiry_date', { ascending: true });
+
+      console.log(`🔍 Batches for product ${productId} at farm ${selectedFarm.id}:`, batchesData?.length || 0, batchesData);
+      
+      // Also check if there are batches with different product_id but same name
+      if (!batchesData || batchesData.length === 0) {
+        const { data: allFarmBatches } = await supabase
+          .from('batches')
+          .select('id, product_id, qty_left, lot, expiry_date, products(name, farm_id)')
+          .eq('farm_id', selectedFarm.id)
+          .gt('qty_left', 0);
+        
+        console.log(`📋 All farm batches with stock:`, allFarmBatches?.length || 0, allFarmBatches);
+        
+        // Try to find a batch with matching product name
+        if (productCheck && allFarmBatches) {
+          const matchingBatch = allFarmBatches.find((b: any) => 
+            b.products?.name?.toLowerCase() === productCheck.name?.toLowerCase()
+          );
+          
+          if (matchingBatch) {
+            console.log(`✅ Found matching batch by name:`, matchingBatch);
+            return matchingBatch.id;
+          }
+        }
+      }
 
       if (error) {
         console.error('Error fetching batch stock:', error);
