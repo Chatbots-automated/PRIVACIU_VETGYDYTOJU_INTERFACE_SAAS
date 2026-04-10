@@ -302,47 +302,119 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                           );
                         })}
                       </tbody>
-                      <tfoot className="bg-gray-100 border-t-2 border-gray-300">
-                        <tr>
-                          <td colSpan={5} className="px-3 py-2 text-right font-bold text-gray-900">
-                            Iš viso (be nuol.):
+                      <tfoot className="bg-gray-50">
+                        {/* Subtotals row */}
+                        <tr className="border-t-2 border-gray-300">
+                          <td colSpan={3} className="px-3 py-3"></td>
+                          <td colSpan={2} className="px-3 py-3 text-right text-sm font-semibold text-gray-700">
+                            Tarpinė suma (be nuolaidos):
                           </td>
-                          <td className="px-3 py-2 text-right font-bold text-gray-700">
-                            {invoice.currency} {invoiceItems.reduce((sum, item) => {
-                              const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
-                              const unitPriceBeforeDiscount = hasDiscount 
-                                ? item.unit_price / (1 - item.discount_percent / 100)
-                                : item.unit_price;
-                              return sum + (unitPriceBeforeDiscount * item.quantity);
-                            }, 0).toFixed(2)}
-                          </td>
-                          <td className="px-3 py-2"></td>
-                        </tr>
-                        <tr>
-                          <td colSpan={5} className="px-3 py-2 text-right font-bold text-gray-900">
-                            Iš viso (su nuol.):
-                          </td>
-                          <td className="px-3 py-2"></td>
-                          <td className="px-3 py-2 text-right font-bold text-blue-700 text-lg">
-                            {invoice.currency} {invoice.total_gross.toFixed(2)}
+                          <td colSpan={2} className="px-3 py-3 text-right text-base font-bold text-gray-900">
+                            {invoice.currency} {(() => {
+                              const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
+                                const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                const unitPriceBeforeDiscount = hasDiscount 
+                                  ? item.unit_price / (1 - item.discount_percent / 100)
+                                  : item.unit_price;
+                                return sum + (unitPriceBeforeDiscount * item.quantity);
+                              }, 0);
+                              return totalBeforeDiscount.toFixed(2);
+                            })()}
                           </td>
                         </tr>
-                        <tr className="border-t border-gray-300">
-                          <td colSpan={5} className="px-3 py-2 text-right text-sm text-gray-600">
-                            Grynoji suma (be PVM):
+                        
+                        {/* Discount row - only show if there's a discount */}
+                        {invoiceItems.some(item => item.discount_percent != null && item.discount_percent > 0) && (
+                          <tr className="bg-amber-50">
+                            <td colSpan={3} className="px-3 py-2"></td>
+                            <td colSpan={2} className="px-3 py-2 text-right text-sm font-semibold text-amber-700">
+                              Nuolaida:
+                            </td>
+                            <td colSpan={2} className="px-3 py-2 text-right text-base font-bold text-amber-700">
+                              -{invoice.currency} {(invoiceItems.reduce((sum, item) => {
+                                const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                const unitPriceBeforeDiscount = hasDiscount 
+                                  ? item.unit_price / (1 - item.discount_percent / 100)
+                                  : item.unit_price;
+                                const totalBeforeDiscount = unitPriceBeforeDiscount * item.quantity;
+                                return sum + (totalBeforeDiscount - item.total_price);
+                              }, 0)).toFixed(2)}
+                            </td>
+                          </tr>
+                        )}
+                        
+                        {/* Total after discount (before VAT) - calculated from items */}
+                        <tr className="bg-blue-50 border-t border-gray-300">
+                          <td colSpan={3} className="px-3 py-3"></td>
+                          <td colSpan={2} className="px-3 py-3 text-right text-sm font-semibold text-blue-900">
+                            Suma su nuolaida (be PVM):
                           </td>
-                          <td colSpan={2} className="px-3 py-2 text-right text-sm text-gray-700">
-                            {invoice.currency} {invoice.total_net.toFixed(2)}
+                          <td colSpan={2} className="px-3 py-3 text-right text-lg font-bold text-blue-700">
+                            {invoice.currency} {(() => {
+                              const totalAfterDiscount = invoiceItems.reduce((sum, item) => {
+                                return sum + item.total_price;
+                              }, 0);
+                              return totalAfterDiscount.toFixed(2);
+                            })()}
                           </td>
                         </tr>
-                        <tr>
-                          <td colSpan={5} className="px-3 py-2 text-right text-sm text-gray-600">
+                        
+                        {/* VAT row - calculated from items */}
+                        <tr className="bg-gray-100">
+                          <td colSpan={3} className="px-3 py-2"></td>
+                          <td colSpan={2} className="px-3 py-2 text-right text-sm font-semibold text-gray-700">
                             PVM ({invoice.vat_rate}%):
                           </td>
-                          <td colSpan={2} className="px-3 py-2 text-right text-sm text-gray-700">
-                            {invoice.currency} {invoice.total_vat.toFixed(2)}
+                          <td colSpan={2} className="px-3 py-2 text-right text-base font-bold text-gray-900">
+                            {invoice.currency} {(() => {
+                              const totalAfterDiscount = invoiceItems.reduce((sum, item) => {
+                                return sum + item.total_price;
+                              }, 0);
+                              const vat = totalAfterDiscount * (invoice.vat_rate / 100);
+                              return vat.toFixed(2);
+                            })()}
                           </td>
                         </tr>
+                        
+                        {/* Final total WITHOUT discount (with VAT) - MAIN PRICE */}
+                        <tr className="bg-blue-50 border-t-2 border-blue-300">
+                          <td colSpan={3} className="px-3 py-4"></td>
+                          <td colSpan={2} className="px-3 py-4 text-right text-base font-bold text-blue-900">
+                            IŠ VISO MOKĖTI (be nuolaidos, su PVM):
+                          </td>
+                          <td colSpan={2} className="px-3 py-4 text-right text-xl font-bold text-blue-700">
+                            {invoice.currency} {(() => {
+                              const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
+                                const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                const unitPriceBeforeDiscount = hasDiscount 
+                                  ? item.unit_price / (1 - item.discount_percent / 100)
+                                  : item.unit_price;
+                                return sum + (unitPriceBeforeDiscount * item.quantity);
+                              }, 0);
+                              const totalWithVAT = totalBeforeDiscount * (1 + invoice.vat_rate / 100);
+                              return totalWithVAT.toFixed(2);
+                            })()}
+                          </td>
+                        </tr>
+                        
+                        {/* Discounted price - only show if there's a discount */}
+                        {invoiceItems.some(item => item.discount_percent != null && item.discount_percent > 0) && (
+                          <tr className="bg-green-50">
+                            <td colSpan={3} className="px-3 py-3"></td>
+                            <td colSpan={2} className="px-3 py-3 text-right text-sm font-semibold text-green-700">
+                              Su pritaikyta nuolaida:
+                            </td>
+                            <td colSpan={2} className="px-3 py-3 text-right text-lg font-bold text-green-700">
+                              {invoice.currency} {(() => {
+                                const totalAfterDiscount = invoiceItems.reduce((sum, item) => {
+                                  return sum + item.total_price;
+                                }, 0);
+                                const totalWithVAT = totalAfterDiscount * (1 + invoice.vat_rate / 100);
+                                return totalWithVAT.toFixed(2);
+                              })()}
+                            </td>
+                          </tr>
+                        )}
                       </tfoot>
                     </table>
                   </div>

@@ -68,7 +68,13 @@ export function WarehouseInventory() {
         return acc;
       }, []);
       
-      setInventory(grouped);
+      // Filter out products with no remaining stock (qty_left = 0)
+      // Only show products that are still available in the warehouse
+      const availableStock = grouped.filter(item => item.qty_left > 0);
+      
+      console.log('📦 Available warehouse stock (qty_left > 0):', availableStock.length, 'of', grouped.length, 'total');
+      
+      setInventory(availableStock);
     } catch (error) {
       console.error('Error loading warehouse inventory:', error);
     } finally {

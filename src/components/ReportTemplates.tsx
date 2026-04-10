@@ -1418,26 +1418,111 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                         })}
                       </div>
 
-                      <div className="mt-4 pt-4 border-t-2 border-gray-300 bg-white rounded-lg p-3">
-                        <div className="grid grid-cols-3 gap-4 text-sm">
-                          <div key={`net-${invoice.id}`}>
-                            <span className="text-gray-600">Suma be PVM:</span>
-                            <span className="ml-2 font-bold text-gray-900">
-                              {invoice.currency} {(invoice.total_net || 0).toFixed(2)}
+                      <div className="mt-4 pt-4 border-t-2 border-gray-300 bg-white rounded-lg p-4">
+                        <div className="space-y-2">
+                          {/* Subtotal before discount (sum of item total_price without discount) */}
+                          <div className="flex justify-between items-center py-2 border-b border-gray-200">
+                            <span className="text-sm font-semibold text-gray-700">Tarpinė suma (be nuolaidos):</span>
+                            <span className="text-base font-bold text-gray-900">
+                              {invoice.currency} {(() => {
+                                const totalBeforeDiscount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                  const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                  if (hasDiscount) {
+                                    // Calculate what the total_price would have been without discount
+                                    const totalWithDiscount = parseFloat(item.total_price) || 0;
+                                    const totalBeforeDiscount = totalWithDiscount / (1 - item.discount_percent / 100);
+                                    return sum + totalBeforeDiscount;
+                                  }
+                                  return sum + (parseFloat(item.total_price) || 0);
+                                }, 0);
+                                return totalBeforeDiscount.toFixed(2);
+                              })()}
                             </span>
                           </div>
-                          <div key={`vat-${invoice.id}`}>
-                            <span className="text-gray-600">PVM ({invoice.vat_rate || 0}%):</span>
-                            <span className="ml-2 font-bold text-gray-900">
-                              {invoice.currency} {(invoice.total_vat || 0).toFixed(2)}
+
+                          {/* Discount amount - only show if there's a discount */}
+                          {(invoice.items || []).some((item: any) => item.discount_percent != null && item.discount_percent > 0) && (
+                            <div className="flex justify-between items-center py-2 bg-amber-50 px-3 rounded">
+                              <span className="text-sm font-semibold text-amber-700">Nuolaida:</span>
+                              <span className="text-base font-bold text-amber-700">
+                                -{invoice.currency} {(() => {
+                                  const discountAmount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                    const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                    if (hasDiscount) {
+                                      const totalWithDiscount = parseFloat(item.total_price) || 0;
+                                      const totalBeforeDiscount = totalWithDiscount / (1 - item.discount_percent / 100);
+                                      return sum + (totalBeforeDiscount - totalWithDiscount);
+                                    }
+                                    return sum;
+                                  }, 0);
+                                  return discountAmount.toFixed(2);
+                                })()}
+                              </span>
+                            </div>
+                          )}
+
+                          {/* Sum of item total_price (after discount, this is what invoice.total_net should be based on) */}
+                          <div className="flex justify-between items-center py-2 bg-blue-50 px-3 rounded">
+                            <span className="text-sm font-semibold text-blue-900">Suma su nuolaida (be PVM):</span>
+                            <span className="text-lg font-bold text-blue-700">
+                              {invoice.currency} {(() => {
+                                const totalAfterDiscount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                  return sum + (parseFloat(item.total_price) || 0);
+                                }, 0);
+                                return totalAfterDiscount.toFixed(2);
+                              })()}
                             </span>
                           </div>
-                          <div key={`gross-${invoice.id}`} className="text-right">
-                            <span className="text-gray-600">Suma su PVM:</span>
-                            <span className="ml-2 font-bold text-green-700 text-lg">
-                              {invoice.currency} {(invoice.total_gross || 0).toFixed(2)}
+
+                          {/* VAT */}
+                          <div className="flex justify-between items-center py-2 bg-gray-100 px-3 rounded">
+                            <span className="text-sm font-semibold text-gray-700">PVM ({invoice.vat_rate || 0}%):</span>
+                            <span className="text-base font-bold text-gray-900">
+                              {invoice.currency} {(() => {
+                                const totalAfterDiscount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                  return sum + (parseFloat(item.total_price) || 0);
+                                }, 0);
+                                const vat = totalAfterDiscount * ((invoice.vat_rate || 0) / 100);
+                                return vat.toFixed(2);
+                              })()}
                             </span>
                           </div>
+
+                          {/* Final total WITHOUT discount (with VAT) */}
+                          <div className="flex justify-between items-center py-3 bg-blue-50 px-3 rounded border-t-2 border-blue-300">
+                            <span className="text-base font-bold text-blue-900">IŠ VISO MOKĖTI (be nuolaidos, su PVM):</span>
+                            <span className="text-xl font-bold text-blue-700">
+                              {invoice.currency} {(() => {
+                                const totalBeforeDiscount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                  const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
+                                  if (hasDiscount) {
+                                    const totalWithDiscount = parseFloat(item.total_price) || 0;
+                                    const totalBeforeDiscount = totalWithDiscount / (1 - item.discount_percent / 100);
+                                    return sum + totalBeforeDiscount;
+                                  }
+                                  return sum + (parseFloat(item.total_price) || 0);
+                                }, 0);
+                                const totalWithVAT = totalBeforeDiscount * (1 + (invoice.vat_rate || 0) / 100);
+                                return totalWithVAT.toFixed(2);
+                              })()}
+                            </span>
+                          </div>
+
+                          {/* Discounted price - only show if there's a discount */}
+                          {(invoice.items || []).some((item: any) => item.discount_percent != null && item.discount_percent > 0) && (
+                            <div className="flex justify-between items-center py-2 bg-green-50 px-3 rounded">
+                              <span className="text-sm font-semibold text-green-700">Su pritaikyta nuolaida:</span>
+                              <span className="text-lg font-bold text-green-700">
+                                {invoice.currency} {(() => {
+                                  const totalAfterDiscount = (invoice.items || []).reduce((sum: number, item: any) => {
+                                    return sum + (parseFloat(item.total_price) || 0);
+                                  }, 0);
+                                  const totalWithVAT = totalAfterDiscount * (1 + (invoice.vat_rate || 0) / 100);
+                                  return totalWithVAT.toFixed(2);
+                                })()}
+                              </span>
+                            </div>
+                          )}
                         </div>
                       </div>
                     </div>
