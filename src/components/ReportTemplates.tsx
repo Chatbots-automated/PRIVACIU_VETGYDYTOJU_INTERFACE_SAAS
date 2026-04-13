@@ -117,7 +117,7 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
                 10.<br/>Klinikinė<br/>diagnozė
               </th>
               <th className="border-2 border-gray-300 px-2 py-3 text-[11px] font-bold text-gray-700 align-top" style={{minWidth: '120px'}}>
-                11.<br/>Suteiktos<br/>veterinarijos<br/>paslaugos
+                11.<br/>Gydymas
               </th>
               <th className="border-2 border-gray-300 px-2 py-3 text-[11px] font-bold text-gray-700 align-top" style={{minWidth: '90px'}}>
                 12.<br/>Išlauka
@@ -206,23 +206,24 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
                   {!row.services && !row.medicine_name && <span className="text-gray-400">-</span>}
                 </td>
                 
-                {/* Column 12: Withdrawal period - Only show dates */}
+                {/* Column 12: Withdrawal period - Show both meat and milk */}
                 <td className="border-2 border-gray-300 px-2 py-2 text-[11px]">
-                  {row.withdrawal_until_meat && row.withdrawal_days_meat > 0 && (
+                  {row.withdrawal_until_meat && (
                     <div className="text-red-700 text-[10px]">🥩 {formatDateLT(row.withdrawal_until_meat)}</div>
                   )}
-                  {row.withdrawal_until_milk && row.withdrawal_days_milk > 0 && (
+                  {row.withdrawal_until_milk && (
                     <div className="text-blue-700 text-[10px] mt-0.5">🥛 {formatDateLT(row.withdrawal_until_milk)}</div>
                   )}
-                  {(!row.withdrawal_until_meat || row.withdrawal_days_meat === 0) && 
-                   (!row.withdrawal_until_milk || row.withdrawal_days_milk === 0) && (
+                  {!row.withdrawal_until_meat && !row.withdrawal_until_milk && (
                     <span className="text-gray-400">-</span>
                   )}
                 </td>
                 
-                {/* Column 13: Outcome */}
+                {/* Column 13: Outcome with date */}
                 <td className="border-2 border-gray-300 px-2 py-2 text-[11px] text-gray-900">
-                  {row.outcome_date ? formatDateLT(row.outcome_date) : (row.treatment_outcome || '-')}
+                  {row.treatment_outcome && row.outcome_date 
+                    ? `${row.treatment_outcome} ${formatDateLT(row.outcome_date)}`
+                    : row.treatment_outcome || '-'}
                 </td>
                 
                 {/* Column 14: Veterinarian name */}
@@ -1053,6 +1054,7 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
           <table className="w-full border-collapse">
             <thead>
               <tr className="bg-gradient-to-r from-red-50 to-orange-50">
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Eilės Nr.</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Ūkis</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Gyvūno žymė</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Rūšis</th>
@@ -1070,6 +1072,9 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                 const isEditing = editingRow === row.treatment_id;
                 return (
                   <tr key={idx} className="hover:bg-red-50 transition-colors print-break-avoid">
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-bold text-gray-900">
+                      {idx + 1}
+                    </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
                       <div className="flex items-center gap-1">
                         <span>{row.farm_name || '-'}</span>
@@ -1362,16 +1367,17 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                                       <span className="text-gray-600">Vnt. kaina (be nuol.):</span>
                                       <span className="ml-2 font-medium text-gray-900">
                                         {(() => {
-                                          const qty = parseFloat(item.quantity) || 0;
+                                          const qty = parseFloat(item.quantity) || 1;
                                           const totalPrice = parseFloat(item.total_price) || 0;
                                           const discount = parseFloat(item.discount_percent) || 0;
                                           
-                                          if (discount > 0 && qty > 0) {
-                                            const priceAfterDiscount = totalPrice / qty;
-                                            const priceBeforeDiscount = priceAfterDiscount / (1 - discount / 100);
-                                            return `${invoice.currency} ${priceBeforeDiscount.toFixed(4)}`;
+                                          if (discount > 0) {
+                                            // Calculate total before discount, then derive unit price
+                                            const totalBeforeDiscount = totalPrice / (1 - discount / 100);
+                                            const unitPriceBeforeDiscount = totalBeforeDiscount / qty;
+                                            return `${invoice.currency} ${unitPriceBeforeDiscount.toFixed(2)}`;
                                           }
-                                          return `${invoice.currency} ${(item.unit_price || 0).toFixed(4)}`;
+                                          return `${invoice.currency} ${(item.unit_price || 0).toFixed(2)}`;
                                         })()}
                                       </span>
                                     </div>
@@ -1379,7 +1385,7 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                                       <div key={`price-after-${item.id}`}>
                                         <span className="text-gray-600">Vnt. kaina (su nuol.):</span>
                                         <span className="ml-2 font-medium text-green-700">
-                                          {invoice.currency} {(item.unit_price || 0).toFixed(4)}
+                                          {invoice.currency} {(item.unit_price || 0).toFixed(2)}
                                         </span>
                                       </div>
                                     )}

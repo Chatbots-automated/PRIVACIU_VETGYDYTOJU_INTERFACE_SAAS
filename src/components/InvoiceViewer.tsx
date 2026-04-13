@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useFarm } from '../contexts/FarmContext';
-import { FileText, Package, Calendar, Building2, ChevronDown, ChevronUp } from 'lucide-react';
+import { FileText, Package, Calendar, Building2, ChevronDown, ChevronUp, ArrowLeft } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 
 interface Invoice {
@@ -102,6 +102,119 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
       setInvoiceItems(data || []);
     } catch (error) {
       console.error('Error loading invoice items:', error);
+    }
+  };
+
+  const handleReturnToWarehouse = async (invoice: Invoice) => {
+    if (!invoice.farm_id) {
+      alert('Ši sąskaita jau yra sandėlyje');
+      return;
+    }
+
+    try {
+      // First, check if any products from this invoice have been used
+      const { data: farmBatches, error: batchesError } = await supabase
+        .from('batches')
+        .select('*, usage_items(id)')
+        .eq('invoice_id', invoice.id)
+        .eq('farm_id', invoice.farm_id);
+
+      if (batchesError) throw batchesError;
+
+      // Check if any batch has usage_items (stock has been used)
+      const hasUsage = farmBatches?.some(batch => 
+        (batch as any).usage_items && (batch as any).usage_items.length > 0
+      );
+
+      if (hasUsage) {
+        alert(
+          `Negalima grąžinti sąskaitos #${invoice.invoice_number} į sandėlį!\n\n` +
+          `Kai kurie produktai iš šios sąskaitos jau buvo panaudoti gydymams.\n\n` +
+          `Galite grąžinti tik sąskaitas, kurių produktai dar nebuvo naudoti.`
+        );
+        return;
+      }
+
+      const confirmed = confirm(
+        `Ar tikrai norite grąžinti sąskaitą #${invoice.invoice_number} į Vetpraktika sandėlį?\n\n` +
+        `Visi produktai bus perkelti iš ūkio "${invoice.farm?.name}" atgal į bendrą sandėlį.`
+      );
+
+      if (!confirmed) return;
+
+      // 1. Update invoice to remove farm assignment
+      const { error: invoiceError } = await supabase
+        .from('invoices')
+        .update({ farm_id: null })
+        .eq('id', invoice.id);
+
+      if (invoiceError) throw invoiceError;
+
+      // 2. Move batches from farm batches to warehouse batches
+      // Get all batches for this invoice again (without usage_items join)
+      const { data: batchesToMove, error: batchesError2 } = await supabase
+        .from('batches')
+        .select('*')
+        .eq('invoice_id', invoice.id)
+        .eq('farm_id', invoice.farm_id);
+
+      if (batchesError2) throw batchesError2;
+
+      if (batchesToMove && batchesToMove.length > 0) {
+        // Create warehouse batches from farm batches
+        const warehouseBatches = batchesToMove.map(batch => ({
+          product_id: batch.product_id,
+          lot: batch.lot,
+          mfg_date: batch.mfg_date,
+          expiry_date: batch.expiry_date,
+          received_qty: batch.received_qty,
+          qty_left: batch.qty_left,
+          status: batch.status,
+          purchase_price: batch.purchase_price,
+          currency: batch.currency,
+          supplier_id: batch.supplier_id,
+          doc_number: batch.doc_number,
+          doc_date: batch.doc_date,
+        }));
+
+        const { data: newWarehouseBatches, error: warehouseError } = await supabase
+          .from('warehouse_batches')
+          .insert(warehouseBatches)
+          .select();
+
+        if (warehouseError) throw warehouseError;
+
+        // Update invoice_items to link to new warehouse batches
+        if (newWarehouseBatches) {
+          for (let i = 0; i < batchesToMove.length; i++) {
+            const oldBatch = batchesToMove[i];
+            const newBatch = newWarehouseBatches[i];
+
+            await supabase
+              .from('invoice_items')
+              .update({ 
+                warehouse_batch_id: newBatch.id,
+                batch_id: null 
+              })
+              .eq('batch_id', oldBatch.id);
+          }
+        }
+
+        // Delete old farm batches
+        const { error: deleteBatchesError } = await supabase
+          .from('batches')
+          .delete()
+          .eq('invoice_id', invoice.id)
+          .eq('farm_id', invoice.farm_id);
+
+        if (deleteBatchesError) throw deleteBatchesError;
+      }
+
+      alert(`Sąskaita #${invoice.invoice_number} sėkmingai grąžinta į sandėlį!`);
+      loadInvoices(); // Reload the list
+    } catch (error: any) {
+      console.error('Error returning invoice to warehouse:', error);
+      alert('Klaida grąžinant sąskaitą: ' + error.message);
     }
   };
 
@@ -218,7 +331,20 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                     </div>
                   </div>
                 </div>
-                <div className="ml-4">
+                <div className="ml-4 flex items-center gap-2">
+                  {/* Return to warehouse button - only show for farm-assigned invoices when viewing from farm context */}
+                  {!showAllInvoices && selectedFarm && invoice.farm_id && (
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        handleReturnToWarehouse(invoice);
+                      }}
+                      className="p-2 text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
+                      title="Grąžinti į sandėlį"
+                    >
+                      <ArrowLeft className="w-5 h-5" />
+                    </button>
+                  )}
                   {selectedInvoice === invoice.id ? (
                     <ChevronUp className="w-5 h-5 text-gray-400" />
                   ) : (
@@ -251,10 +377,15 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                         {invoiceItems.map((item) => {
                           // Calculate prices without discount
                           const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
-                          const unitPriceBeforeDiscount = hasDiscount 
-                            ? item.unit_price / (1 - item.discount_percent / 100)
-                            : item.unit_price;
-                          const totalPriceBeforeDiscount = unitPriceBeforeDiscount * item.quantity;
+                          
+                          // IMPORTANT: Always calculate totals first, then derive unit prices
+                          // This avoids rounding errors where unit_price * qty != total_price
+                          const totalPriceBeforeDiscount = hasDiscount 
+                            ? item.total_price / (1 - item.discount_percent / 100)
+                            : item.total_price;
+                          
+                          // Unit price is derived from total for display consistency
+                          const unitPriceBeforeDiscount = totalPriceBeforeDiscount / item.quantity;
                           
                           return (
                           <tr key={item.id} className="hover:bg-gray-50">
@@ -313,10 +444,11 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                             {invoice.currency} {(() => {
                               const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
                                 const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
-                                const unitPriceBeforeDiscount = hasDiscount 
-                                  ? item.unit_price / (1 - item.discount_percent / 100)
-                                  : item.unit_price;
-                                return sum + (unitPriceBeforeDiscount * item.quantity);
+                                // Calculate from total_price to avoid rounding errors
+                                const itemTotalBeforeDiscount = hasDiscount 
+                                  ? item.total_price / (1 - item.discount_percent / 100)
+                                  : item.total_price;
+                                return sum + itemTotalBeforeDiscount;
                               }, 0);
                               return totalBeforeDiscount.toFixed(2);
                             })()}
@@ -333,10 +465,9 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                             <td colSpan={2} className="px-3 py-2 text-right text-base font-bold text-amber-700">
                               -{invoice.currency} {(invoiceItems.reduce((sum, item) => {
                                 const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
-                                const unitPriceBeforeDiscount = hasDiscount 
-                                  ? item.unit_price / (1 - item.discount_percent / 100)
-                                  : item.unit_price;
-                                const totalBeforeDiscount = unitPriceBeforeDiscount * item.quantity;
+                                if (!hasDiscount) return sum;
+                                // Calculate from total_price to avoid rounding errors
+                                const totalBeforeDiscount = item.total_price / (1 - item.discount_percent / 100);
                                 return sum + (totalBeforeDiscount - item.total_price);
                               }, 0)).toFixed(2)}
                             </td>
@@ -386,10 +517,11 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
                             {invoice.currency} {(() => {
                               const totalBeforeDiscount = invoiceItems.reduce((sum, item) => {
                                 const hasDiscount = item.discount_percent != null && item.discount_percent > 0;
-                                const unitPriceBeforeDiscount = hasDiscount 
-                                  ? item.unit_price / (1 - item.discount_percent / 100)
-                                  : item.unit_price;
-                                return sum + (unitPriceBeforeDiscount * item.quantity);
+                                // Calculate from total_price to avoid rounding errors
+                                const itemTotalBeforeDiscount = hasDiscount 
+                                  ? item.total_price / (1 - item.discount_percent / 100)
+                                  : item.total_price;
+                                return sum + itemTotalBeforeDiscount;
                               }, 0);
                               const totalWithVAT = totalBeforeDiscount * (1 + invoice.vat_rate / 100);
                               return totalWithVAT.toFixed(2);

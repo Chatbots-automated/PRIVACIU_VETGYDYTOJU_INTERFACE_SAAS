@@ -38,9 +38,15 @@ const AGE_GROUPS: AgeGroup[] = [
 
 export function BulkTreatment() {
   // Group products by category for easier selection
-  const getMedicineProducts = () => products.filter(p => p.category === 'medicines');
+  const getMedicineProducts = () => products.filter(p => 
+    p.category === 'medicines' || 
+    p.category === 'treatment_materials' || 
+    p.category === 'svirkstukai' ||
+    p.category === 'ovules' ||
+    p.category === 'bolusas'
+  );
   const getVaccineProducts = () => products.filter(p => p.category === 'vakcina');
-  const getPreventionProducts = () => products.filter(p => p.category === 'prevention' || p.category === 'ovules');
+  const getPreventionProducts = () => products.filter(p => p.category === 'prevention');
 
   const { user, logAction } = useAuth();
   const { selectedFarm } = useFarm();
@@ -263,51 +269,86 @@ export function BulkTreatment() {
       return;
     }
 
+    // Validate stock availability before starting
+    const stockWarnings: string[] = [];
+    for (const med of validMedications) {
+      const batch = batches.find(b => b.batch_id === med.batch_id);
+      const totalNeeded = parseFloat(med.qty) * selectedAnimals.length;
+      const available = batch?.on_hand || 0;
+      
+      if (available < totalNeeded) {
+        const product = products.find(p => p.id === med.product_id);
+        stockWarnings.push(
+          `${product?.name || 'Produktas'}: Reikia ${totalNeeded} ${med.unit}, turima ${available} ${med.unit}`
+        );
+      }
+    }
+
+    if (stockWarnings.length > 0) {
+      const proceed = confirm(
+        `⚠️ DĖMESIO: Nepakanka atsargų!\n\n` +
+        stockWarnings.join('\n') +
+        `\n\nTęsti vis tiek? Bus išgydyta tik dalis gyvūnų (kol nepasibaigs atsargos).`
+      );
+      
+      if (!proceed) return;
+    }
+
     setLoading(true);
 
     try {
       // Group medications by category
-      const treatments = validMedications.filter(m => m.category === 'medicines');
+      const treatments = validMedications.filter(m => 
+        m.category === 'medicines' || 
+        m.category === 'treatment_materials' || 
+        m.category === 'svirkstukai' ||
+        m.category === 'ovules' ||
+        m.category === 'bolusas'
+      );
       const vaccinations = validMedications.filter(m => m.category === 'vakcina');
-      const preventions = validMedications.filter(m => m.category === 'prevention' || m.category === 'ovules');
+      const preventions = validMedications.filter(m => m.category === 'prevention');
+
+      let successCount = 0;
+      const errors: string[] = [];
 
       for (const animal of selectedAnimals) {
-        // Handle treatments (medicines)
-        if (treatments.length > 0) {
-          const { data: treatment, error: treatmentError } = await supabase
-            .from('treatments')
-            .insert({
+        try {
+          // Handle treatments (medicines)
+          if (treatments.length > 0) {
+            const { data: treatment, error: treatmentError } = await supabase
+              .from('treatments')
+              .insert({
+                farm_id: selectedFarm.id,
+                reg_date: formData.treatment_date,
+                animal_id: animal.id,
+                vet_name: formData.vet_name,
+                notes: formData.notes,
+                clinical_diagnosis: 'Masinis gydymas',
+                animal_condition: 'Patenkinama',
+              })
+              .select()
+              .single();
+
+            if (treatmentError) throw treatmentError;
+
+            // Add all medicines to this treatment
+            const usageItems = treatments.map(med => ({
               farm_id: selectedFarm.id,
-              reg_date: formData.treatment_date,
-              animal_id: animal.id,
-              vet_name: formData.vet_name,
-              notes: formData.notes,
-              clinical_diagnosis: 'Masinis gydymas',
-              animal_condition: 'Patenkinama',
-            })
-            .select()
-            .single();
+              treatment_id: treatment.id,
+              product_id: med.product_id,
+              batch_id: med.batch_id,
+              qty: parseFloat(med.qty),
+              unit: med.unit,
+              purpose: med.purpose,
+              administered_date: formData.treatment_date,
+            }));
 
-          if (treatmentError) throw treatmentError;
+            const { error: usageError } = await supabase
+              .from('usage_items')
+              .insert(usageItems);
 
-          // Add all medicines to this treatment
-          const usageItems = treatments.map(med => ({
-            farm_id: selectedFarm.id,
-            treatment_id: treatment.id,
-            product_id: med.product_id,
-            batch_id: med.batch_id,
-            qty: parseFloat(med.qty),
-            unit: med.unit,
-            purpose: med.purpose,
-            administered_date: formData.treatment_date,
-          }));
-
-          const { error: usageError } = await supabase
-            .from('usage_items')
-            .insert(usageItems);
-
-          if (usageError) throw usageError;
-        }
+            if (usageError) throw usageError;
+          }
 
         // Handle vaccinations
         for (const vac of vaccinations) {
@@ -361,19 +402,36 @@ export function BulkTreatment() {
 
           if (usageError) throw usageError;
         }
+
+          successCount++;
+        } catch (animalError: any) {
+          console.error(`Error treating animal ${animal.tag_no}:`, animalError);
+          errors.push(`${animal.tag_no}: ${animalError.message}`);
+          // Continue with next animal instead of stopping
+        }
       }
 
       // Log action (non-critical, won't throw)
       await logAction('bulk_treatment_create', null, null, null, {
         animals_count: selectedAnimals.length,
+        success_count: successCount,
+        error_count: errors.length,
         medications_count: validMedications.length,
         date: formData.treatment_date,
       });
 
       setSuccess(true);
       
-      // Show success notification
-      const message = `Sėkmingai išsaugota! Gydyta gyvūnų: ${selectedAnimals.length}, Panaudota produktų: ${validMedications.length}`;
+      // Show success notification with details
+      let message = `Sėkmingai išgydyta gyvūnų: ${successCount} iš ${selectedAnimals.length}`;
+      if (errors.length > 0) {
+        message += `\n\nKlaidos (${errors.length}):\n`;
+        message += errors.slice(0, 5).join('\n');
+        if (errors.length > 5) {
+          message += `\n... ir dar ${errors.length - 5} klaidų`;
+        }
+        message += '\n\nTikėtina priežastis: nepakanka atsargų pasirinktoje serijoje.';
+      }
       alert(message);
       
       setTimeout(() => {
@@ -499,9 +557,15 @@ export function BulkTreatment() {
           <div className="space-y-3">
             {selectedMedications.map((med, index) => {
               const selectedProduct = products.find(p => p.id === med.product_id);
-              const medicineProducts = products.filter(p => p.category === 'medicines');
+              const medicineProducts = products.filter(p => 
+                p.category === 'medicines' || 
+                p.category === 'treatment_materials' || 
+                p.category === 'svirkstukai' ||
+                p.category === 'ovules' ||
+                p.category === 'bolusas'
+              );
               const vaccineProducts = products.filter(p => p.category === 'vakcina');
-              const preventionProducts = products.filter(p => p.category === 'prevention' || p.category === 'ovules');
+              const preventionProducts = products.filter(p => p.category === 'prevention');
 
               return (
               <div key={med.id} className="flex gap-3 items-start bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
@@ -517,7 +581,15 @@ export function BulkTreatment() {
                         updateMedication(med.id, 'category', category);
                         updateMedication(med.id, 'product_id', '');
                         updateMedication(med.id, 'batch_id', '');
-                        updateMedication(med.id, 'purpose', category === 'medicines' ? 'treatment' : category === 'vakcina' ? 'vaccination' : 'prevention');
+                        updateMedication(med.id, 'purpose', 
+                          (category === 'medicines' || 
+                           category === 'treatment_materials' || 
+                           category === 'svirkstukai' ||
+                           category === 'ovules' ||
+                           category === 'bolusas') ? 'treatment' : 
+                          category === 'vakcina' ? 'vaccination' : 
+                          'prevention'
+                        );
                       }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
                     >
@@ -575,7 +647,7 @@ export function BulkTreatment() {
                   <div className="flex gap-2">
                     <div className="flex-1">
                       <label className="block text-xs font-medium text-gray-700 mb-1">
-                        Kiekis
+                        Kiekis <span className="text-red-600">vienam gyvūnui</span>
                       </label>
                       <input
                         type="number"
@@ -586,6 +658,11 @@ export function BulkTreatment() {
                         placeholder="0"
                         required
                       />
+                      {med.qty && selectedAnimals.length > 0 && (
+                        <p className="text-xs text-blue-600 mt-1 font-medium">
+                          Iš viso reikės: {(parseFloat(med.qty) * selectedAnimals.length).toFixed(2)} {med.unit}
+                        </p>
+                      )}
                     </div>
                     <div className="w-20">
                       <label className="block text-xs font-medium text-gray-700 mb-1">

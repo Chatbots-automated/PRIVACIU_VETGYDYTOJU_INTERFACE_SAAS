@@ -2857,6 +2857,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               tests: treatmentData.tests ? treatmentData.tests : null,
               animal_condition: treatmentData.animal_condition ? treatmentData.animal_condition : null,
               outcome: treatmentData.outcome ? treatmentData.outcome : null,
+              outcome_date: treatmentData.outcome_date ? treatmentData.outcome_date : null,
               services: treatmentData.services ? treatmentData.services : null,
               vet_name: formData.vet_name ? formData.vet_name : null,
               notes: treatmentData.notes ? treatmentData.notes : null,
@@ -2870,6 +2871,12 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
           if (treatmentError) throw treatmentError;
           treatmentRecord = data;
+          
+          // Link treatment to visit via related_treatment_id
+          await supabase
+            .from('animal_visits')
+            .update({ related_treatment_id: data.id })
+            .eq('id', visitData.id);
         }
 
         // NEW SYSTEM: Handle medication deduction based on visit status
@@ -4014,7 +4021,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                             >
                               <option value="">Pasirinkite vaistą</option>
-                              {sortByLithuanian(products.filter(p => p.category === 'medicines'), 'name').map(product => (
+                              {sortByLithuanian(products.filter(p => 
+                                p.category === 'medicines' || 
+                                p.category === 'treatment_materials' || 
+                                p.category === 'svirkstukai' ||
+                                p.category === 'ovules' ||
+                                p.category === 'bolusas'
+                              ), 'name').map(product => (
                                 <option key={product.id} value={product.id}>{product.name}</option>
                               ))}
                             </select>

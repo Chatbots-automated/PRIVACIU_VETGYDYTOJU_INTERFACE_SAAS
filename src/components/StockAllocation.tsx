@@ -1,7 +1,8 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
-import { Package, ArrowRight, Building2, CheckCircle, AlertCircle, Search, Filter } from 'lucide-react';
+import { Package, ArrowRight, Building2, CheckCircle, AlertCircle, Search, Filter, FileText } from 'lucide-react';
+import { InvoiceAllocation } from './InvoiceAllocation';
 
 interface WarehouseStock {
   warehouse_batch_id: string;
@@ -29,6 +30,7 @@ interface Farm {
 
 export function StockAllocation() {
   const { logAction, user } = useAuth();
+  const [activeTab, setActiveTab] = useState<'products' | 'invoices'>('products');
   const [warehouseStock, setWarehouseStock] = useState<WarehouseStock[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -304,11 +306,42 @@ export function StockAllocation() {
           </div>
           <div>
             <h2 className="text-2xl font-bold">Atsargų Paskirstymas</h2>
-            <p className="text-gray-200 mt-1">Paskirstykite sandėlio atsargas konkretiems ūkiams</p>
+            <p className="text-gray-200 mt-1">Paskirstykite sandėlio atsargas arba sąskaitas konkretiems ūkiams</p>
           </div>
         </div>
       </div>
 
+      {/* Tabs */}
+      <div className="flex gap-2 border-b border-gray-200">
+        <button
+          onClick={() => setActiveTab('products')}
+          className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+            activeTab === 'products'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <Package className="w-5 h-5" />
+          Sandėlio Atsargos (Produktais)
+        </button>
+        <button
+          onClick={() => setActiveTab('invoices')}
+          className={`px-6 py-3 font-semibold transition-colors flex items-center gap-2 ${
+            activeTab === 'invoices'
+              ? 'text-blue-600 border-b-2 border-blue-600'
+              : 'text-gray-600 hover:text-gray-900'
+          }`}
+        >
+          <FileText className="w-5 h-5" />
+          Sandėlio Atsargos (Sąskaitomis)
+        </button>
+      </div>
+
+      {/* Tab content */}
+      {activeTab === 'invoices' ? (
+        <InvoiceAllocation />
+      ) : (
+        <>
       {/* Filters */}
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
@@ -528,6 +561,8 @@ export function StockAllocation() {
           )}
         </div>
       </div>
+        </>
+      )}
     </div>
   );
 }
