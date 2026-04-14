@@ -82,19 +82,18 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         
         if (farmError) throw farmError;
         
-        // Also load products that have stock at this farm (from batches)
+        // Also load products that have ANY stock at this farm (including 0 qty_left)
         const { data: batchesData, error: batchError } = await supabase
           .from('batches')
           .select('product_id')
-          .eq('farm_id', selectedFarm.id)
-          .gt('qty_left', 0);
+          .eq('farm_id', selectedFarm.id);
         
         if (!batchError && batchesData && batchesData.length > 0) {
-          const productIdsWithStock = [...new Set(batchesData.map((b: any) => b.product_id))];
+          const productIdsWithBatches = [...new Set(batchesData.map((b: any) => b.product_id))];
           
-          // Get products that have stock but aren't in farmProducts
+          // Get products that have batches but aren't in farmProducts
           const farmProductIds = new Set((farmProducts || []).map(p => p.id));
-          const additionalProductIds = productIdsWithStock.filter(id => !farmProductIds.has(id));
+          const additionalProductIds = productIdsWithBatches.filter(id => !farmProductIds.has(id));
           
           if (additionalProductIds.length > 0) {
             const { data: additionalProducts, error: additionalError } = await supabase
@@ -748,21 +747,6 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
           </tbody>
         </table>
       </div>
-
-      {products.some(p => p.category === 'medicines') && (
-        <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 flex items-start gap-2 text-sm">
-          <AlertTriangle className="w-5 h-5 text-amber-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-semibold text-amber-900">⚠️ SVARBU: Karencinės dienos</p>
-            <p className="text-amber-800 text-xs mt-1">
-              <strong>Vaistams (medicines)</strong> būtina nurodyti karencines dienas:<br/>
-              • <strong className="text-red-700">🥩 Mėsa</strong> - kiek dienų negalima skerdžiati ir parduoti mėsos<br/>
-              • <strong className="text-blue-700">🥛 Pienas</strong> - kiek dienų negalima melžti ir parduoti pieno<br/>
-              Sistema automatiškai blokuos veiksmus, jei karencija dar nepasibaigusi.
-            </p>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

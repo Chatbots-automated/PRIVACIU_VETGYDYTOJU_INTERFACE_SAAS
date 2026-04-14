@@ -509,7 +509,7 @@ export function AllFarmsReports() {
             {reportType === 'drug_journal' && <DrugJournalReport data={data} />}
             {reportType === 'treated_animals' && <TreatedAnimalsReport data={data} />}
             {reportType === 'withdrawal' && <WithdrawalReport data={data} onDataChange={loadReport} />}
-            {reportType === 'invoices' && <InvoicesReport data={data} />}
+            {reportType === 'invoices' && <InvoicesReport data={data} onInvoiceDeleted={loadReport} />}
           </div>
         )}
       </div>

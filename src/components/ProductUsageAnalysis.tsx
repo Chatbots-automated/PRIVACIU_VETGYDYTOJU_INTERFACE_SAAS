@@ -120,7 +120,18 @@ export function ProductUsageAnalysis() {
 
       // Fetch all lookup data upfront (MUCH faster than individual queries)
       console.log('📚 Loading lookup data...');
-      const productsRes = await supabase.from('products').select('id, name, category, subcategory, primary_pack_unit').eq('farm_id', selectedFarm.id);
+      // CRITICAL FIX: Products can belong to the farm OR the vetpraktika module (farm_id can be NULL)
+      // We need to get products that are used in batches for this farm
+      const farmBatchProductIds = await supabase
+        .from('batches')
+        .select('product_id')
+        .eq('farm_id', selectedFarm.id);
+      
+      const productIds = [...new Set((farmBatchProductIds.data || []).map(b => b.product_id).filter(Boolean))];
+      
+      const productsRes = productIds.length > 0
+        ? await supabase.from('products').select('id, name, category, subcategory, primary_pack_unit').in('id', productIds)
+        : { data: [] };
       const batchesRes = await supabase.from('batches').select('id, product_id, purchase_price, received_qty, qty_left, created_at, supplier_id').eq('farm_id', selectedFarm.id);
       const suppliersRes = await supabase.from('suppliers').select('id, name').eq('farm_id', selectedFarm.id);
       const treatmentsRes = await supabase.from('treatments').select('id, animal_id').eq('farm_id', selectedFarm.id);

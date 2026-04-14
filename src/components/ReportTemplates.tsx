@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDateLT } from '../lib/formatters';
-import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle } from 'lucide-react';
+import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle, Trash2, RefreshCw } from 'lucide-react';
 
 function translateUnit(unit: string): string {
   const translations: Record<string, string> = {
@@ -1196,10 +1196,12 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
 
 interface InvoicesReportProps {
   data: any[];
+  onInvoiceDeleted?: () => void;
 }
 
-export function InvoicesReport({ data }: InvoicesReportProps) {
+export function InvoicesReport({ data, onInvoiceDeleted }: InvoicesReportProps) {
   const [expandedInvoices, setExpandedInvoices] = useState<Set<string>>(new Set());
+  const [deletingInvoice, setDeletingInvoice] = useState<string | null>(null);
 
   const toggleInvoice = (invoiceId: string) => {
     const newExpanded = new Set(expandedInvoices);
@@ -1209,6 +1211,116 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
       newExpanded.add(invoiceId);
     }
     setExpandedInvoices(newExpanded);
+  };
+
+  const handleDeleteInvoice = async (invoice: any, event: React.MouseEvent) => {
+    event.stopPropagation();
+    
+    const confirmMessage = `Ar tikrai norite ištrinti sąskaitą ${invoice.invoice_number}?\n\nBus ištrinta:\n- Sąskaita\n- Visi sąskaitos produktai\n- Visi atsargų įrašai\n- Visi panaudojimo įrašai\n\nŠis veiksmas negrįžtamas!`;
+    
+    if (!confirm(confirmMessage)) return;
+    
+    try {
+      setDeletingInvoice(invoice.id);
+      
+      // Step 1: Get batch IDs first
+      const batchIds = invoice.items
+        ?.filter((item: any) => item.batch_id)
+        .map((item: any) => item.batch_id) || [];
+      
+      if (batchIds.length === 0) {
+        throw new Error('Sąskaita neturi susietų atsargų įrašų');
+      }
+      
+      // Step 2: Return stock from usage_items
+      const { data: usageItems } = await supabase
+        .from('usage_items')
+        .select('id, qty, batch_id')
+        .in('batch_id', batchIds);
+      
+      if (usageItems && usageItems.length > 0) {
+        // Group by batch and sum quantities
+        const batchReturns = usageItems.reduce((acc: any, item: any) => {
+          if (!acc[item.batch_id]) acc[item.batch_id] = 0;
+          acc[item.batch_id] += item.qty;
+          return acc;
+        }, {});
+        
+        // Return stock to each batch
+        for (const [batchId, qtyToReturn] of Object.entries(batchReturns)) {
+          // Get current qty_left
+          const { data: batch } = await supabase
+            .from('batches')
+            .select('qty_left')
+            .eq('id', batchId)
+            .single();
+          
+          if (batch) {
+            const newQtyLeft = (batch.qty_left || 0) + (qtyToReturn as number);
+            
+            const { error: updateError } = await supabase
+              .from('batches')
+              .update({ 
+                qty_left: newQtyLeft,
+                status: 'active'
+              })
+              .eq('id', batchId);
+            
+            if (updateError) {
+              console.warn(`Failed to return stock to batch ${batchId}:`, updateError);
+            }
+          }
+        }
+      }
+      
+      // Step 3: Delete usage_items
+      if (usageItems && usageItems.length > 0) {
+        const { error: deleteUsageError } = await supabase
+          .from('usage_items')
+          .delete()
+          .in('id', usageItems.map((item: any) => item.id));
+        
+        if (deleteUsageError) throw deleteUsageError;
+      }
+      
+      // Step 4: Delete batches
+      if (batchIds.length > 0) {
+        const { error: deleteBatchesError } = await supabase
+          .from('batches')
+          .delete()
+          .in('id', batchIds);
+        
+        if (deleteBatchesError) throw deleteBatchesError;
+      }
+      
+      // Step 5: Delete invoice items (CASCADE should handle this, but be explicit)
+      const { error: deleteItemsError } = await supabase
+        .from('invoice_items')
+        .delete()
+        .eq('invoice_id', invoice.id);
+      
+      if (deleteItemsError) throw deleteItemsError;
+      
+      // Step 6: Delete invoice
+      const { error: deleteInvoiceError } = await supabase
+        .from('invoices')
+        .delete()
+        .eq('id', invoice.id);
+      
+      if (deleteInvoiceError) throw deleteInvoiceError;
+      
+      alert(`Sąskaita ${invoice.invoice_number} sėkmingai ištrinta!`);
+      
+      // Refresh the list
+      if (onInvoiceDeleted) {
+        onInvoiceDeleted();
+      }
+    } catch (error: any) {
+      console.error('Error deleting invoice:', error);
+      alert(`Klaida trinant sąskaitą: ${error.message}`);
+    } finally {
+      setDeletingInvoice(null);
+    }
   };
 
   const calculateTotals = () => {
@@ -1299,7 +1411,19 @@ export function InvoicesReport({ data }: InvoicesReportProps) {
                         </div>
                       </div>
                     </div>
-                    <div className="ml-4">
+                    <div className="flex items-center gap-2 ml-4">
+                      <button
+                        onClick={(e) => handleDeleteInvoice(invoice, e)}
+                        disabled={deletingInvoice === invoice.id}
+                        className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Ištrinti sąskaitą"
+                      >
+                        {deletingInvoice === invoice.id ? (
+                          <RefreshCw className="w-5 h-5 animate-spin" />
+                        ) : (
+                          <Trash2 className="w-5 h-5" />
+                        )}
+                      </button>
                       {isExpanded ? (
                         <ChevronUp className="w-5 h-5 text-gray-400" />
                       ) : (
