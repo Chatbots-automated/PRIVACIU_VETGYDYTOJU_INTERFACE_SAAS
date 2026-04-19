@@ -314,6 +314,7 @@ export function BulkTreatment() {
       for (const animal of selectedAnimals) {
         try {
           let mainTreatmentId: string | null = null;
+          let visitTreatmentId: string | null = null;
 
           // Handle treatments (medicines)
           if (treatments.length > 0) {
@@ -333,6 +334,7 @@ export function BulkTreatment() {
 
             if (treatmentError) throw treatmentError;
             mainTreatmentId = treatment.id;
+            visitTreatmentId = treatment.id;
 
             // Add all medicines to this treatment
             const usageItems = treatments.map(med => ({
@@ -372,6 +374,7 @@ export function BulkTreatment() {
 
           if (vacTreatmentError) throw vacTreatmentError;
           if (!mainTreatmentId) mainTreatmentId = vaccineTreatment.id;
+          if (!visitTreatmentId) visitTreatmentId = vaccineTreatment.id;
 
           // Create vaccinations AND usage_items
           for (const vac of vaccinations) {
@@ -444,31 +447,29 @@ export function BulkTreatment() {
           if (usageError) throw usageError;
         }
 
-        // Create animal visit record for this bulk treatment
-        if (mainTreatmentId) {
-          const procedures: string[] = [];
-          if (treatments.length > 0) procedures.push('Gydymas');
-          if (vaccinations.length > 0) procedures.push('Vakcina');
-          if (preventions.length > 0) procedures.push('Profilaktika');
+        // ALWAYS create animal visit record for bulk treatment
+        const procedures: string[] = [];
+        if (treatments.length > 0) procedures.push('Gydymas');
+        if (vaccinations.length > 0) procedures.push('Vakcina');
+        if (preventions.length > 0) procedures.push('Profilaktika');
 
-          const { error: visitError } = await supabase
-            .from('animal_visits')
-            .insert({
-              farm_id: selectedFarm.id,
-              animal_id: animal.id,
-              visit_datetime: new Date(formData.treatment_date).toISOString(),
-              procedures: procedures,
-              status: 'Užbaigtas',
-              notes: formData.notes || null,
-              vet_name: formData.vet_name || null,
-              created_by_user_id: user?.full_name || user?.email || null,
-              treatment_required: procedures.includes('Gydymas'),
-              related_treatment_id: mainTreatmentId,
-            });
+        const { error: visitError } = await supabase
+          .from('animal_visits')
+          .insert({
+            farm_id: selectedFarm.id,
+            animal_id: animal.id,
+            visit_datetime: new Date(formData.treatment_date).toISOString(),
+            procedures: procedures,
+            status: 'Baigtas',
+            notes: formData.notes || null,
+            vet_name: formData.vet_name || null,
+            created_by_user_id: user?.full_name || user?.email || null,
+            treatment_required: procedures.includes('Gydymas'),
+            related_treatment_id: visitTreatmentId,
+          });
 
-          if (visitError) {
-            console.warn(`Failed to create visit for animal ${animal.tag_no}:`, visitError);
-          }
+        if (visitError) {
+          console.warn(`Failed to create visit for animal ${animal.tag_no}:`, visitError);
         }
 
           successCount++;
