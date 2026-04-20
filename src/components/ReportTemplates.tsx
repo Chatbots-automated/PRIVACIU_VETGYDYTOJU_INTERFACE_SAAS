@@ -39,38 +39,32 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
     return '-';
   };
 
-  // Calculate Eil. Nr. based on registration date
-  // Data is sorted DESC (newest first), but Eil. Nr. should be sequential from oldest (1) to newest
-  // Since we have multiple rows per treatment (one per medicine), we need to track unique treatments
-  const dataWithEilNr = data.map((row, idx) => {
-    // Count unique treatments that are OLDER than this one (earlier date)
-    const treatmentsOlderThanThis = new Set<string>();
-    
-    for (let i = 0; i < data.length; i++) {
-      const currentRow = data[i];
-      
-      // If current row has an earlier date, it's older (gets lower Eil. Nr.)
-      if (currentRow.registration_date < row.registration_date) {
-        treatmentsOlderThanThis.add(currentRow.treatment_id);
-      } 
-      // If same date, use created_at to determine order
-      else if (currentRow.registration_date === row.registration_date) {
-        if (currentRow.created_at < row.created_at) {
-          treatmentsOlderThanThis.add(currentRow.treatment_id);
-        } else if (currentRow.created_at === row.created_at && 
-                   currentRow.treatment_id !== row.treatment_id) {
-          // Same timestamp, use treatment_id for consistent ordering
-          if (currentRow.treatment_id < row.treatment_id) {
-            treatmentsOlderThanThis.add(currentRow.treatment_id);
-          }
-        }
-      }
+  // Sort data by registration_date ASC, created_at ASC, treatment_id ASC
+  // This ensures display order is: 1, 2, 3, ... (oldest to newest)
+  const sortedData = [...data].sort((a, b) => {
+    if (a.registration_date !== b.registration_date) {
+      return a.registration_date < b.registration_date ? -1 : 1;
+    }
+    if (a.created_at !== b.created_at) {
+      return a.created_at < b.created_at ? -1 : 1;
+    }
+    return a.treatment_id < b.treatment_id ? -1 : 1;
+  });
+
+  // Calculate Eil. Nr. based on position in sorted array
+  // Track unique treatment IDs to assign sequential numbers
+  const treatmentNumbers = new Map<string, number>();
+  let currentNumber = 1;
+  
+  const dataWithEilNr = sortedData.map((row) => {
+    if (!treatmentNumbers.has(row.treatment_id)) {
+      treatmentNumbers.set(row.treatment_id, currentNumber);
+      currentNumber++;
     }
     
-    // Eil. Nr. = number of older treatments + 1
     return {
       ...row,
-      eil_nr: treatmentsOlderThanThis.size + 1
+      eil_nr: treatmentNumbers.get(row.treatment_id)!
     };
   });
 
