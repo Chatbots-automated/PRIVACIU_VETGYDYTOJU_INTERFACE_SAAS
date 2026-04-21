@@ -1,11 +1,13 @@
 import { useEffect, useState, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { Search, AlertCircle, Package, Download } from 'lucide-react';
+import { Search, AlertCircle, Package, Download, FileText } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { translateCategory, sortByLithuanian } from '../lib/helpers';
 import * as XLSX from 'xlsx';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 interface StockItem {
   batch_id: string;
@@ -236,6 +238,74 @@ export function Inventory() {
     });
   };
 
+  const exportToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ATSARGOS', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Sugeneruota: ${new Date().toLocaleDateString('lt-LT')}`, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    if (selectedFarm) {
+      doc.text(`Ukis: ${selectedFarm.name}`, doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
+    }
+
+    const tableData = filteredInventory.map(item => {
+      const status = isExpired(item.expiry_date) 
+        ? 'Pasibaiges' 
+        : isExpiringSoon(item.expiry_date) 
+        ? 'Greitai pasibaigs' 
+        : 'Geras';
+      
+      return [
+        item.product_name || '',
+        translateCategory(item.category || ''),
+        item.lot || '',
+        `${item.on_hand} ${item.unit || ''}`,
+        item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('lt-LT') : '',
+        status
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 35,
+      head: [['Produktas', 'Kategorija', 'LOT', 'Likutis', 'Galioja iki', 'Busena']],
+      body: tableData,
+      styles: {
+        fontSize: 9,
+        cellPadding: 2.5,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1
+      },
+      headStyles: {
+        fillColor: [200, 220, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 10
+      },
+      columnStyles: {
+        0: { cellWidth: 70 },
+        1: { cellWidth: 40 },
+        2: { cellWidth: 40 },
+        3: { cellWidth: 35 },
+        4: { cellWidth: 35 },
+        5: { cellWidth: 40 }
+      },
+      margin: { left: 10, right: 10 },
+      theme: 'grid'
+    });
+
+    doc.save(`atsargos_${new Date().toISOString().split('T')[0]}.pdf`);
+
+    logAction('export_inventory_pdf', null, null, null, {
+      items_count: filteredInventory.length,
+      filter_category: filterCategory
+    });
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-64">
@@ -281,13 +351,20 @@ export function Inventory() {
           <option value="reproduction">Reprodukcija</option>
         </select>
         <button
+          onClick={exportToPDF}
+          disabled={filteredInventory.length === 0}
+          className="px-4 py-2.5 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          <FileText className="w-5 h-5" />
+          <span className="hidden sm:inline">PDF</span>
+        </button>
+        <button
           onClick={exportToExcel}
           disabled={filteredInventory.length === 0}
           className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-5 h-5" />
-          <span className="hidden sm:inline">Eksportuoti Excel</span>
-          <span className="sm:hidden">Excel</span>
+          <span className="hidden sm:inline">Excel</span>
         </button>
       </div>
 

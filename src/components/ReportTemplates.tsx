@@ -1,7 +1,9 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDateLT } from '../lib/formatters';
-import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle, Trash2, RefreshCw } from 'lucide-react';
+import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle, Trash2, RefreshCw, Download } from 'lucide-react';
+import jsPDF from 'jspdf';
+import autoTable from 'jspdf-autotable';
 
 function translateUnit(unit: string): string {
   const translations: Record<string, string> = {
@@ -68,11 +70,132 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
     };
   });
 
+  const exportToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('GYDOMY GYVUNU REGISTRACIJOS ZURNALAS', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Sugeneruota: ${formatDateLT(new Date().toISOString())}`, doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+
+    // Prepare table data matching the exact structure
+    const tableData = dataWithEilNr.map(row => {
+      const ownerInfo = [row.owner_name, row.owner_address].filter(Boolean).join('\n');
+      const speciesSex = [row.species, row.sex].filter(Boolean).join('\n');
+      const diagnosis = [row.disease_name, row.clinical_diagnosis !== row.disease_name ? row.clinical_diagnosis : ''].filter(Boolean).join('\n');
+      
+      // Build treatment text (column 11)
+      let treatment = '';
+      if (row.services) treatment += row.services + '\n';
+      if (row.prescription_text) {
+        treatment += row.prescription_text;
+      } else if (row.medicine_name) {
+        treatment += row.medicine_name;
+        if (row.medicine_dose) {
+          treatment += `\nDoze: ${row.medicine_dose} ${row.medicine_unit || ''}`;
+          if (row.medicine_days) treatment += ` x ${row.medicine_days} d.`;
+        }
+      }
+      
+      // Withdrawal info (column 12)
+      const withdrawal = [
+        row.withdrawal_until_milk ? `Pienas: ${formatDateLT(row.withdrawal_until_milk)}` : '',
+        row.withdrawal_until_meat ? `Mesa: ${formatDateLT(row.withdrawal_until_meat)}` : ''
+      ].filter(Boolean).join('\n');
+      
+      return [
+        row.eil_nr?.toString() || '',
+        row.registration_date ? formatDateLT(row.registration_date) : '-',
+        ownerInfo || '-',
+        speciesSex || '-',
+        calculateAge(row.age_months, row.birth_date),
+        row.animal_tag || '-',
+        row.first_symptoms_date ? formatDateLT(row.first_symptoms_date) : '-',
+        row.animal_condition || '-',
+        row.tests || '-',
+        diagnosis || '-',
+        treatment || '-',
+        withdrawal || '-',
+        row.treatment_outcome || '-',
+        row.vet_name || '-'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 28,
+      head: [[
+        '1.\nEil.\nNr.',
+        '2.\nRegistracijos\ndata',
+        '3.\nGyvuno laikytojo\nduomenys',
+        '4.\nGyvuno rusis,\nlytis',
+        '5.\nGyvuno\namzius',
+        '6.\nGyvuno\nzenklinimo\nnumeris',
+        '7.\nPirmuju ligos\npozymiu data',
+        '8.\nGyvuno\nbukle',
+        '9.\nAtlikti\ntyrimai',
+        '10.\nKlinikinė\ndiagnoze',
+        '11.\nGydymas',
+        '12.\nIslauka',
+        '13.\nLigos\nbaigtis',
+        '14.\nVeterinarijos\ngydytojas'
+      ]],
+      body: tableData,
+      styles: { 
+        fontSize: 6,
+        cellPadding: 1.5,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+        overflow: 'linebreak'
+      },
+      headStyles: {
+        fillColor: [200, 220, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        valign: 'middle',
+        fontSize: 6
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 18 },
+        2: { cellWidth: 25 },
+        3: { cellWidth: 15 },
+        4: { cellWidth: 12 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 18 },
+        7: { cellWidth: 18 },
+        8: { cellWidth: 18 },
+        9: { cellWidth: 22 },
+        10: { cellWidth: 25 },
+        11: { cellWidth: 18 },
+        12: { cellWidth: 20 },
+        13: { cellWidth: 20 }
+      },
+      margin: { left: 5, right: 5 },
+      theme: 'grid'
+    });
+
+    doc.save(`gydomy_gyvunu_registracija_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="bg-white">
       <div className="text-center mb-6 no-print">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">GYDOMŲ GYVŪNŲ REGISTRACIJOS ŽURNALAS</h1>
-        <p className="text-sm text-gray-500">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
+        <div className="flex items-center justify-center gap-4">
+          <h1 className="text-3xl font-bold text-gray-900">GYDOMŲ GYVŪNŲ REGISTRACIJOS ŽURNALAS</h1>
+          <button
+            onClick={exportToPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            title="Eksportuoti į PDF"
+          >
+            <Download className="w-5 h-5" />
+            PDF
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
       </div>
 
       <div className="overflow-x-auto rounded-lg border-2 border-gray-300 shadow-sm">
@@ -374,11 +497,123 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
     setInvoiceItems([]);
   };
 
+  const exportToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text('VETERINARINIU VAISTU IR VAISTINIU PREPARATU', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    doc.text('APSKAITOS ZURNALAS', doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Sugeneruota: ${formatDateLT(new Date().toISOString())}`, doc.internal.pageSize.getWidth() / 2, 29, { align: 'center' });
+
+    let startY = 35;
+
+    medicines.forEach((medicine, idx) => {
+      if (idx > 0) {
+        doc.addPage();
+        startY = 15;
+      }
+
+      doc.setFontSize(11);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Vaistas: ${medicine.product_name}`, 10, startY);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Vienetas: ${medicine.unit || '-'}`, 10, startY + 5);
+      startY += 12;
+
+      const tableData = medicine.batches.map((batch: any) => {
+        const docInfo = [
+          batch.supplier_name,
+          batch.doc_title && batch.doc_title.toLowerCase() !== 'invoice' ? batch.doc_title : '',
+          batch.invoice_number ? `Saskaita Nr. ${batch.invoice_number}` : '',
+          batch.invoice_date ? formatDateLT(batch.invoice_date) : ''
+        ].filter(Boolean).join('\n');
+        
+        return [
+          batch.receipt_date ? formatDateLT(batch.receipt_date) : '-',
+          docInfo || '-',
+          batch.quantity_received || '0',
+          batch.expiry_date ? formatDateLT(batch.expiry_date) : '-',
+          batch.batch_number || batch.lot || '-',
+          Math.abs(parseFloat(batch.quantity_used) || 0) < 0.01 ? '0' : (parseFloat(batch.quantity_used) || 0).toFixed(2),
+          Math.abs(parseFloat(batch.quantity_remaining) || 0) < 0.01 ? '0' : (parseFloat(batch.quantity_remaining) || 0).toFixed(2)
+        ];
+      });
+
+      // Add totals row
+      const totalReceived = medicine.batches.reduce((sum: number, b: any) => sum + (parseFloat(b.quantity_received) || 0), 0);
+      const totalUsed = medicine.batches.reduce((sum: number, b: any) => sum + (parseFloat(b.quantity_used) || 0), 0);
+      const totalRemaining = medicine.batches.reduce((sum: number, b: any) => sum + (parseFloat(b.quantity_remaining) || 0), 0);
+      
+      tableData.push([
+        { content: `Viso (${medicine.product_name}):`, colSpan: 2, styles: { fontStyle: 'bold', halign: 'right' } } as any,
+        { content: Math.abs(totalReceived) < 0.01 ? '0.00' : totalReceived.toFixed(2), styles: { fontStyle: 'bold' } } as any,
+        { content: '', colSpan: 2 } as any,
+        { content: Math.abs(totalUsed) < 0.01 ? '0.00' : totalUsed.toFixed(2), styles: { fontStyle: 'bold' } } as any,
+        { content: Math.abs(totalRemaining) < 0.01 ? '0.00' : totalRemaining.toFixed(2), styles: { fontStyle: 'bold' } } as any
+      ]);
+
+      autoTable(doc, {
+        startY,
+        head: [[
+          'Registracijos\ndata',
+          'Is kur gauta /\nDokumento nr.',
+          'Gauta\nkiekis',
+          'Galiojimo\npabaiga',
+          'Serija\n(LOT)',
+          'Panaudota\nkiekis',
+          'Likutis'
+        ]],
+        body: tableData,
+        styles: {
+          fontSize: 7,
+          cellPadding: 2,
+          lineColor: [0, 0, 0],
+          lineWidth: 0.1,
+          overflow: 'linebreak'
+        },
+        headStyles: {
+          fillColor: [200, 220, 240],
+          textColor: [0, 0, 0],
+          fontStyle: 'bold',
+          halign: 'center',
+          fontSize: 7
+        },
+        columnStyles: {
+          0: { cellWidth: 25 },
+          1: { cellWidth: 70 },
+          2: { cellWidth: 25, halign: 'right' },
+          3: { cellWidth: 25 },
+          4: { cellWidth: 25 },
+          5: { cellWidth: 25, halign: 'right' },
+          6: { cellWidth: 25, halign: 'right' }
+        },
+        margin: { left: 10, right: 10 },
+        theme: 'grid'
+      });
+    });
+
+    doc.save(`vaistu_apskaita_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="bg-white">
       <div className="text-center mb-6 no-print">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">VETERINARINIŲ VAISTŲ IR VAISTINIŲ PREPARATŲ APSKAITOS ŽURNALAS</h1>
-        <p className="text-sm text-gray-500">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
+        <div className="flex items-center justify-center gap-4">
+          <h1 className="text-3xl font-bold text-gray-900">VETERINARINIŲ VAISTŲ IR VAISTINIŲ PREPARATŲ APSKAITOS ŽURNALAS</h1>
+          <button
+            onClick={exportToPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            title="Eksportuoti į PDF"
+          >
+            <Download className="w-5 h-5" />
+            PDF
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
       </div>
 
       {medicines.length === 0 && (
@@ -1035,11 +1270,104 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
     }
   };
 
+  const exportToPDF = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    doc.setFontSize(16);
+    doc.setFont('helvetica', 'bold');
+    doc.text('ISLAUKU ATASKAITA', doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Gyvunai su karencijos laikotarpiu', doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    doc.text(`Sugeneruota: ${formatDateLT(new Date().toISOString())}`, doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
+
+    const tableData = data.map((row, idx) => {
+      const meatWithdrawal = row.withdrawal_until_meat 
+        ? `${row.withdrawal_days_meat > 0 ? row.withdrawal_days_meat + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_meat)}`
+        : 'Nera';
+      
+      const milkWithdrawal = row.withdrawal_until_milk
+        ? `${row.withdrawal_days_milk > 0 ? row.withdrawal_days_milk + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_milk)}`
+        : 'Nera';
+      
+      return [
+        (idx + 1).toString(),
+        (row.farm_name || '-') + (row.is_eco_farm ? ' (ECO)' : ''),
+        row.animal_tag || '-',
+        row.species || '-',
+        row.treatment_date ? formatDateLT(row.treatment_date) : '-',
+        row.disease_name || '-',
+        row.medicines_used || '-',
+        meatWithdrawal,
+        milkWithdrawal,
+        row.veterinarian || '-'
+      ];
+    });
+
+    autoTable(doc, {
+      startY: 35,
+      head: [[
+        'Nr.',
+        'Ukis',
+        'Gyvuno\nNr.',
+        'Rusis',
+        'Gydymo\ndata',
+        'Liga',
+        'Panaudoti\nvaistai',
+        'Karencija\n(mesa)',
+        'Karencija\n(pienas)',
+        'Veterinaras'
+      ]],
+      body: tableData,
+      styles: {
+        fontSize: 7,
+        cellPadding: 2,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1,
+        overflow: 'linebreak'
+      },
+      headStyles: {
+        fillColor: [200, 220, 240],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        fontSize: 7
+      },
+      columnStyles: {
+        0: { cellWidth: 10, halign: 'center' },
+        1: { cellWidth: 30 },
+        2: { cellWidth: 25, halign: 'center' },
+        3: { cellWidth: 20 },
+        4: { cellWidth: 22 },
+        5: { cellWidth: 25 },
+        6: { cellWidth: 35 },
+        7: { cellWidth: 25, halign: 'center' },
+        8: { cellWidth: 25, halign: 'center' },
+        9: { cellWidth: 30 }
+      },
+      margin: { left: 10, right: 10 },
+      theme: 'grid'
+    });
+
+    doc.save(`islauku_ataskaita_${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
   return (
     <div className="bg-white">
       <div className="text-center mb-6 no-print">
-        <h1 className="text-3xl font-bold text-gray-900 mb-2">IŠLAUKŲ ATASKAITA</h1>
-        <p className="text-sm text-gray-500">Gyvūnai su karencijos laikotarpiu</p>
+        <div className="flex items-center justify-center gap-4">
+          <h1 className="text-3xl font-bold text-gray-900">IŠLAUKŲ ATASKAITA</h1>
+          <button
+            onClick={exportToPDF}
+            className="flex items-center gap-2 px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+            title="Eksportuoti į PDF"
+          >
+            <Download className="w-5 h-5" />
+            PDF
+          </button>
+        </div>
+        <p className="text-sm text-gray-500 mt-2">Gyvūnai su karencijos laikotarpiu</p>
         <p className="text-sm text-gray-500">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
       </div>
 

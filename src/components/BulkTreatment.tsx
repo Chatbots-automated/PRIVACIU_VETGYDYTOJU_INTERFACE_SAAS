@@ -766,17 +766,6 @@ export function BulkTreatment() {
                           placeholder="1"
                         />
                       </div>
-                      <div>
-                        <label className="block text-xs font-medium text-gray-700 mb-1">
-                          Kitas skiepas
-                        </label>
-                        <input
-                          type="date"
-                          value={med.next_booster_date || ''}
-                          onChange={(e) => updateMedication(med.id, 'next_booster_date', e.target.value)}
-                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                        />
-                      </div>
                     </>
                   )}
                 </div>

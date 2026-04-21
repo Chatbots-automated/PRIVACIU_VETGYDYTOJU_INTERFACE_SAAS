@@ -1236,19 +1236,6 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                     </div>
                   </div>
 
-                  {vaccination.next_booster_date && (
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3 mb-3">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-green-600" />
-                          <span className="text-sm font-medium text-gray-700">Kita vakcina:</span>
-                        </div>
-                        <span className="font-bold text-green-700">
-                          {formatDateLT(vaccination.next_booster_date)}
-                        </span>
-                      </div>
-                    </div>
-                  )}
 
                   {(vaccination.withdrawal_until_milk || vaccination.withdrawal_until_meat) && (
                     <div className="bg-amber-50 border border-amber-300 rounded-lg p-3 mb-3">
@@ -1721,12 +1708,6 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       <div className="text-xs font-medium text-gray-500 mb-1">Kiekis</div>
                       <div className="text-gray-700">{vaccination.dose_amount} {vaccination.unit}</div>
                     </div>
-                    {vaccination.next_booster_date && (
-                      <div>
-                        <div className="text-xs font-medium text-gray-500 mb-1">Kitas skiepas</div>
-                        <div className="text-gray-700">{formatDateLT(vaccination.next_booster_date)}</div>
-                      </div>
-                    )}
                   </div>
 
                   {vaccination.notes && (
@@ -3383,28 +3364,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           if (vaccinationError) throw vaccinationError;
 
           await logAction('create_vaccination', 'vaccinations', vaccinationRecord.id);
-
-          // If there's a next booster date, create a planned visit for it
-          if (vaccine.next_booster_date) {
-            const { error: futureVisitError } = await supabase
-              .from('animal_visits')
-              .insert({
-                farm_id: selectedFarm!.id,
-                animal_id: animalId,
-                visit_datetime: `${vaccine.next_booster_date}T10:00:00`,
-                procedures: ['Vakcina'],
-                status: 'Planuojamas',
-                notes: `Pakartotinė vakcina: ${products.find(p => p.id === vaccine.product_id)?.name || 'N/A'}`,
-                vet_name: vaccinationData.administered_by || formData.vet_name || null,
-                created_by_user_id: user?.full_name || user?.email || null,
-                next_visit_required: false,
-                treatment_required: false,
-              });
-
-            if (futureVisitError) {
-              console.error('Error creating future vaccination visit:', futureVisitError);
-            }
-          }
         }
       }
 
@@ -4467,20 +4426,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                           className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
                         />
                       </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">Pakartotinė vakcinacija (data)</label>
-                      <input
-                        type="date"
-                        value={vaccine.next_booster_date}
-                        onChange={(e) => {
-                          const newVaccines = [...vaccinationData.vaccines];
-                          newVaccines[index] = { ...vaccine, next_booster_date: e.target.value };
-                          setVaccinationData({ ...vaccinationData, vaccines: newVaccines });
-                        }}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-purple-500"
-                      />
                     </div>
                   </div>
                 ))}
