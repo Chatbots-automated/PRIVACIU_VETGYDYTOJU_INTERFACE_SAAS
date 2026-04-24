@@ -124,9 +124,9 @@ export function WarehouseStock() {
   });
 
   const loadData = async () => {
-    // Load all products and suppliers (warehouse level - no farm filter)
+    // Load warehouse-level products only (farm_id IS NULL) and suppliers
     const [productsRes, suppliersRes] = await Promise.all([
-      supabase.from('products').select('*').eq('is_active', true).order('name'),
+      supabase.from('products').select('*').is('farm_id', null).eq('is_active', true).order('name'),
       supabase.from('suppliers').select('*').order('name'),
     ]);
 

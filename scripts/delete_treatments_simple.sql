@@ -1,21 +1,38 @@
 -- =====================================================================
--- Simple Delete Treatments and Return Stock
+-- Delete Treatments, Visits, and Return Stock
 -- =====================================================================
 -- Works with actual database schema
+-- Deletes treatments, animal_visits, and returns stock to batches
 -- =====================================================================
 
 -- STEP 1: Preview what will be deleted
 SELECT 
+    'Treatment' AS type,
     t.id,
-    t.reg_date,
+    t.reg_date AS date,
     a.tag_no,
-    t.clinical_diagnosis,
+    t.clinical_diagnosis AS description,
     t.vet_name,
     t.created_at
 FROM treatments t
 LEFT JOIN animals a ON a.id = t.animal_id
 WHERE t.reg_date >= '2026-04-09'  -- Change this date
-ORDER BY t.created_at DESC;
+
+UNION ALL
+
+SELECT 
+    'Visit' AS type,
+    av.id,
+    av.visit_datetime::date AS date,
+    a.tag_no,
+    av.notes AS description,
+    av.vet_name,
+    av.created_at
+FROM animal_visits av
+LEFT JOIN animals a ON a.id = av.animal_id
+WHERE av.visit_datetime >= '2026-04-09'  -- Change this date
+
+ORDER BY created_at DESC;
 
 -- STEP 2: Preview stock that will be returned
 SELECT 
@@ -51,8 +68,17 @@ AND tc.batch_id IS NOT NULL;
 DO $$
 DECLARE
     v_treatment_id UUID;
-    v_deleted_count INTEGER := 0;
+    v_visit_id UUID;
+    v_deleted_treatments INTEGER := 0;
+    v_deleted_visits INTEGER := 0;
 BEGIN
+    RAISE NOTICE 'Starting deletion process...';
+    
+    -- ========================================
+    -- PART 1: Delete Treatments and Return Stock
+    -- ========================================
+    RAISE NOTICE 'Processing treatments...';
+    
     FOR v_treatment_id IN 
         SELECT id FROM treatments WHERE reg_date >= '2026-04-09'
     LOOP
@@ -98,13 +124,67 @@ BEGIN
         
         DELETE FROM treatment_courses WHERE treatment_id = v_treatment_id;
         DELETE FROM usage_items WHERE treatment_id = v_treatment_id;
+        
+        -- Delete animal_visits linked to this treatment
+        DELETE FROM animal_visits WHERE related_treatment_id = v_treatment_id;
+        
+        -- Delete the treatment itself
         DELETE FROM treatments WHERE id = v_treatment_id;
         
-        v_deleted_count := v_deleted_count + 1;
+        v_deleted_treatments := v_deleted_treatments + 1;
     END LOOP;
     
-    RAISE NOTICE 'Deleted % treatments and returned stock', v_deleted_count;
+    RAISE NOTICE 'Deleted % treatments and returned stock', v_deleted_treatments;
+    
+    -- ========================================
+    -- PART 2: Delete Visits (not linked to treatments)
+    -- ========================================
+    RAISE NOTICE 'Processing visits...';
+    
+    FOR v_visit_id IN 
+        SELECT id FROM animal_visits 
+        WHERE visit_datetime >= '2026-04-09'
+        AND related_treatment_id IS NULL  -- Only delete visits not already deleted above
+    LOOP
+        -- Return stock from planned_medications (if any were processed)
+        -- Check if medications_processed flag is true
+        UPDATE batches b
+        SET 
+            qty_left = b.qty_left + (pm->>'quantity')::numeric,
+            status = CASE 
+                WHEN b.status = 'depleted' AND (b.qty_left + (pm->>'quantity')::numeric) > 0 
+                THEN 'active' 
+                ELSE b.status 
+            END,
+            updated_at = NOW()
+        FROM animal_visits av
+        CROSS JOIN LATERAL jsonb_array_elements(av.planned_medications) AS pm
+        WHERE av.id = v_visit_id
+        AND av.medications_processed = true
+        AND b.id::text = pm->>'batch_id';
+        
+        -- Delete the visit
+        DELETE FROM animal_visits WHERE id = v_visit_id;
+        
+        v_deleted_visits := v_deleted_visits + 1;
+    END LOOP;
+    
+    RAISE NOTICE 'Deleted % visits and returned stock', v_deleted_visits;
+    RAISE NOTICE 'Total: % treatments + % visits = % records deleted', 
+        v_deleted_treatments, v_deleted_visits, (v_deleted_treatments + v_deleted_visits);
 END $$;
 
 -- STEP 4: Verify
-SELECT COUNT(*) AS remaining FROM treatments WHERE reg_date >= '2026-04-09';
+SELECT 
+    'Treatments remaining' AS check_type, 
+    COUNT(*) AS count
+FROM treatments 
+WHERE reg_date >= '2026-04-09'
+
+UNION ALL
+
+SELECT 
+    'Visits remaining' AS check_type, 
+    COUNT(*) AS count
+FROM animal_visits 
+WHERE visit_datetime >= '2026-04-09';

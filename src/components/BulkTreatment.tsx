@@ -376,9 +376,11 @@ export function BulkTreatment() {
           if (!mainTreatmentId) mainTreatmentId = vaccineTreatment.id;
           if (!visitTreatmentId) visitTreatmentId = vaccineTreatment.id;
 
-          // Create vaccinations AND usage_items
+          // Create vaccinations (usage_items are created automatically by trigger)
           for (const vac of vaccinations) {
             // Create vaccination record
+            // NOTE: Database trigger 'create_usage_from_vaccination' will automatically
+            // create a usage_item and deduct stock - DO NOT create usage_item manually!
             const { error: vacError } = await supabase
               .from('vaccinations')
               .insert({
@@ -396,22 +398,9 @@ export function BulkTreatment() {
               });
 
             if (vacError) throw vacError;
-
-            // ALSO create usage_item linked to treatment so it shows in reports
-            const { error: usageError } = await supabase
-              .from('usage_items')
-              .insert({
-                farm_id: selectedFarm.id,
-                treatment_id: vaccineTreatment.id,
-                product_id: vac.product_id,
-                batch_id: vac.batch_id,
-                qty: parseFloat(vac.qty),
-                unit: vac.unit,
-                purpose: 'vaccination',
-                administered_date: formData.treatment_date,
-              });
-
-            if (usageError) throw usageError;
+            
+            // Stock is automatically deducted by the database trigger
+            // No need to manually create usage_item here
           }
         }
 
