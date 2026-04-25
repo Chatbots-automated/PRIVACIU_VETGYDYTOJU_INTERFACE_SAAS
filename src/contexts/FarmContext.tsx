@@ -12,8 +12,9 @@ interface Farm {
   contact_phone?: string;
   contact_email?: string;
   vic_username?: string;
-  vic_password?: string;
+  vic_password_encrypted?: string;
   is_active: boolean;
+  is_eco_farm?: boolean;
 }
 
 interface FarmContextType {

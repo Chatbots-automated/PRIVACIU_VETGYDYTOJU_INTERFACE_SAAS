@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { Animal, AnimalVisitSummary } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { useFarm } from '../contexts/FarmContext';
 import { Plus, Edit2, Save, X, Search, RefreshCw, Calendar, Clock, Trash2 } from 'lucide-react';
 import { AnimalDetailSidebar } from './AnimalDetailSidebar';
@@ -10,7 +11,7 @@ import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
 
 export function AnimalsCompact() {
-  const { logAction } = useAuth();
+  const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [visitSummaries, setVisitSummaries] = useState<Map<string, AnimalVisitSummary>>(new Map());
@@ -193,9 +194,12 @@ export function AnimalsCompact() {
         .replace(/ž/g, 'z')
         .replace(/[^a-z0-9]/g, '');
 
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('species')
         .insert({
+          client_id: clientId,
           farm_id: selectedFarm.id,
           code: generatedCode,
           name_lt: newSpeciesForm.name_lt.trim(),
@@ -223,9 +227,12 @@ export function AnimalsCompact() {
         return;
       }
 
+      const clientId = requireClientId(user);
+
       const { data, error } = await supabase
         .from('animals')
         .insert({
+          client_id: clientId,
           farm_id: selectedFarm.id,
           tag_no: formData.tag_no || null,
           species: formData.species,

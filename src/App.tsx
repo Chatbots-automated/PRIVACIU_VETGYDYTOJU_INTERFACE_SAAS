@@ -8,6 +8,8 @@ import { FarmProvider } from './contexts/FarmContext';
 import { Farms } from './components/Farms';
 import { VeterinaryModule } from './components/VeterinaryModule';
 import { VetpraktikaModule } from './components/VetpraktikaModule';
+import { AdminDashboard } from './components/AdminDashboard';
+import { ClientRegistration } from './components/ClientRegistration';
 import { Building2 } from 'lucide-react';
 
 type Module = 'veterinarija' | 'klientai' | 'vetpraktika' | null;
@@ -22,11 +24,27 @@ function App() {
   const [currentView, setCurrentView] = useState('dashboard');
   const [selectedModule, setSelectedModule] = useState<Module>(null);
   const [notification, setNotification] = useState<Notification | null>(null);
-  const { user, loading } = useAuth();
+  const [isAdminPage, setIsAdminPage] = useState(false);
+  const [isRegistrationPage, setIsRegistrationPage] = useState(false);
+  const { user, loading, isClientAdmin } = useAuth();
 
   // Initialize from URL on mount
   useEffect(() => {
+    const path = window.location.pathname;
     const params = new URLSearchParams(window.location.search);
+    
+    // Check if we're on the registration page
+    if (path === '/register') {
+      setIsRegistrationPage(true);
+      return;
+    }
+    
+    // Check if we're on the admin page
+    if (path === '/admin') {
+      setIsAdminPage(true);
+      return;
+    }
+    
     const module = params.get('module') as Module;
     const view = params.get('view');
     
@@ -40,7 +58,16 @@ function App() {
 
   // Update URL when navigation changes
   useEffect(() => {
-    if (!user) return;
+    if (!user && !isRegistrationPage) return;
+    
+    if (isRegistrationPage) {
+      return; // Keep registration URL as is
+    }
+    
+    if (isAdminPage) {
+      window.history.pushState({}, '', '/admin');
+      return;
+    }
     
     const params = new URLSearchParams();
     if (selectedModule) {
@@ -52,12 +79,30 @@ function App() {
     
     const newUrl = params.toString() ? `?${params.toString()}` : '/';
     window.history.pushState({}, '', newUrl);
-  }, [currentView, selectedModule, user]);
+  }, [currentView, selectedModule, user, isAdminPage, isRegistrationPage]);
 
   // Handle browser back/forward buttons
   useEffect(() => {
     const handlePopState = () => {
+      const path = window.location.pathname;
       const params = new URLSearchParams(window.location.search);
+      
+      if (path === '/register') {
+        setIsRegistrationPage(true);
+        setIsAdminPage(false);
+        setSelectedModule(null);
+        return;
+      }
+      
+      if (path === '/admin') {
+        setIsAdminPage(true);
+        setIsRegistrationPage(false);
+        setSelectedModule(null);
+        return;
+      }
+      
+      setIsAdminPage(false);
+      setIsRegistrationPage(false);
       const module = params.get('module') as Module;
       const view = params.get('view');
       
@@ -112,8 +157,18 @@ function App() {
     );
   }
 
+  // Registration page - accessible without login
+  if (isRegistrationPage) {
+    return <ClientRegistration />;
+  }
+
   if (!user) {
     return <AuthForm />;
+  }
+
+  // Admin page route
+  if (isAdminPage) {
+    return <AdminDashboard />;
   }
 
   if (!selectedModule) {

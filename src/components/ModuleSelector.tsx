@@ -1,12 +1,19 @@
-import { Stethoscope, Euro, Package, Shield, LogOut, Building2, Warehouse } from 'lucide-react';
+import { Stethoscope, Euro, Package, Shield, LogOut, Building2, Warehouse, Settings, CreditCard, User } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { useState } from 'react';
+import { SubscriptionProfile } from './SubscriptionProfile';
 
 interface ModuleSelectorProps {
   onSelectModule: (module: 'veterinarija' | 'klientai' | 'vetpraktika') => void;
 }
 
 export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
-  const { signOut, user } = useAuth();
+  const { signOut, user, isClientAdmin } = useAuth();
+  const [showProfile, setShowProfile] = useState(false);
+
+  const navigateToAdmin = () => {
+    window.location.href = '/admin';
+  };
 
   const handleLogout = async () => {
     try {
@@ -221,12 +228,43 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
           </button>
         </div>
 
+        {/* Admin Panel Access - Only for client_admin */}
+        {isClientAdmin && (
+          <div className="mt-8 flex justify-center">
+            <button
+              onClick={navigateToAdmin}
+              className="group bg-gradient-to-r from-amber-500 to-orange-600 hover:from-amber-600 hover:to-orange-700 rounded-xl shadow-lg hover:shadow-2xl transition-all duration-200 overflow-hidden border-2 border-amber-400 text-left transform hover:scale-105 px-8 py-4"
+            >
+              <div className="flex items-center gap-4">
+                <div className="p-3 bg-white rounded-lg">
+                  <Settings className="w-8 h-8 text-amber-600" />
+                </div>
+                <div>
+                  <h3 className="text-xl font-bold text-white mb-1">Admin Dashboard</h3>
+                  <p className="text-amber-100 text-sm">Platform management & analytics</p>
+                </div>
+                <svg className="w-6 h-6 text-white group-hover:translate-x-1 transition-transform ml-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                </svg>
+              </div>
+            </button>
+          </div>
+        )}
+
         <div className="mt-12 text-center">
-          <div className="inline-flex items-center gap-4 bg-white rounded-lg px-6 py-3 border border-gray-200 shadow-sm">
+          <div className="inline-flex items-center gap-3 bg-white rounded-lg px-6 py-3 border border-gray-200 shadow-sm">
             <div className="text-gray-700">
               <p className="text-sm text-gray-500">Prisijungęs kaip</p>
               <p className="font-medium">{user?.email}</p>
             </div>
+            <button
+              onClick={() => setShowProfile(true)}
+              className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-white transition-colors"
+              title="Prenumerata ir organizacija"
+            >
+              <CreditCard className="w-5 h-5" />
+              <span>Prenumerata</span>
+            </button>
             <button
               onClick={handleLogout}
               className="flex items-center gap-2 px-4 py-2 bg-red-600 hover:bg-red-700 rounded-lg text-white transition-colors"
@@ -237,6 +275,8 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
           </div>
         </div>
       </div>
+
+      <SubscriptionProfile isOpen={showProfile} onClose={() => setShowProfile(false)} />
     </div>
   );
 }

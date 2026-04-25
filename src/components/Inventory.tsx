@@ -94,7 +94,7 @@ export function Inventory() {
           lot,
           expiry_date,
           mfg_date,
-          received_qty,
+          qty_received,
           qty_left,
           package_size,
           package_count,

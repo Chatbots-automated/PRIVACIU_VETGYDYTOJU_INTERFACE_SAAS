@@ -1,0 +1,260 @@
+================================================================================
+CHATGPT BRAINSTORMING PROMPT - SAAS PRICING MODEL
+================================================================================
+
+You are a SaaS pricing strategist helping design the optimal pricing model for a veterinary management platform in Lithuania/Europe.
+
+================================================================================
+CONTEXT & BUSINESS MODEL
+================================================================================
+
+PRODUCT: Cloud-based veterinary practice management system
+TARGET MARKET: Private veterinarians in Lithuania/Europe
+PRIMARY USERS: Independent vet doctors who travel to farms
+
+KEY CHARACTERISTICS OF CUSTOMERS:
+- Typically solo practitioners or small teams (1-5 people)
+- Manage multiple client farms (anywhere from 3 to 60+ farms)
+- Drive between farms to provide veterinary services
+- Need to track: animals, treatments, medications, inventory, compliance
+- Must maintain legal records for government reporting
+- Small businesses with limited budgets
+- Tech-savvy enough but want simple solutions
+
+CURRENT SYSTEM ARCHITECTURE:
+- Multi-tenant SaaS (CLIENT = vet practice organization)
+- Each client manages multiple FARMS (their customers)
+- Each farm has animals, treatments, inventory, etc.
+- Team members (users) work across all farms
+- Currently using Supabase + React + TypeScript
+
+================================================================================
+PRICING CONSTRAINTS & REQUIREMENTS
+================================================================================
+
+MUST HAVE:
+1. Farm count as PRIMARY pricing metric (not users, not animals)
+2. Unlimited or very high user limits (team size shouldn't matter)
+3. All essential features available to everyone (CRUD, records, compliance)
+4. Weekly billing preferred (easier cash flow for small businesses)
+5. 7-day free trial
+6. Clear upgrade path as practice grows
+7. Simple to understand and explain
+
+NICE TO HAVE:
+- Tiered features (some advanced features in higher tiers)
+- Volume discounts (more farms = better price per farm)
+- Annual discount option
+- Overage handling (what if they exceed farm limit?)
+
+MUST AVOID:
+- Complex per-animal pricing
+- Expensive user seat charges
+- Hidden fees
+- Confusing tier names
+- Too many tiers (max 4-5)
+
+================================================================================
+COMPETITIVE LANDSCAPE (Reference)
+================================================================================
+
+Similar products in market:
+- Farm management software: €30-150/month flat rate
+- Practice management: €50-200/month per user
+- Inventory systems: €25-100/month flat rate
+- Lithuanian market: Lower prices than Western Europe
+
+Our advantage:
+- All-in-one solution (inventory + treatments + compliance + reporting)
+- Built specifically for traveling vets
+- Mobile-friendly
+- Lithuanian language support
+
+================================================================================
+PRICING MODELS TO EVALUATE
+================================================================================
+
+OPTION A: Pure Per-Farm Pricing
+- Charge based on number of farms managed
+- Example: €5/week per farm, with volume discounts
+- Tier 1: 1-5 farms = €5/farm/week
+- Tier 2: 6-15 farms = €4/farm/week
+- Tier 3: 16-30 farms = €3/farm/week
+- etc.
+
+OPTION B: Tiered Plans (Farm Ranges)
+- Fixed price for each tier based on farm count range
+- Example:
+  - Micro (1-5 farms): €25/week
+  - Small (6-15 farms): €45/week
+  - Medium (16-30 farms): €75/week
+  - Large (31-60 farms): €125/week
+
+OPTION C: Hybrid (Base + Per Farm)
+- Small base fee + per-farm charge
+- Example: €15/week base + €2/farm
+- Covers fixed costs + scales with usage
+
+OPTION D: Feature-Based Tiers
+- Different features at different price points
+- All tiers: Unlimited farms, unlimited users
+- Basic: €35/week (core features)
+- Pro: €65/week (+ analytics, reports)
+- Enterprise: €95/week (+ API, custom features)
+
+================================================================================
+QUESTIONS TO ANSWER
+================================================================================
+
+1. PRICING STRUCTURE:
+   - Which model (A, B, C, D, or hybrid) best fits our market?
+   - What's the optimal price per farm or per tier?
+   - Should we use fixed tiers or sliding scale?
+
+2. FEATURE DISTRIBUTION:
+   - What features should be in ALL tiers?
+   - What features justify higher tiers?
+   - Should basic compliance/reporting be in all tiers?
+
+3. LIMITS & OVERAGES:
+   - What happens when they exceed farm limit?
+   - Hard block or soft warning + upgrade prompt?
+   - Grace period for upgrades?
+
+4. TRIAL STRATEGY:
+   - 7 days free with 3 farms - good enough?
+   - Credit card required upfront or not?
+   - What converts best?
+
+5. BILLING FREQUENCY:
+   - Weekly billing (€X/week)
+   - Monthly billing with weekly option?
+   - Annual discount (e.g., 2 months free)?
+
+6. COMPETITIVE POSITIONING:
+   - Premium pricing or value pricing?
+   - What's the sweet spot for Lithuania market?
+   - Price anchoring strategy?
+
+7. GROWTH PATH:
+   - How does pricing scale as they grow?
+   - Volume discounts needed?
+   - Grandfathering for early customers?
+
+8. PSYCHOLOGICAL PRICING:
+   - €49/week vs €50/week (charm pricing)?
+   - Round numbers vs precise numbers?
+   - Weekly vs monthly presentation?
+
+================================================================================
+CUSTOMER SCENARIOS (Test Cases)
+================================================================================
+
+SCENARIO 1: Solo Vet - Just Starting
+- 3 farms
+- 1 vet (himself)
+- 250 animals total
+- Budget: €100-150/month
+→ What tier? What price?
+
+SCENARIO 2: Small Practice
+- 12 farms
+- 2 vets + 1 tech
+- 800 animals total
+- Budget: €200-300/month
+→ What tier? What price?
+
+SCENARIO 3: Growing Practice
+- 25 farms
+- 4 vets + 2 techs
+- 1,800 animals total
+- Budget: €400-500/month
+→ What tier? What price?
+
+SCENARIO 4: Large Practice
+- 45 farms
+- 6 vets + 4 staff
+- 3,500 animals total
+- Budget: €600-800/month
+→ What tier? What price?
+
+SCENARIO 5: Enterprise
+- 80 farms
+- 10+ team members
+- 6,000+ animals
+- Budget: Custom (€1000+/month)
+→ Custom pricing needed?
+
+================================================================================
+DELIVERABLES REQUESTED
+================================================================================
+
+Please provide:
+
+1. RECOMMENDED PRICING MODEL
+   - Specific tier structure
+   - Exact pricing for each tier
+   - Justification for the model
+
+2. FEATURE BREAKDOWN
+   - What features in each tier?
+   - What's included in base tier?
+   - What justifies premium tiers?
+
+3. COMPARISON TABLE
+   - Side-by-side comparison of all tiers
+   - Clear differentiation
+   - Compelling upgrade reasons
+
+4. PRICING PSYCHOLOGY
+   - How to present prices?
+   - Anchor pricing strategy?
+   - Most popular tier highlighting?
+
+5. GO-TO-MARKET STRATEGY
+   - Launch pricing vs long-term pricing
+   - Early adopter discounts?
+   - Referral incentives?
+
+6. RISK MITIGATION
+   - What if pricing is too high?
+   - What if pricing is too low?
+   - A/B testing strategy?
+
+7. CALCULATIONS & EXAMPLES
+   - Real pricing examples for each scenario
+   - ROI calculations for customers
+   - Break-even analysis
+
+================================================================================
+ADDITIONAL CONSIDERATIONS
+================================================================================
+
+- Lithuanian market purchasing power (lower than Western Europe)
+- Seasonal nature of veterinary work (farming cycles)
+- Government regulations requiring record-keeping (compliance value)
+- Competition from spreadsheets/pen-and-paper (free alternative)
+- Value proposition: Time saved + Compliance + Professionalism
+- Mobile access important (working in the field)
+- Offline capability not required (always have data connection)
+
+================================================================================
+OUTPUT FORMAT
+================================================================================
+
+Structure your response as:
+
+1. Executive Summary (recommended approach in 2-3 sentences)
+2. Detailed Pricing Model (tiers, prices, features)
+3. Comparison Table (visual comparison)
+4. Feature Distribution Matrix (what's in each tier)
+5. Customer Scenario Results (pricing for each test case)
+6. Implementation Recommendations (how to roll this out)
+7. Alternative Options (2-3 other viable approaches)
+8. Risks & Mitigation (what could go wrong)
+
+================================================================================
+END OF PROMPT
+================================================================================
+
+Please analyze this and provide comprehensive pricing recommendations.

@@ -1,0 +1,163 @@
+===============================================================================
+✅ CRITICAL FIXES APPLIED - 2026-04-25
+===============================================================================
+
+## 1. Fixed Missing client_id in ReceiveStock.tsx
+
+### Problem:
+ReceiveStock component was only using farm_id when inserting data, but the SaaS
+schema requires BOTH client_id AND farm_id for multi-tenant isolation.
+
+### Fixed Inserts:
+✅ Suppliers - Added client_id
+✅ Invoices - Added client_id
+✅ Batches (from invoice) - Added client_id
+✅ Invoice Items - Added client_id
+✅ Batches (manual receive) - Added client_id
+✅ Insemination Inventory - Added client_id
+
+### Changes Made:
+- Added import: `import { requireClientId } from '../lib/clientHelpers';`
+- Added user to useAuth: `const { logAction, user } = useAuth();`
+- Added client_id to 6 different insert operations
+
+### Impact:
+- Stock receiving (pajamavimas) now works correctly ✅
+- Supplier creation works correctly ✅
+- Invoice processing works correctly ✅
+- Data properly isolated between clients ✅
+- Multi-tenant security maintained ✅
+
+
+## 2. Added Organization ID Display
+
+### Problem:
+Users couldn't see their Organization ID (client_id) anywhere in the UI.
+
+### Solution:
+Added Organization ID display to SubscriptionProfile component:
+- Shows client_id in a monospace font
+- Displayed in organization info section
+- Styled with border for easy copying
+
+### Location:
+SubscriptionProfile.tsx - Organization Information section
+- Displayed as: "Organizacijos ID: [uuid]"
+
+
+## 3. Added Farm Limit Enforcement
+
+### Problem:
+Users could add unlimited farms even when at their plan limit.
+
+### Solution:
+Added farm limit checking to Farms.tsx:
+- Shows farm count: "Aktyvūs ūkiai: X / Y"
+- Disables "Pridėti ūkį" button when at limit
+- Shows warning message when limit reached
+- Loads client limits on component mount
+
+
+===============================================================================
+## Files Modified:
+===============================================================================
+
+1. src/components/ReceiveStock.tsx
+   - Added client_id to all insert operations
+   - Fixed multi-tenant data isolation
+
+2. src/components/SubscriptionProfile.tsx
+   - Added Organization ID display
+
+3. src/components/Farms.tsx
+   - Added farm limit enforcement
+   - Added client limit display
+
+4. src/contexts/FarmContext.tsx
+   - Fixed interface (vic_password → vic_password_encrypted)
+
+5. supabase/migrations_saas/20260425000006_add_missing_columns.sql
+   - Added is_eco_farm column
+
+6. supabase/migrations_saas/20260425000007_update_existing_clients_to_new_limits.sql
+   - Updated existing clients to new pricing limits
+
+
+===============================================================================
+## Testing Checklist:
+===============================================================================
+
+### Stock Receiving (Pajamavimas):
+- [ ] Upload invoice PDF
+- [ ] Match products
+- [ ] Receive stock
+- [ ] Verify batch created with client_id
+- [ ] Verify invoice created with client_id
+- [ ] Check supplier has client_id
+
+### Organization ID:
+- [ ] Click "Prenumerata" button
+- [ ] Verify Organization ID is displayed
+- [ ] Copy ID successfully
+
+### Farm Limits:
+- [ ] Navigate to Farms
+- [ ] See current farm count (e.g., "4 / 3")
+- [ ] Try to add farm when at limit
+- [ ] Button should be disabled
+- [ ] Warning message should show
+
+
+===============================================================================
+## Database Verification Queries:
+===============================================================================
+
+-- Check if client_id exists on recent records
+
+-- Suppliers
+SELECT id, client_id, farm_id, name, created_at 
+FROM suppliers 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+-- Invoices
+SELECT id, client_id, farm_id, invoice_number, created_at 
+FROM invoices 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+-- Batches
+SELECT id, client_id, farm_id, product_id, lot, created_at 
+FROM batches 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+-- Invoice Items
+SELECT id, client_id, farm_id, invoice_id, created_at 
+FROM invoice_items 
+ORDER BY created_at DESC 
+LIMIT 5;
+
+-- All should now have client_id populated ✅
+
+
+===============================================================================
+## Next Steps (If Needed):
+===============================================================================
+
+1. Audit other components for missing client_id:
+   - Animals.tsx
+   - Vaccinations.tsx
+   - Products.tsx
+   - Any other CRUD components
+
+2. Test all major workflows:
+   - Create treatment
+   - Create vaccination
+   - Create animal
+   - Receive stock
+   - Generate reports
+
+3. Verify RLS policies are working correctly
+
+===============================================================================

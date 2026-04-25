@@ -7,9 +7,10 @@ import { useFarm } from '../contexts/FarmContext';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
+import { requireClientId } from '../lib/clientHelpers';
 
 export function ReceiveStock() {
-  const { logAction } = useAuth();
+  const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const [products, setProducts] = useState<Product[]>([]);
   const [inseminationProducts, setInseminationProducts] = useState<InseminationProduct[]>([]);
@@ -534,10 +535,12 @@ export function ReceiveStock() {
         if (existingSupplier) {
           supplierId = existingSupplier.id;
         } else {
+          const clientId = requireClientId(user);
           const { data: newSupplier, error: supplierError } = await supabase
             .from('suppliers')
             .insert({
-              farm_id: selectedFarm.id,
+              client_id: clientId,
+              farm_id: selectedFarm?.id || null,
               name: invoiceData.supplier.name,
               code: invoiceData.supplier.code || null,
               vat_code: invoiceData.supplier.vat_code || null,
@@ -551,10 +554,12 @@ export function ReceiveStock() {
       }
 
       // First, create the invoice record
+      const clientId = requireClientId(user);
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
-          farm_id: selectedFarm.id,
+          client_id: clientId,
+          farm_id: selectedFarm?.id || null,
           invoice_number: invoiceData.invoice.number,
           invoice_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
           doc_title: 'Invoice',
@@ -603,7 +608,8 @@ export function ReceiveStock() {
         // Skip batch creation for supplier_services category (no stock tracking)
         if (matched.category !== 'supplier_services') {
           stockEntries.push({
-            farm_id: selectedFarm.id,
+            client_id: clientId,
+            farm_id: selectedFarm?.id || null,
             product_id: matched.id,
             lot: itemData.batch || bulkReceiveData.lot || null,
             mfg_date: null,
@@ -627,7 +633,8 @@ export function ReceiveStock() {
             : null;
 
         invoiceItemsEntries.push({
-          farm_id: selectedFarm.id,
+          client_id: clientId,
+          farm_id: selectedFarm?.id || null,
           invoice_id: invoice.id,
           product_id: matched.id,
           line_no: itemData.line_no,
@@ -828,7 +835,9 @@ export function ReceiveStock() {
           return;
         }
 
+        const clientId = requireClientId(user);
         const inventoryData = {
+          client_id: clientId,
           farm_id: selectedFarm.id,
           product_id: actualProductId,
           quantity: receivedQty,
@@ -858,7 +867,9 @@ export function ReceiveStock() {
           return;
         }
 
+        const clientId = requireClientId(user);
         const batchData: any = {
+          client_id: clientId,
           farm_id: selectedFarm.id,
           product_id: productId,
           lot: formData.lot || null,

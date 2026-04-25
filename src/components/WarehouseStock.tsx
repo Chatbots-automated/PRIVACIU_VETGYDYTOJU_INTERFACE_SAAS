@@ -678,20 +678,20 @@ export function WarehouseStock() {
         if (matched.category !== 'supplier_services') {
           stockEntries.push({
             client_id: clientId,
-            farm_id: assignToFarmId,
             product_id: matched.id,
             invoice_id: invoice.id,
+            supplier_id: supplierId,
             lot: itemData.batch || bulkReceiveData.lot || null,
             mfg_date: null,
             expiry_date: itemData.expiry || null,
-            supplier_id: supplierId,
             doc_title: 'Invoice',
             doc_number: invoiceData.invoice.number,
             doc_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
             purchase_price: totalPrice,
-            unit_price: unitPrice,
-            qty_received: packageSize && packageCount ? packageSize * packageCount : qty,
-            received_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
+            currency: invoiceData.invoice.currency || 'EUR',
+            received_qty: packageSize && packageCount ? packageSize * packageCount : qty,
+            package_size: packageSize,
+            package_count: packageCount,
           });
         }
 
@@ -843,6 +843,7 @@ export function WarehouseStock() {
     setSuccess(false);
 
     try {
+      const clientId = requireClientId(user);
       let productId = formData.product_id;
 
       // If in manual create mode, create the product first
@@ -943,6 +944,7 @@ export function WarehouseStock() {
         return;
       } else {
         const batchData: any = {
+          client_id: clientId,
           product_id: productId,
           lot: formData.lot || null,
           mfg_date: formData.mfg_date || null,

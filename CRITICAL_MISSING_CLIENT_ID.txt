@@ -1,0 +1,74 @@
+===============================================================================
+🚨 CRITICAL: Missing client_id in Components
+===============================================================================
+
+## Problem Found:
+
+Many components are only using `farm_id` but NOT `client_id` when inserting data.
+According to the SaaS baseline schema, almost ALL tables require BOTH:
+- client_id (for tenant isolation)
+- farm_id (for farm-level organization)
+
+## Tables That Require BOTH client_id AND farm_id:
+
+From supabase/migrations_saas/20260425000001_saas_multi_tenant_baseline.sql:
+
+1. ✅ treatments - FIXED (already has both)
+2. ❌ suppliers - MISSING client_id
+3. ❌ invoices - MISSING client_id  
+4. ❌ invoice_items - MISSING client_id
+5. ❌ batches - MISSING client_id
+6. ❌ usage_items - FIXED (Treatment.tsx already adds both)
+7. ❌ products - Need to check
+8. ❌ animals - Need to check
+9. ❌ vaccinations - Need to check
+10. ❌ diseases - Need to check
+
+## Components That Need Fixing:
+
+### 1. ReceiveStock.tsx - HIGH PRIORITY
+Lines 539-545: suppliers insert - MISSING client_id
+Lines 556-572: invoices insert - MISSING client_id
+Lines ~650: batches insert - MISSING client_id (need to check exact line)
+Lines ~671: invoice_items insert - MISSING client_id (need to check exact line)
+
+### 2. Other Components (Need to audit):
+- Animals.tsx
+- Vaccinations.tsx  
+- Products management components
+- Any other CRUD components
+
+## How to Fix:
+
+Add client_id to ALL inserts using requireClientId helper:
+
+```typescript
+import { requireClientId } from '../lib/clientHelpers';
+
+// In component:
+const { user } = useAuth();
+const clientId = requireClientId(user);
+
+// When inserting:
+await supabase.from('table_name').insert({
+  client_id: clientId,  // ← ADD THIS
+  farm_id: selectedFarm.id,
+  // ... rest of fields
+});
+```
+
+## Why This is Critical:
+
+1. **RLS Policies**: Row Level Security filters by client_id
+2. **Data Isolation**: Without client_id, data could leak between clients
+3. **Queries Will Fail**: Many queries expect client_id to exist
+4. **Future Multi-Tenant Issues**: System won't scale properly
+
+## Next Steps:
+
+1. Audit ALL components that do .insert() operations
+2. Add client_id to every insert that's missing it
+3. Test all CRUD operations after fixes
+4. Check RLS policies are working correctly
+
+===============================================================================

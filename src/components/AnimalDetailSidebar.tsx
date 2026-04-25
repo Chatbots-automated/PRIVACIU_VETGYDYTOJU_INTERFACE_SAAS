@@ -6,6 +6,7 @@ import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/helpers';
 import { AnimalAnalytics } from './AnimalAnalytics';
 import { TeatStatusCard } from './TeatStatusCard';
 import { TeatDisplay, TeatSelector } from './TeatSelector';
@@ -1452,8 +1453,8 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                   <div className="mt-2 space-y-2">
                                     {/* Show single doses with cost */}
                                     {treatment.usage_items && treatment.usage_items.map((item, i) => {
-                                      const unitCost = item.batch?.purchase_price && item.batch?.received_qty
-                                        ? item.batch.purchase_price / item.batch.received_qty
+                                      const unitCost = item.batch?.purchase_price && item.batch?.qty_received
+                                        ? item.batch.purchase_price / item.batch.qty_received
                                         : 0;
                                       const totalCost = item.qty * unitCost;
                                       return (
@@ -1469,7 +1470,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                     })}
                                     {/* Show courses with cost */}
                                     {treatment.treatment_courses && treatment.treatment_courses.map((course, i) => {
-                                      const unitCost = course.batch?.purchase_price && course.batch?.received_qty
+                                      const unitCost = course.batch?.purchase_price && course.batch?.qty_received
                                         ? course.batch.purchase_price / course.batch.received_qty
                                         : 0;
                                       const totalCost = course.total_quantity * unitCost;
@@ -1487,13 +1488,13 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                     {/* Total treatment cost */}
                                     {(() => {
                                       const usageCost = treatment.usage_items?.reduce((sum, item) => {
-                                        const unitCost = item.batch?.purchase_price && item.batch?.received_qty
+                                        const unitCost = item.batch?.purchase_price && item.batch?.qty_received
                                           ? item.batch.purchase_price / item.batch.received_qty
                                           : 0;
                                         return sum + (item.qty * unitCost);
                                       }, 0) || 0;
                                       const courseCost = treatment.treatment_courses?.reduce((sum, course) => {
-                                        const unitCost = course.batch?.purchase_price && course.batch?.received_qty
+                                        const unitCost = course.batch?.purchase_price && course.batch?.qty_received
                                           ? course.batch.purchase_price / course.batch.received_qty
                                           : 0;
                                         return sum + (course.total_quantity * unitCost);
@@ -1607,7 +1608,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                     <div className="space-y-2 mt-3">
                       {/* Single doses with cost */}
                       {treatment.usage_items && treatment.usage_items.map((item, i) => {
-                        const unitCost = item.batch?.purchase_price && item.batch?.received_qty
+                        const unitCost = item.batch?.purchase_price && item.batch?.qty_received
                           ? item.batch.purchase_price / item.batch.received_qty
                           : 0;
                         const totalCost = item.qty * unitCost;
@@ -1624,7 +1625,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       })}
                       {/* Courses with cost */}
                       {treatment.treatment_courses && treatment.treatment_courses.map((course, i) => {
-                        const unitCost = course.batch?.purchase_price && course.batch?.received_qty
+                        const unitCost = course.batch?.purchase_price && course.batch?.qty_received
                           ? course.batch.purchase_price / course.batch.received_qty
                           : 0;
                         const totalCost = course.total_quantity * unitCost;
@@ -1642,13 +1643,13 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       {/* Total treatment cost */}
                       {(() => {
                         const usageCost = treatment.usage_items?.reduce((sum, item) => {
-                          const unitCost = item.batch?.purchase_price && item.batch?.received_qty
+                          const unitCost = item.batch?.purchase_price && item.batch?.qty_received
                             ? item.batch.purchase_price / item.batch.received_qty
                             : 0;
                           return sum + (item.qty * unitCost);
                         }, 0) || 0;
                         const courseCost = treatment.treatment_courses?.reduce((sum, course) => {
-                          const unitCost = course.batch?.purchase_price && course.batch?.received_qty
+                          const unitCost = course.batch?.purchase_price && course.batch?.qty_received
                             ? course.batch.purchase_price / course.batch.received_qty
                             : 0;
                           return sum + (course.total_quantity * unitCost);
@@ -2350,9 +2351,12 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
     }
 
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('diseases')
         .insert({ 
+          client_id: clientId,
           farm_id: selectedFarm.id,
           name: newDiseaseName.trim() 
         })
@@ -2376,10 +2380,10 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
   const fetchStockLevel = async (productId: string) => {
     if (!selectedFarm) return 0;
-    
+
     const { data: batchesData, error } = await supabase
       .from('batches')
-      .select('id, received_qty, qty_left, expiry_date')
+      .select('id, qty_received, qty_left, expiry_date')
       .eq('product_id', productId)
       .eq('farm_id', selectedFarm.id);
 
@@ -2399,7 +2403,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
       if (productData) {
         const { data: batchesByName } = await supabase
           .from('batches')
-          .select('id, received_qty, qty_left, expiry_date, products!inner(name)')
+          .select('id, qty_received, qty_left, expiry_date, products!inner(name)')
           .eq('farm_id', selectedFarm.id)
           .eq('products.name', productData.name);
         

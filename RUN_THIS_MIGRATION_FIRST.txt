@@ -1,0 +1,67 @@
+⚠️  CRITICAL: RUN THIS MIGRATION IMMEDIATELY ⚠️
+
+Before using the app, you MUST run this SQL migration in Supabase:
+
+===============================================================================
+STEPS TO FIX THE is_eco_farm ERROR:
+===============================================================================
+
+1. Go to your Supabase Dashboard:
+   https://supabase.com/dashboard/project/vlfjmffbwrmblvlsbsnz
+
+2. Click on "SQL Editor" in the left sidebar
+
+3. Click "New Query"
+
+4. Copy and paste the entire contents of this file:
+   migrations/saas/20260425000006_add_missing_columns.sql
+
+5. Click "Run" or press Ctrl+Enter
+
+6. Verify it says "Success. No rows returned"
+
+7. Test the app - create a new client in "Klientų valdymas"
+
+===============================================================================
+WHAT THIS FIXES:
+===============================================================================
+
+❌ BEFORE: Error when creating farm/client:
+   "Could not find the 'is_eco_farm' column of 'farms' in the schema cache"
+
+✅ AFTER: Farm/client creation works perfectly
+   - is_eco_farm checkbox appears in form
+   - Eco-farm status saves correctly
+   - Withdrawal periods calculate correctly for eco-farms
+
+===============================================================================
+MIGRATION CONTENTS:
+===============================================================================
+
+-- Add is_eco_farm column to farms table
+ALTER TABLE public.farms ADD COLUMN IF NOT EXISTS is_eco_farm boolean DEFAULT false NOT NULL;
+
+COMMENT ON COLUMN public.farms.is_eco_farm IS 'Eco-farm flag: withdrawal periods are doubled (0 days becomes 2 days, others are multiplied by 2)';
+
+-- Add postal_code to clients if not exists (for billing)
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS postal_code text;
+
+-- Add contact_person to clients if not exists
+ALTER TABLE public.clients ADD COLUMN IF NOT EXISTS contact_person text;
+
+===============================================================================
+VERIFICATION COMMANDS:
+===============================================================================
+
+After running the migration, run these to verify:
+
+-- Check if is_eco_farm exists in farms table
+SELECT column_name, data_type, column_default
+FROM information_schema.columns
+WHERE table_schema = 'public'
+  AND table_name = 'farms'
+  AND column_name = 'is_eco_farm';
+
+-- Should return 1 row showing the column exists
+
+===============================================================================

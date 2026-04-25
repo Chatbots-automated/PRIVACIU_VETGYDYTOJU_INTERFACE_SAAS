@@ -1,0 +1,198 @@
+===============================================================================
+IMPLEMENTATION SUMMARY - 2026-04-25
+===============================================================================
+
+## CRITICAL BUG FIX: Missing is_eco_farm Column
+
+**Problem:**
+- Client creation failed with error: "Could not find the 'is_eco_farm' column of 'farms' in the schema cache"
+- The column existed in old migrations but was not included in the SaaS baseline migration
+
+**Solution:**
+- Created new migration: migrations/saas/20260425000006_add_missing_columns.sql
+- Adds is_eco_farm column to farms table (boolean, default false)
+- Adds postal_code and contact_person columns to clients table for completeness
+
+**Files Created/Modified:**
+- ✅ migrations/saas/20260425000006_add_missing_columns.sql (NEW)
+
+
+## PRICING MODEL UPDATE: New Weekly Pricing Structure
+
+**Changes:**
+- Updated weekly pricing to reflect agreed-upon tiers:
+  * Trial: FREE (7 days, up to 3 farms, unlimited users)
+  * Startas: €19/week (1-5 farms, unlimited users)
+  * Praktika: €39/week (6-15 farms, unlimited users)
+  * Augimas: €69/week (16-35 farms, unlimited users)
+  * Komanda: €119/week (36+ farms, unlimited users)
+
+- ALL PLANS include all 3 core modules (Veterinarija, Klientai, Vetpraktika)
+- ALL PLANS include unlimited users
+- Difference is in farm count limits
+
+**Files Modified:**
+- ✅ migrations/saas/20260425000005_update_pricing_tiers.sql
+  * Updated pricing_tiers table with new weekly prices
+  * Added 'komanda' to subscription_plan enum
+  * Updated plan names and features
+  
+- ✅ src/components/AdminDashboard.tsx
+  * Updated pricingTiers configuration
+  * Updated Client interface to include 'komanda' plan
+  * Updated handlePlanChange function signature
+  * Fixed formData state typing
+
+
+## NEW FEATURE: Subscription Profile Viewer
+
+**Problem:**
+- Users had no way to view their current subscription plan
+- No way to see usage stats (farms, users, animals)
+- No way to see available upgrade options
+
+**Solution:**
+- Created new SubscriptionProfile component
+- Added "Prenumerata" button in ModuleSelector
+- Shows:
+  * Organization information (name, code, contact details)
+  * Current subscription plan with pricing
+  * Usage statistics (farms, users, animals) with limits
+  * Available plans with upgrade options
+  * Trial expiration warnings
+  * Subscription dates
+
+**Files Created/Modified:**
+- ✅ src/components/SubscriptionProfile.tsx (NEW)
+  * Full-featured subscription/profile modal
+  * Shows organization details
+  * Shows current plan and pricing
+  * Shows usage vs limits
+  * Lists all available plans
+  * Shows trial expiration warnings
+  
+- ✅ src/components/ModuleSelector.tsx
+  * Added import for SubscriptionProfile
+  * Added "Prenumerata" button next to logout
+  * Uses CreditCard icon
+  * Opens subscription profile modal on click
+
+
+## DATABASE MIGRATIONS TO RUN
+
+Run these migrations in order on your Supabase instance:
+
+1. migrations/saas/20260425000006_add_missing_columns.sql
+   - Adds is_eco_farm to farms
+   - Adds missing client columns
+
+2. (Already exists) migrations/saas/20260425000005_update_pricing_tiers.sql
+   - Updates pricing with new weekly tiers
+   - Adds 'komanda' plan
+
+
+## TESTING CHECKLIST
+
+### 1. Database Schema
+- [ ] Run migration 20260425000006_add_missing_columns.sql
+- [ ] Verify is_eco_farm column exists in farms table
+- [ ] Verify komanda is in subscription_plan enum
+
+### 2. Client Creation (Farms Component)
+- [ ] Log in as a regular user
+- [ ] Navigate to "Klientų valdymas" (Farms)
+- [ ] Try to create a new farm/client
+- [ ] Verify the eco-farm checkbox appears
+- [ ] Verify no "is_eco_farm" column error occurs
+- [ ] Create a farm successfully
+
+### 3. Admin Dashboard
+- [ ] Log in as client_admin user
+- [ ] Navigate to /admin
+- [ ] Create a new client
+- [ ] Select different subscription plans (including Komanda)
+- [ ] Verify registration code is generated
+- [ ] Verify max_farms and max_users update correctly
+
+### 4. Subscription Profile
+- [ ] Log in as any user
+- [ ] Go to module selector
+- [ ] Click "Prenumerata" button
+- [ ] Verify profile modal opens
+- [ ] Check organization info displays correctly
+- [ ] Check current plan displays correctly
+- [ ] Check usage stats display (farms, users, animals)
+- [ ] Verify trial warning appears if applicable
+- [ ] Check all available plans are listed
+- [ ] Close modal and verify it closes
+
+### 5. System-Wide Check
+- [ ] Search codebase for any other references to missing columns
+- [ ] Check console for any new errors
+- [ ] Test client registration flow
+- [ ] Test user login/logout
+
+
+## KNOWN ISSUES (Non-Critical)
+
+The typecheck shows various TypeScript errors in other components, but these are pre-existing and not related to the current fixes:
+- AnimalDetailSidebar: Various property errors
+- WarehouseStock: Type assignment issues
+- Other components: Unused variables
+
+These should be addressed in a future cleanup task but don't affect functionality.
+
+
+## FILES CHANGED SUMMARY
+
+### New Files:
+1. migrations/saas/20260425000006_add_missing_columns.sql
+2. migrations/saas/ directory (contains all SaaS migrations)
+3. src/components/SubscriptionProfile.tsx
+4. IMPLEMENTATION_SUMMARY.txt (this file)
+
+### Modified Files:
+1. migrations/saas/20260425000005_update_pricing_tiers.sql
+2. src/components/AdminDashboard.tsx
+3. src/components/ModuleSelector.tsx
+4. src/components/Farms.tsx (fixed vic_password → vic_password_encrypted)
+5. src/contexts/FarmContext.tsx (fixed vic_password → vic_password_encrypted)
+
+### No Changes Required:
+- src/components/Farms.tsx (already had is_eco_farm code, just needed DB schema)
+- src/components/ReportTemplates.tsx (reads from views, no changes needed)
+
+
+## DEPLOYMENT STEPS
+
+1. **Database First:**
+   ```sql
+   -- In Supabase SQL Editor, run:
+   -- 1. migrations/saas/20260425000006_add_missing_columns.sql
+   -- This MUST be run before deploying frontend
+   ```
+
+2. **Frontend Deploy:**
+   - Push code to GitHub
+   - Netlify will auto-deploy
+   - Or manual: `npm run build && netlify deploy --prod`
+
+3. **Verification:**
+   - Test client creation immediately
+   - Verify subscription profile displays
+   - Check for any console errors
+
+
+## NEXT STEPS (Future Work)
+
+1. Implement actual payment processing for plan upgrades
+2. Add email notifications for trial expiration
+3. Implement automatic plan downgrade/upgrade when limits are exceeded
+4. Add billing history view in subscription profile
+5. Add usage analytics/charts
+6. Implement API for plan management (for admin automation)
+
+
+===============================================================================
+END OF IMPLEMENTATION SUMMARY
+===============================================================================

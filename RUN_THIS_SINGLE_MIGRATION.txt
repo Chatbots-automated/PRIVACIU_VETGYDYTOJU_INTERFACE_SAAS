@@ -1,0 +1,137 @@
+=======================================================================
+RUN THIS SINGLE MIGRATION - FIXES ALL SCHEMA ISSUES
+=======================================================================
+Created: 2026-04-25
+File: supabase/migrations_saas/20260425000011_fix_all_schema_issues.sql
+=======================================================================
+
+WHAT THIS FIXES:
+================
+✅ Adds supplier_services to product_category enum
+✅ Adds is_eco_farm column to farms table
+✅ Adds postal_code and contact_person to clients table
+✅ Adds client_id and farm_id to species table (for custom species per farm/client)
+✅ Adds 12 route-specific withdrawal columns to products table
+✅ Adds package_size, package_count, currency to batches table
+✅ Adds allocation_id to batches (links to farm_stock_allocations)
+✅ Adds warehouse_batch_id to invoice_items (links to warehouse_batches)
+✅ Adds foreign key constraints:
+    - invoice_items.product_id → products
+    - invoice_items.batch_id → batches
+✅ Makes farm_id nullable in invoices, invoice_items, and batches (for shared warehouse)
+✅ Creates warehouse_batches table (based on old schema + client_id for multi-tenancy)
+✅ Creates farm_stock_allocations table (with client_id for multi-tenancy)
+✅ Renames qty_received to received_qty in warehouse_batches if it exists with wrong name
+✅ Creates warehouse inventory views:
+    - vw_warehouse_inventory (all warehouse stock)
+    - vw_stock_allocation_history (allocation history)
+    - vw_warehouse_stock_available (available stock for allocation in FIFO order)
+    - vw_allocation_analytics_by_farm (analytics by farm)
+    - vw_allocation_analytics_by_product (analytics by product)
+✅ Creates veterinary reporting views:
+    - animal_visit_summary (animal visit details)
+    - vw_withdrawal_status (current withdrawal status per animal)
+    - vw_vet_drug_journal_all_farms (drug receipts across all farms)
+    - vw_treated_animals_all_farms (treated animals register)
+    - vw_withdrawal_journal_all_farms (withdrawal periods)
+✅ Updates client limits to new pricing tiers (Trial gets 3 farms, not 1)
+✅ Adds warehouse triggers for automatic quantity tracking and field initialization
+✅ Adds trigger_set_timestamp function for updated_at fields
+
+ERRORS THIS RESOLVES:
+======================
+❌ "Could not find the 'is_eco_farm' column"
+❌ "Could not find the 'vic_password' column" (fixed by using vic_password_encrypted)
+❌ "Could not find the 'withdrawal_im_meat' column" (and 11 other withdrawal columns)
+❌ "null value in column 'farm_id' violates not-null constraint"
+❌ "Could not find the table 'warehouse_batches'"
+❌ "Could not find the 'qty_received' column of 'warehouse_batches'"
+❌ "Could not find the 'warehouse_batch_id' column of 'invoice_items'"
+❌ "Could not find a relationship between 'invoice_items' and 'products'"
+❌ "Could not find a relationship between 'invoice_items' and 'batches'"
+❌ "Could not find the table 'vw_warehouse_stock_available'" (404)
+❌ "Could not find the table 'vw_withdrawal_status'" (404)
+❌ "Could not find the table 'vw_vet_drug_journal_all_farms'" (404)
+❌ "Could not find the table 'vw_treated_animals_all_farms'" (404)
+❌ "Could not find the table 'vw_withdrawal_journal_all_farms'" (404)
+❌ "Could not find the table 'animal_visit_summary'" (404)
+❌ "invalid input value for enum product_category: 'supplier_services'"
+❌ "null value in column 'client_id' of relation 'animals' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'diseases' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'species' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'farm_stock_allocations' violates not-null constraint"
+❌ "Could not find the 'received_qty' column of 'batches'" (batches uses qty_received)
+❌ "column wb.received_date does not exist" (removed from view - doesn't exist in warehouse_batches)
+❌ "relation idx_warehouse_batches_client_id already exists" (uses IF NOT EXISTS now)
+❌ "cannot drop columns from view" (drops views before recreating them)
+
+HOW TO RUN:
+===========
+
+OPTION 1: Via Supabase Dashboard (EASIEST)
+-------------------------------------------
+1. Go to: https://supabase.com/dashboard/project/vlfjmffbwrmblvlsbsnz/sql/new
+2. Copy the ENTIRE contents of: 
+   supabase/migrations_saas/20260425000011_fix_all_schema_issues.sql
+3. Paste into the SQL editor
+4. Click "Run" button
+5. Wait for "Success. No rows returned" message
+
+OPTION 2: Via Supabase CLI
+---------------------------
+cd C:\Projects\PRIVACIU_VETGYDYTOJU_INTERFACE_SAAS
+supabase db push
+
+VERIFICATION:
+=============
+After running, test in your app:
+1. Go to "pajamavimas" tab
+2. Upload an invoice
+3. Select a product
+4. Choose "bendras sandelis" (shared warehouse)
+5. Click "Priimti" 
+6. Should work without any "Could not find column" errors!
+
+WHAT ABOUT THE OLD MIGRATION FILES?
+====================================
+The old individual migration files (20260425000006 through 20260425000010)
+can be kept for reference, but this new file (20260425000011) includes
+everything from them and more.
+
+If you want to clean up, you can delete these old files:
+- 20260425000006_add_missing_columns.sql
+- 20260425000007_update_existing_clients_to_new_limits.sql  
+- 20260425000008_add_route_specific_withdrawal_columns.sql
+- 20260425000009_make_invoice_farm_id_nullable.sql
+- 20260425000010_add_warehouse_system_for_saas.sql
+
+But keep:
+- 20260425000001_saas_multi_tenant_baseline.sql (CORE SCHEMA)
+- 20260425000002_saas_custom_auth.sql (AUTH FUNCTIONS)
+- 20260425000003_add_pricing_and_billing.sql (PRICING SYSTEM)
+- 20260425000004_add_registration_system.sql (REGISTRATION)
+- 20260425000005_update_pricing_tiers.sql (PRICING UPDATES)
+- 20260425000011_fix_all_schema_issues.sql (THIS NEW ONE!)
+
+UI COMPONENT FIXES:
+===================
+The following UI components have been updated to work with the new schema:
+✅ ReceiveStock.tsx - added client_id to all inserts
+✅ WarehouseStock.tsx - fixed column names (received_qty, not qty_received)
+✅ InvoiceAllocation.tsx - fixed batches insert (qty_received, not received_qty)
+✅ StockAllocation.tsx - added client_id to products and farm_stock_allocations
+✅ Inventory.tsx - fixed batches SELECT query (qty_received)
+✅ AnimalsCompact.tsx - added client_id to species and animals inserts
+✅ AnimalDetailSidebar.tsx - fixed all batches queries and batch references:
+   - Changed SELECT queries from received_qty to qty_received
+   - Changed all batch.received_qty references to batch.qty_received
+   - Added client_id to diseases inserts
+
+NOTE: If you already ran migrations 20260425000006-20260425000010,
+running 20260425000011 is safe because it uses "IF NOT EXISTS" and
+"ADD COLUMN IF NOT EXISTS" which won't cause errors if columns/tables
+already exist.
+
+=======================================================================
+READY TO GO! Just run the SQL file in Supabase Dashboard.
+=======================================================================

@@ -1,0 +1,62 @@
+===============================================================================
+CRITICAL BUG FIX: Column Name Mismatches
+===============================================================================
+
+## Problem Found:
+
+The frontend components were using incorrect column names that don't match 
+the actual database schema defined in the SaaS baseline migration.
+
+## Database Schema (from 20260425000001_saas_multi_tenant_baseline.sql):
+
+### farms table has:
+- vic_username (text)
+- vic_password_encrypted (text)  ← NOT vic_password!
+- is_active (boolean)
+- is_eco_farm (boolean) ← Added by migration 20260425000006
+
+## Errors Fixed:
+
+### Error 1: vic_password
+❌ Before: Component tried to insert/update "vic_password"
+✅ After: Changed to "vic_password_encrypted"
+
+Files fixed:
+- src/components/Farms.tsx (interface, emptyFarm, insert, update, input field)
+- src/contexts/FarmContext.tsx (interface)
+
+### Error 2: is_eco_farm
+❌ Before: Column didn't exist in database
+✅ After: Migration 20260425000006 adds it
+
+File: migrations/saas/20260425000006_add_missing_columns.sql
+
+## Changes Made:
+
+1. src/components/Farms.tsx:
+   - Updated Farm interface: vic_password → vic_password_encrypted
+   - Updated emptyFarm default values
+   - Updated .insert() call to use vic_password_encrypted
+   - Updated .update() call to use vic_password_encrypted
+   - Updated input field onChange handler
+
+2. src/contexts/FarmContext.tsx:
+   - Updated Farm interface: vic_password → vic_password_encrypted
+   - Added is_eco_farm to interface
+
+## To Deploy:
+
+1. First, run database migration:
+   migrations/saas/20260425000006_add_missing_columns.sql
+
+2. Then deploy frontend code with the fixed column names
+
+## Testing:
+
+After deployment, test:
+1. Create a new farm with VIC credentials
+2. Edit existing farm VIC credentials
+3. Check eco-farm checkbox works
+4. Verify no "Could not find column" errors
+
+===============================================================================

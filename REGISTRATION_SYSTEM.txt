@@ -1,0 +1,245 @@
+================================================================================
+CLIENT REGISTRATION SYSTEM - QUICK REFERENCE
+================================================================================
+Updated: 2026-04-25
+
+OVERVIEW
+--------
+New code-based registration system for client onboarding.
+Admin creates client → gets registration code → client self-registers
+
+================================================================================
+IMPROVED PRICING TIERS - WEEKLY BILLING
+================================================================================
+
+TRIAL (7 Days Free)
+-------------------
+Price: €0 (FREE)
+Duration: 7 days only
+Max Farms: 1
+Max Users: 2
+Features: Basic features for testing
+Auto-expires: Yes, after 7 days
+
+STARTER
+-------
+Price: €12.50/week (€50/month)
+Max Farms: 3
+Max Users: 5
+Features: Full features, email support, mobile app
+Best for: Small veterinary practices
+
+PROFESSIONAL
+------------
+Price: €32.25/week (€129/month)
+Max Farms: 10
+Max Users: 15
+Features: Full features + priority support + advanced analytics
+Best for: Growing practices
+
+ENTERPRISE
+----------
+Price: €74.75/week (€299/month)
+Max Farms: Unlimited (999)
+Max Users: 100
+Features: Everything + dedicated support + custom integration + SLA
+Best for: Large organizations
+
+NOTE: All prices are WEEKLY. Divided monthly price by 4 for weekly rate.
+
+================================================================================
+REGISTRATION FLOW
+================================================================================
+
+Step 1: ADMIN CREATES CLIENT
+-----------------------------
+1. Login as client_admin
+2. Go to /admin
+3. Click "Add Client"
+4. Fill in organization details
+5. Choose subscription plan (trial/starter/professional/enterprise)
+6. Click "Create Client"
+7. REGISTRATION CODE IS GENERATED!
+
+Example Code: ABCD-EFGH-IJKL
+
+Step 2: ADMIN SENDS CODE TO CLIENT
+-----------------------------------
+Admin gets:
+- Registration Code: ABCD-EFGH-IJKL
+- Registration URL: http://yourapp.com/register?code=ABCD-EFGH-IJKL
+
+Send via:
+- Email
+- SMS
+- WhatsApp
+- Or any communication method
+
+Step 3: CLIENT REGISTERS
+-------------------------
+1. Client clicks "Registruotis" on login page
+2. Enters registration code (XXXX-XXXX-XXXX)
+3. System validates code automatically
+4. Client sees organization info
+5. Client can EDIT/ADD organization details:
+   - Contact Person
+   - Phone Number
+   - Address
+   - City
+   - Postal Code
+6. Client fills in PERSONAL account info:
+   - Full Name (Vardas ir pavardė)
+   - Email Address (El. paštas)
+   - Password (Slaptažodis - min 8 chars)
+   - Confirm Password
+7. Client clicks "Sukurti paskyrą" (Create Account)
+8. System updates client info if edited
+9. Password is hashed with bcrypt
+10. User account created and linked to client
+11. Auto-login and redirect to app
+
+Step 4: CLIENT USES SYSTEM
+---------------------------
+Client can now:
+- Login with their email/password
+- Access their organization's data
+- Add more users (within limit)
+- Manage farms
+- Use all features based on plan
+
+================================================================================
+DATABASE CHANGES
+================================================================================
+
+MIGRATIONS TO RUN:
+------------------
+1. 20260425000004_add_registration_system.sql
+   - Adds registration_code column to clients
+   - Adds validate_registration_code() function
+
+2. 20260425000005_update_pricing_tiers.sql
+   - Updates subscription_plan enum (trial/starter/professional/enterprise)
+   - Updates pricing_tiers table with new prices
+   - Updates billing calculation function
+
+RUN IN SUPABASE SQL EDITOR:
+----------------------------
+Copy contents from both files and run in order.
+
+================================================================================
+FEATURES
+================================================================================
+
+ADMIN DASHBOARD (/admin)
+-------------------------
+✓ View all clients
+✓ See real-time usage stats
+✓ Add new clients
+✓ Generate registration codes
+✓ Copy registration URLs
+✓ Visual plan selection with cards
+✓ Trial auto-expires after 7 days
+✓ Delete clients
+✓ Toggle active/inactive
+
+REGISTRATION PAGE (/register?code=XXXX)
+----------------------------------------
+✓ Validates registration code
+✓ Shows organization info
+✓ Beautiful UI with plan badge
+✓ Secure password hashing (bcrypt)
+✓ Email validation
+✓ Password strength check
+✓ Auto-login after registration
+✓ Success confirmation
+
+SECURITY
+--------
+✓ Passwords hashed with bcrypt
+✓ Registration code required
+✓ Code validation against active clients
+✓ One-time use recommended (manual cleanup)
+✓ Client must be active and subscription active
+✓ Email uniqueness enforced
+✓ User limit checking
+
+================================================================================
+TESTING
+================================================================================
+
+Test Registration Flow:
+-----------------------
+1. Login as admin: gratasgedraitis@gmail.com / Gratasged123
+2. Go to /admin
+3. Add test client:
+   Name: "Test Vet Clinic"
+   Email: "test@example.com"
+   Plan: "Trial"
+4. Copy registration code (e.g., ABCD-EFGH-IJKL)
+5. Open new incognito window
+6. Go to: http://localhost:5173/register?code=ABCD-EFGH-IJKL
+7. Fill registration form
+8. Create account
+9. Login and test!
+
+================================================================================
+PRICING COMPARISON
+================================================================================
+
+Old Model: Base + Per Animal
+New Model: Flat Monthly Fee
+
+WHY FLAT PRICING?
+-----------------
+✓ Simpler for clients to understand
+✓ Predictable monthly costs
+✓ No surprise bills from animal count changes
+✓ Easier to sell and market
+✓ Better for scaling
+✓ Industry standard for SaaS
+
+TRIAL IS NOW 7 DAYS:
+---------------------
+✓ Short enough to create urgency
+✓ Long enough to test properly
+✓ Auto-expires (no manual intervention)
+✓ Easy upgrade path
+
+================================================================================
+NEXT STEPS
+================================================================================
+
+TODO (Future Enhancements):
+---------------------------
+□ Email notifications when code is generated
+□ Automated welcome emails
+□ Registration code expiration (30 days?)
+□ One-time use codes (mark as used)
+□ Resend code functionality
+□ Bulk client import
+□ Trial expiration reminders
+□ Automatic plan upgrades
+□ Payment integration (Stripe)
+□ Invoice generation
+
+================================================================================
+SUPPORT
+================================================================================
+
+Common Issues:
+--------------
+Q: "Invalid registration code"
+A: Check code is correct, client is active, subscription is active
+
+Q: "Email already registered"
+A: User already exists, use different email or contact support
+
+Q: "Maximum user limit reached"
+A: Client needs to upgrade plan or admin needs to increase max_users
+
+Q: "Trial expired"
+A: Admin needs to upgrade client to paid plan
+
+================================================================================
+END OF REFERENCE
+================================================================================

@@ -1,13 +1,23 @@
 import { useState } from 'react';
 import { useAuth } from '../contexts/AuthContext';
-import { Stethoscope, Mail, Lock, ArrowRight } from 'lucide-react';
+import { Stethoscope, Mail, Lock, ArrowRight, UserPlus } from 'lucide-react';
 
 export function AuthForm() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [showRegisterCodeInput, setShowRegisterCodeInput] = useState(false);
+  const [registrationCode, setRegistrationCode] = useState('');
   const { signIn } = useAuth();
+
+  const handleRegisterClick = () => {
+    if (registrationCode.trim()) {
+      window.location.href = `/register?code=${registrationCode.trim()}`;
+    } else {
+      setShowRegisterCodeInput(true);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -115,6 +125,46 @@ export function AuthForm() {
                 )}
               </button>
             </form>
+
+            {/* Registration Section */}
+            <div className="mt-6 pt-6 border-t border-gray-200">
+              {showRegisterCodeInput ? (
+                <div className="space-y-3">
+                  <input
+                    type="text"
+                    placeholder="Įveskite registracijos kodą (XXXX-XXXX-XXXX)"
+                    value={registrationCode}
+                    onChange={(e) => setRegistrationCode(e.target.value.toUpperCase())}
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-500 text-center font-mono text-lg tracking-wider"
+                    autoFocus
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={() => setShowRegisterCodeInput(false)}
+                      className="flex-1 px-4 py-2 text-gray-600 bg-gray-100 rounded-lg hover:bg-gray-200 transition-colors font-medium"
+                    >
+                      Atšaukti
+                    </button>
+                    <button
+                      onClick={handleRegisterClick}
+                      disabled={!registrationCode.trim()}
+                      className="flex-1 bg-green-600 text-white py-2 rounded-lg font-semibold hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                      Tęsti
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowRegisterCodeInput(true)}
+                  className="w-full bg-gradient-to-r from-green-600 to-emerald-600 text-white py-3 rounded-lg font-semibold hover:from-green-700 hover:to-emerald-700 transition-all flex items-center justify-center gap-2 shadow-sm"
+                >
+                  <UserPlus className="w-5 h-5" />
+                  <span>Registruotis</span>
+                </button>
+              )}
+            </div>
           </div>
 
           <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">

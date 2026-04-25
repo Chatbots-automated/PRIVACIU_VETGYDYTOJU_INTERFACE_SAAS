@@ -1,0 +1,136 @@
+===============================================================================
+QUICK TEST GUIDE - After Deployment
+===============================================================================
+
+## BEFORE TESTING: Run Database Migration
+
+1. Go to Supabase Dashboard SQL Editor
+2. Run: migrations/saas/20260425000006_add_missing_columns.sql
+3. Verify success message
+
+===============================================================================
+
+## Test 1: Fix Verification - Create Farm (Most Important!)
+   
+   Purpose: Verify the is_eco_farm error is fixed
+   
+   Steps:
+   1. Log in as any user (not client_admin)
+   2. Navigate to "Klientų valdymas" (Farms module)
+   3. Click "Pridėti ūkį" (Add Farm)
+   4. Fill in:
+      - Name: "Test Ūkis"
+      - Code: "TEST-001"
+      - Check the "Ekoūkis (karencija x2)" checkbox
+   5. Click "Išsaugoti" (Save)
+   
+   ✅ Expected: Farm saves successfully, no errors
+   ❌ Before: "Could not find the 'is_eco_farm' column" error
+
+===============================================================================
+
+## Test 2: Subscription Profile Viewer
+
+   Purpose: Verify new subscription viewer works
+   
+   Steps:
+   1. Log in as any user
+   2. After selecting a module, go back to module selector
+   3. Look for "Prisijungęs kaip" section at bottom
+   4. Click the blue "Prenumerata" button (with credit card icon)
+   5. Verify modal opens showing:
+      - Organization name and details
+      - Current subscription plan
+      - Usage statistics (farms/users/animals)
+      - List of all available plans
+   6. Click X to close
+   
+   ✅ Expected: Modal displays correctly with all information
+   ❌ Problem: If modal doesn't appear, check console for errors
+
+===============================================================================
+
+## Test 3: Admin Dashboard - Create Client with New Plans
+
+   Purpose: Verify all 5 pricing tiers work
+   
+   Steps:
+   1. Log in as client_admin (gratasgedraitis@gmail.com / Gratasged123)
+   2. Navigate to /admin
+   3. Click "Add New Client"
+   4. Fill in basic info (name, email, etc.)
+   5. In subscription plan section, you should see 5 plans:
+      - Trial (7 Days) - €0
+      - Startas - €19/week
+      - Praktika - €39/week  
+      - Augimas - €69/week
+      - Komanda - €119/week
+   6. Select "Komanda" plan
+   7. Verify max_farms shows 999
+   8. Save client
+   9. Verify registration code is generated
+   
+   ✅ Expected: All 5 plans appear, Komanda saves correctly
+   ❌ Problem: If only 4 plans show, database migration wasn't run
+
+===============================================================================
+
+## Test 4: Check for Similar Errors System-Wide
+
+   Purpose: Ensure no other column errors exist
+   
+   Steps:
+   1. Log in and test creating/editing in each module:
+      - Veterinarija: Create a treatment
+      - Klientai: Create an animal
+      - Vetpraktika: Create a batch/product
+   2. Check browser console for any errors
+   3. Try generating reports
+   
+   ✅ Expected: All operations work without column errors
+   ❌ Problem: If errors appear, note the table/column and report
+
+===============================================================================
+
+## Common Issues & Solutions
+
+Issue: "is_eco_farm" error still appears
+Solution: Migration wasn't run. Go to Supabase SQL Editor and run the migration.
+
+Issue: "komanda" plan not available in dropdown
+Solution: Run migration 20260425000005 to add komanda to enum.
+
+Issue: Subscription profile modal doesn't open
+Solution: Check browser console. May need to clear cache (Ctrl+Shift+R).
+
+Issue: TypeScript/build errors
+Solution: Run `npm install` to ensure dependencies are up to date.
+
+===============================================================================
+
+## Verification Checklist
+
+After running all tests, verify:
+
+[ ] Farm creation works without is_eco_farm error
+[ ] Eco-farm checkbox appears and saves correctly
+[ ] Subscription profile modal opens and displays correctly
+[ ] All 5 pricing plans appear in admin dashboard
+[ ] Komanda plan can be selected and saved
+[ ] Max farms for Komanda shows as 999
+[ ] Usage statistics display correctly in profile modal
+[ ] No console errors during normal operations
+
+===============================================================================
+
+## If Everything Works:
+
+Great! The implementation is complete. Key features now working:
+
+✅ Farm creation with eco-farm support
+✅ New weekly pricing structure (€19/39/69/119 + free trial)
+✅ All plans include all 3 modules + unlimited users
+✅ Subscription profile viewer for users
+✅ 5-tier pricing system (including Komanda for large practices)
+
+===============================================================================

@@ -14,7 +14,7 @@ interface Farm {
   contact_phone?: string;
   contact_email?: string;
   vic_username?: string;
-  vic_password?: string;
+  vic_password_encrypted?: string;
   is_active: boolean;
   is_eco_farm?: boolean;
 }
@@ -26,6 +26,7 @@ export function Farms() {
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
+  const [clientLimits, setClientLimits] = useState<{ max_farms: number; max_users: number } | null>(null);
 
   const emptyFarm: Farm = {
     name: '',
@@ -35,7 +36,7 @@ export function Farms() {
     contact_phone: '',
     contact_email: '',
     vic_username: '',
-    vic_password: '',
+    vic_password_encrypted: '',
     is_active: true,
     is_eco_farm: false,
   };
@@ -44,7 +45,24 @@ export function Farms() {
 
   useEffect(() => {
     loadData();
+    loadClientLimits();
   }, []);
+
+  const loadClientLimits = async () => {
+    try {
+      const clientId = requireClientId(user);
+      const { data, error } = await supabase
+        .from('clients')
+        .select('max_farms, max_users')
+        .eq('id', clientId)
+        .single();
+
+      if (error) throw error;
+      setClientLimits(data);
+    } catch (error) {
+      console.error('Error loading client limits:', error);
+    }
+  };
 
   const loadData = async () => {
     try {
@@ -86,7 +104,7 @@ export function Farms() {
             contact_phone: formData.contact_phone || null,
             contact_email: formData.contact_email || null,
             vic_username: formData.vic_username || null,
-            vic_password: formData.vic_password || null,
+            vic_password_encrypted: formData.vic_password_encrypted || null,
             is_active: formData.is_active,
             is_eco_farm: formData.is_eco_farm || false,
           })
@@ -106,7 +124,7 @@ export function Farms() {
             contact_phone: formData.contact_phone || null,
             contact_email: formData.contact_email || null,
             vic_username: formData.vic_username || null,
-            vic_password: formData.vic_password || null,
+            vic_password_encrypted: formData.vic_password_encrypted || null,
             is_active: formData.is_active,
             is_eco_farm: formData.is_eco_farm || false,
           }]);
@@ -162,21 +180,47 @@ export function Farms() {
     );
   }
 
+  const activeFarms = farms.filter(f => f.is_active).length;
+  const canAddFarm = !clientLimits || activeFarms < clientLimits.max_farms;
+  const isAtLimit = clientLimits && activeFarms >= clientLimits.max_farms;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-gray-900">Klientų Ūkiai</h2>
           <p className="text-gray-600 mt-1">Valdykite veterinarinių paslaugų klientus</p>
+          {clientLimits && (
+            <p className="text-sm text-gray-500 mt-1">
+              Aktyvūs ūkiai: <span className={activeFarms >= clientLimits.max_farms ? 'text-red-600 font-semibold' : 'text-gray-700'}>{activeFarms}</span> / {clientLimits.max_farms}
+            </p>
+          )}
         </div>
         {!showAdd && !editing && (
-          <button
-            onClick={() => setShowAdd(true)}
-            className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          >
-            <Plus className="w-5 h-5" />
-            Pridėti ūkį
-          </button>
+          <>
+            {isAtLimit && (
+              <div className="text-right">
+                <p className="text-sm text-red-600 font-medium mb-2">
+                  Pasiekėte ūkių limitą ({clientLimits?.max_farms})
+                </p>
+                <p className="text-xs text-gray-600">
+                  Atnaujinkite prenumeratą, kad pridėtumėte daugiau ūkių
+                </p>
+              </div>
+            )}
+            <button
+              onClick={() => canAddFarm ? setShowAdd(true) : alert('Pasiekėte maksimalų ūkių skaičių. Atnaujinkite prenumeratą.')}
+              disabled={!canAddFarm}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
+                canAddFarm
+                  ? 'bg-blue-600 text-white hover:bg-blue-700'
+                  : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+              }`}
+            >
+              <Plus className="w-5 h-5" />
+              Pridėti ūkį
+            </button>
+          </>
         )}
       </div>
 
@@ -286,8 +330,8 @@ export function Farms() {
                   </label>
                   <input
                     type="password"
-                    value={formData.vic_password || ''}
-                    onChange={(e) => setFormData({ ...formData, vic_password: e.target.value })}
+                    value={formData.vic_password_encrypted || ''}
+                    onChange={(e) => setFormData({ ...formData, vic_password_encrypted: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     placeholder="VIC password"
                   />

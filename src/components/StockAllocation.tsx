@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { Package, ArrowRight, Building2, CheckCircle, AlertCircle, Search, Filter, FileText } from 'lucide-react';
 import { InvoiceAllocation } from './InvoiceAllocation';
 import { SearchableSelect } from './SearchableSelect';
@@ -140,6 +141,7 @@ export function StockAllocation() {
     setAllocating(true);
 
     try {
+      const clientId = requireClientId(user);
       const selectedFarm = farms.find(f => f.id === allocationForm.farm_id);
       let totalAllocated = 0;
       
@@ -172,6 +174,7 @@ export function StockAllocation() {
             const { data: newFarmProduct, error: productError } = await supabase
               .from('products')
               .insert({
+                client_id: clientId,
                 farm_id: allocationForm.farm_id,
                 name: warehouseProduct.name,
                 category: warehouseProduct.category,
@@ -215,6 +218,7 @@ export function StockAllocation() {
           const { data: allocation, error: allocationError } = await supabase
             .from('farm_stock_allocations')
             .insert({
+              client_id: clientId,
               warehouse_batch_id: batch.warehouse_batch_id,
               farm_id: allocationForm.farm_id,
               product_id: product.product_id,
@@ -232,13 +236,13 @@ export function StockAllocation() {
           const { error: batchError } = await supabase
             .from('batches')
             .insert({
+              client_id: clientId,
               farm_id: allocationForm.farm_id,
               product_id: farmProductId,
               allocation_id: allocation.id,
               lot: batch.lot,
               expiry_date: batch.expiry_date,
-              received_qty: qtyFromThisBatch,
-              qty_left: qtyFromThisBatch,
+              qty_received: qtyFromThisBatch,
               purchase_price: batch.purchase_price,
               currency: batch.currency || 'EUR',
               doc_title: 'Warehouse Allocation',

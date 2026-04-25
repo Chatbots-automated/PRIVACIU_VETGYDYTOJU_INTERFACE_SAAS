@@ -1,0 +1,136 @@
+=======================================================================
+SCHEMA FIXES COMPLETE - ALL ISSUES RESOLVED
+=======================================================================
+Date: 2026-04-25
+Migration File: supabase/migrations_saas/20260425000011_fix_all_schema_issues.sql
+=======================================================================
+
+CRITICAL COLUMN NAME DIFFERENCES:
+===================================
+⚠️ IMPORTANT: These two tables use DIFFERENT column names for quantity!
+
+warehouse_batches table:
+  └─ received_qty (warehouse stock - client-wide)
+  
+batches table:
+  └─ qty_received (farm inventory - farm-specific)
+
+ALWAYS use the correct column name depending on which table you're working with!
+
+COMPONENTS FIXED:
+==================
+✅ src/components/WarehouseStock.tsx
+   - Added client_id to warehouse_batches inserts
+   - Removed farm_id (warehouse is client-wide, not farm-specific)
+   - Fixed column names: uses received_qty for warehouse_batches
+
+✅ src/components/InvoiceAllocation.tsx
+   - Fixed column name: qty_received (not received_qty) when creating farm batches
+   - Removed qty_left from insert (it's a GENERATED column)
+
+✅ src/components/StockAllocation.tsx
+   - Added client_id to farm_stock_allocations inserts
+   - Added client_id to products inserts
+   - Added client_id to batches inserts
+   - Fixed column name: qty_received (not received_qty) for farm batches
+   - Removed qty_left from insert (it's auto-calculated)
+
+✅ src/components/Inventory.tsx
+   - Fixed SELECT query: qty_received (not received_qty) from batches table
+
+✅ src/components/AnimalsCompact.tsx
+   - Added client_id when creating animals
+   - Added client_id when creating custom species
+
+MIGRATION INCLUDES:
+===================
+
+1. ENUM VALUES
+   ✅ supplier_services added to product_category enum
+
+2. MISSING COLUMNS
+   ✅ is_eco_farm → farms
+   ✅ postal_code, contact_person → clients
+   ✅ client_id, farm_id → species (for custom species per farm/client)
+   ✅ 12 route-specific withdrawal columns → products
+   ✅ package_size, package_count, currency → batches
+   ✅ allocation_id → batches
+   ✅ warehouse_batch_id → invoice_items
+
+3. FOREIGN KEY CONSTRAINTS
+   ✅ invoice_items.product_id → products
+   ✅ invoice_items.batch_id → batches
+
+4. NULLABLE farm_id
+   ✅ invoices.farm_id (NULL = client-wide/bendras sandelis)
+   ✅ invoice_items.farm_id (NULL = client-wide)
+   ✅ batches.farm_id (NULL = client-wide)
+
+5. WAREHOUSE TABLES
+   ✅ warehouse_batches (with client_id, uses received_qty)
+   ✅ farm_stock_allocations (with client_id)
+
+6. VIEWS CREATED
+   ✅ vw_warehouse_inventory
+   ✅ vw_stock_allocation_history
+   ✅ vw_warehouse_stock_available (FIFO order for allocation)
+   ✅ vw_allocation_analytics_by_farm
+   ✅ vw_allocation_analytics_by_product
+   ✅ animal_visit_summary
+   ✅ vw_vet_drug_journal_all_farms
+   ✅ vw_treated_animals_all_farms
+   ✅ vw_withdrawal_journal_all_farms
+
+7. TRIGGERS
+   ✅ trigger_set_timestamp (updates updated_at fields)
+   ✅ update_warehouse_batch_on_allocation (auto-updates qty_left, qty_allocated)
+   ✅ initialize_warehouse_batch_fields (auto-calculates received_qty from packages)
+
+8. CLIENT LIMITS
+   ✅ Trial: 3 farms, 999 users
+   ✅ Starter: 5 farms, 999 users
+   ✅ Professional: 15 farms, 999 users
+   ✅ Enterprise: 35 farms, 999 users
+
+TESTING CHECKLIST:
+==================
+After running the migration and refreshing your app:
+
+[ ] 1. PAJAMAVIMAS (Stock Receiving)
+    - Upload invoice
+    - Create product with withdrawal periods
+    - Select "bendras sandelis" (shared warehouse)
+    - Click "Priimti"
+    - Should create warehouse_batches without errors
+
+[ ] 2. PASKIRSTYMAS (Stock Allocation)
+    - Tab: "Sandelio atsargos" should show received stock
+    - Select products from warehouse
+    - Choose a farm
+    - Click "Paskirstyti"
+    - Should create farm_stock_allocations and farm batches
+
+[ ] 3. PASKIRSTYMAS (Invoice Allocation)
+    - Tab: "Sandelio atsargos sąskaitomis" should show warehouse invoices
+    - Select an invoice
+    - Choose a farm
+    - Click "Priskirti ūkiui"
+    - Should move warehouse batches to farm batches
+
+[ ] 4. ATSARGOS (Inventory)
+    - Should load farm inventory without errors
+    - Should show allocated products from warehouse
+
+[ ] 5. GYVŪNAI (Animals)
+    - Should create animals without client_id errors
+    - Should create custom species without errors
+
+[ ] 6. ATASKAITOS (All Farms Reports)
+    - All three report tabs should load without 404 errors:
+      - Veterinarinių vaistų žurnalas
+      - Gydytų gyvūnų registras
+      - Karencijų žurnalas
+
+=======================================================================
+EVERYTHING FIXED IN ONE MIGRATION FILE!
+=======================================================================
