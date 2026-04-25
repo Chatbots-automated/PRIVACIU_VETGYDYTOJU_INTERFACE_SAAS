@@ -6,6 +6,7 @@ import { Syringe, Plus, Trash2, Check, Search } from 'lucide-react';
 import { formatDateLT, getDaysUntil } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 
 interface UsageLine {
   id: string;
@@ -66,14 +67,16 @@ export function Treatment() {
   const loadData = async () => {
     if (!selectedFarm) return;
 
+    const clientId = requireClientId(user);
+
     const [animalsRes, diseasesRes, productsRes, batchesRes] = await Promise.all([
-      supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
-      supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id).order('name'),
-      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
+      supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('tag_no'),
+      supabase.from('diseases').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).order('name'),
+      supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true),
       supabase.from('stock_by_batch').select(`
         *,
         products!inner(name)
-      `).eq('farm_id', selectedFarm.id).gt('on_hand', 0),
+      `).eq('client_id', clientId).eq('farm_id', selectedFarm.id).gt('on_hand', 0),
     ]);
 
     if (animalsRes.data) setAnimals(animalsRes.data);
@@ -129,9 +132,12 @@ export function Treatment() {
     }
 
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('diseases')
         .insert({
+          client_id: clientId,
           farm_id: selectedFarm.id,
           name: newDiseaseName.trim()
         })
@@ -241,9 +247,12 @@ export function Treatment() {
     console.log('✅ Validation passed, inserting treatment...');
     alert('DEBUG: Validation passed, creating treatment in database...');
     try {
+      const clientId = requireClientId(user);
+      
       const { data: treatment, error: treatmentError } = await supabase
         .from('treatments')
         .insert({
+          client_id: clientId,
           farm_id: selectedFarm.id,
           reg_date: formData.reg_date,
           animal_id: formData.animal_id || null,
@@ -300,12 +309,15 @@ export function Treatment() {
       const usageInserts = usageItems
         .filter(item => item.product_id && item.batch_id && item.qty)
         .map(item => ({
+          client_id: clientId,
+          farm_id: selectedFarm.id,
           treatment_id: treatment.id,
+          animal_id: formData.animal_id || null,
           product_id: item.product_id,
           batch_id: item.batch_id,
-          qty: parseFloat(item.qty),
+          quantity: parseFloat(item.qty),
           unit: item.unit,
-          purpose: item.purpose,
+          used_date: formData.reg_date,
         }));
 
       if (usageInserts.length > 0) {

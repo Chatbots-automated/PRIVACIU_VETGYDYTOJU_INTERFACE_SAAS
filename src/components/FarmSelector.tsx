@@ -71,7 +71,7 @@ export function FarmSelector({ onFarmSelected, onBack }: FarmSelectorProps) {
             Pasirinkite Ūkį
           </h1>
           <p className="text-xl text-gray-600">
-            VET Praktika, UAB - Veterinarijos modulis
+            Veterinarijos modulis
           </p>
         </div>
 

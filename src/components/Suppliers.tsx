@@ -3,12 +3,13 @@ import { supabase } from '../lib/supabase';
 import { Supplier } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Edit2, Save, X, Building2 } from 'lucide-react';
 import { showNotification } from './NotificationToast';
 
 export function Suppliers() {
-  const { logAction } = useAuth();
+  const { user, logAction } = useAuth();
   const { selectedFarm } = useFarm();
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [loading, setLoading] = useState(true);
@@ -52,10 +53,13 @@ export function Suppliers() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('suppliers')
         .select('*')
-        .eq('farm_id', selectedFarm.id)
+        .eq('client_id', clientId)
+        .or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`)
         .order('name');
 
       if (error) throw error;
@@ -74,7 +78,10 @@ export function Suppliers() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const supplierData = {
+        client_id: clientId,
         farm_id: selectedFarm.id,
         name: formData.name,
         code: formData.code || null,

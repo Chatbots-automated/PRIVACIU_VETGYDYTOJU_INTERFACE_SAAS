@@ -1,5 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { supabase } from '../lib/supabase';
+import { useAuth } from './AuthContext';
+import { getClientId } from '../lib/clientHelpers';
 
 interface Farm {
   id: string;
@@ -26,6 +28,7 @@ interface FarmContextType {
 const FarmContext = createContext<FarmContextType | undefined>(undefined);
 
 export function FarmProvider({ children }: { children: ReactNode }) {
+  const { user } = useAuth();
   const [selectedFarm, setSelectedFarmState] = useState<Farm | null>(null);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -44,9 +47,18 @@ export function FarmProvider({ children }: { children: ReactNode }) {
 
   const loadFarms = async () => {
     try {
+      const clientId = getClientId(user);
+      if (!clientId) {
+        console.warn('FarmContext: No client_id available yet');
+        setFarms([]);
+        setLoading(false);
+        return;
+      }
+      
       const { data, error } = await supabase
         .from('farms')
         .select('*')
+        .eq('client_id', clientId)
         .eq('is_active', true)
         .order('name');
 
@@ -68,8 +80,10 @@ export function FarmProvider({ children }: { children: ReactNode }) {
   };
 
   useEffect(() => {
-    loadFarms();
-  }, []);
+    if (user) {
+      loadFarms();
+    }
+  }, [user]);
 
   useEffect(() => {
     if (selectedFarm) {

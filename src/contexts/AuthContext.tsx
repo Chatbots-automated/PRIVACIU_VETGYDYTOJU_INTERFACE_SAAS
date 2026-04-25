@@ -1,7 +1,7 @@
 import { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 
-export type UserRole = 'admin' | 'vet' | 'tech' | 'viewer' | 'farm_worker' | 'warehouse_worker' | 'custom';
+export type UserRole = 'client_admin' | 'admin' | 'vet' | 'tech' | 'viewer' | 'secretary' | 'farm_worker' | 'warehouse_worker' | 'custom';
 
 export interface ModulePermission {
   module_name: string;
@@ -16,6 +16,9 @@ export interface User {
   email: string;
   role: UserRole;
   full_name: string;
+  client_id: string; // NEW: Organization/client ID
+  default_farm_id: string | null; // NEW: User's default farm
+  can_access_all_farms: boolean; // NEW: Can access all farms in client
   is_frozen: boolean;
   frozen_at: string | null;
   frozen_by: string | null;
@@ -34,10 +37,13 @@ interface AuthContextType {
   hasPermission: (action: string) => boolean;
   hasModulePermission: (moduleName: string, permissionType?: 'view' | 'edit' | 'delete' | 'create') => boolean;
   logAction: (action: string, tableName?: string, recordId?: string, oldData?: any, newData?: any) => Promise<void>;
+  clientId: string | null; // NEW: Current user's client ID
+  isClientAdmin: boolean; // NEW: Is client admin role
   isAdmin: boolean;
   isVet: boolean;
   isTech: boolean;
   isViewer: boolean;
+  isSecretary: boolean; // NEW: Secretary role
   isFarmWorker: boolean;
   isWarehouseWorker: boolean;
   isWorker: boolean;
@@ -226,8 +232,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
     const role = user.role;
 
-    // Admin always has all permissions
-    if (role === 'admin') return true;
+    // Client admin and admin always have all permissions
+    if (role === 'client_admin' || role === 'admin') return true;
 
     // For custom role, check module_permissions
     if (role === 'custom') {
@@ -280,10 +286,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     return false;
   };
 
-  const isAdmin = user?.role === 'admin';
+  const clientId = user?.client_id || null;
+  const isClientAdmin = user?.role === 'client_admin';
+  const isAdmin = user?.role === 'admin' || user?.role === 'client_admin';
   const isVet = user?.role === 'vet';
   const isTech = user?.role === 'tech';
   const isViewer = user?.role === 'viewer';
+  const isSecretary = user?.role === 'secretary';
   const isFarmWorker = user?.role === 'farm_worker';
   const isWarehouseWorker = user?.role === 'warehouse_worker';
   const isWorker = isFarmWorker || isWarehouseWorker;
@@ -299,10 +308,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       hasPermission,
       hasModulePermission,
       logAction,
+      clientId,
+      isClientAdmin,
       isAdmin,
       isVet,
       isTech,
       isViewer,
+      isSecretary,
       isFarmWorker,
       isWarehouseWorker,
       isWorker,

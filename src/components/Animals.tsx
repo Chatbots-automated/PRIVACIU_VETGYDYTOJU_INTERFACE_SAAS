@@ -4,6 +4,7 @@ import { Animal, Product, Disease } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
 import { fetchAllRows, formatAnimalDisplay } from '../lib/helpers';
+import { requireClientId } from '../lib/clientHelpers';
 import { Plus, Edit2, Save, X, Stethoscope, Search, Syringe, Activity, FileText, Calendar, AlertCircle, User, MapPin, RefreshCw, ExternalLink, Trash2 } from 'lucide-react';
 
 interface AnimalDetail extends Animal {
@@ -14,7 +15,7 @@ interface AnimalDetail extends Animal {
 }
 
 export function Animals() {
-  const { logAction } = useAuth();
+  const { user, logAction } = useAuth();
   const { selectedFarm } = useFarm();
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [selectedAnimal, setSelectedAnimal] = useState<AnimalDetail | null>(null);
@@ -78,11 +79,13 @@ export function Animals() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const [animalsRes, productsRes, diseasesRes, speciesRes] = await Promise.all([
-        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
-        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true),
-        supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id),
-        supabase.from('species').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name_lt'),
+        supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true),
+        supabase.from('diseases').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`),
+        supabase.from('species').select('*').eq('is_active', true).order('name_lt'),
       ]);
 
       setAnimals(animalsRes.data || []);
@@ -157,7 +160,6 @@ export function Animals() {
       const { data, error } = await supabase
         .from('species')
         .insert({
-          farm_id: selectedFarm.id,
           code: generatedCode,
           name_lt: newSpeciesForm.name_lt.trim(),
           is_active: true,
@@ -236,7 +238,10 @@ export function Animals() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const animalData = {
+        client_id: clientId,
         farm_id: selectedFarm.id,
         tag_no: formData.tag_no || null,
         species: formData.species,

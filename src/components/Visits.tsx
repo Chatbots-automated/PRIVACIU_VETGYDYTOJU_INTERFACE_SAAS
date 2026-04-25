@@ -4,6 +4,7 @@ import { fetchAllRows } from '../lib/helpers';
 import { Animal } from '../lib/types';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { Calendar, Plus, Edit2, Save, X, Check, XCircle, Clock, Search, AlertCircle } from 'lucide-react';
 import { SearchableSelect } from './SearchableSelect';
 
@@ -68,9 +69,11 @@ export function Visits() {
     try {
       if (!selectedFarm) return;
 
+      const clientId = requireClientId(user);
+      
       const [visitsRes, animalsRes] = await Promise.all([
-        supabase.from('animal_visits').select('*').eq('farm_id', selectedFarm.id).order('visit_date', { ascending: false }),
-        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+        supabase.from('animal_visits').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('visit_date', { ascending: false }),
+        supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('tag_no'),
       ]);
 
       const animalsData = animalsRes.data || [];
@@ -95,7 +98,11 @@ export function Visits() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const visitData = {
+        client_id: clientId,
+        farm_id: selectedFarm.id,
         animal_id: formData.animal_id,
         visit_date: formData.visit_date,
         visit_type: formData.visit_type,

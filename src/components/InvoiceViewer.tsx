@@ -136,7 +136,7 @@ export function InvoiceViewer({ showAllInvoices = false }: InvoiceViewerProps) {
       }
 
       const confirmed = confirm(
-        `Ar tikrai norite grąžinti sąskaitą #${invoice.invoice_number} į Vetpraktika sandėlį?\n\n` +
+        `Ar tikrai norite grąžinti sąskaitą #${invoice.invoice_number} į bendrą sandėlį?\n\n` +
         `Visi produktai bus perkelti iš ūkio "${invoice.farm?.name}" atgal į bendrą sandėlį.`
       );
 

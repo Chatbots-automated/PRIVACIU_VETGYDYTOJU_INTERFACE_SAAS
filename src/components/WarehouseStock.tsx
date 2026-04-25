@@ -4,6 +4,7 @@ import { Product, Supplier } from '../lib/types';
 import { normalizeNumberInput } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle, ChevronLeft, ChevronRight, ChevronDown, ChevronUp, Package, Building2 } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
@@ -125,9 +126,11 @@ export function WarehouseStock() {
 
   const loadData = async () => {
     // Load warehouse-level products only (farm_id IS NULL) and suppliers
+    const clientId = requireClientId(user);
+    
     const [productsRes, suppliersRes] = await Promise.all([
-      supabase.from('products').select('*').is('farm_id', null).eq('is_active', true).order('name'),
-      supabase.from('suppliers').select('*').order('name'),
+      supabase.from('products').select('*').eq('client_id', clientId).is('farm_id', null).eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('*').eq('client_id', clientId).order('name'),
     ]);
 
     if (productsRes.data) setProducts(productsRes.data);
@@ -136,9 +139,12 @@ export function WarehouseStock() {
 
   const loadWarehouseInvoices = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('invoices')
         .select('*')
+        .eq('client_id', clientId)
         .is('farm_id', null)
         .order('invoice_date', { ascending: false })
         .limit(20);
@@ -471,8 +477,10 @@ export function WarehouseStock() {
     }
 
     try {
+      const clientId = requireClientId(user);
 
       const productData = {
+        client_id: clientId,
         farm_id: null,
         name: newProductForm.name,
         category: newProductForm.category,
@@ -594,9 +602,12 @@ export function WarehouseStock() {
         if (existingSupplier) {
           supplierId = existingSupplier.id;
         } else {
+          const clientId = requireClientId(user);
+          
           const { data: newSupplier, error: supplierError } = await supabase
             .from('suppliers')
             .insert({
+              client_id: clientId,
               farm_id: null,
               name: invoiceData.supplier.name,
               code: invoiceData.supplier.code || null,
@@ -611,9 +622,12 @@ export function WarehouseStock() {
       }
 
       // First, create the invoice record
+      const clientId = requireClientId(user);
+      
       const { data: invoice, error: invoiceError } = await supabase
         .from('invoices')
         .insert({
+          client_id: clientId,
           farm_id: assignToFarmId, // null for warehouse, or specific farm_id
           invoice_number: invoiceData.invoice.number,
           invoice_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
@@ -663,6 +677,8 @@ export function WarehouseStock() {
         // Skip batch creation for supplier_services category (no stock tracking)
         if (matched.category !== 'supplier_services') {
           stockEntries.push({
+            client_id: clientId,
+            farm_id: assignToFarmId,
             product_id: matched.id,
             invoice_id: invoice.id,
             lot: itemData.batch || bulkReceiveData.lot || null,
@@ -673,10 +689,9 @@ export function WarehouseStock() {
             doc_number: invoiceData.invoice.number,
             doc_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
             purchase_price: totalPrice,
-            currency: invoiceData.invoice.currency || 'EUR',
-            package_size: packageSize,
-            package_count: packageCount,
-            received_qty: packageSize && packageCount ? packageSize * packageCount : qty,
+            unit_price: unitPrice,
+            qty_received: packageSize && packageCount ? packageSize * packageCount : qty,
+            received_date: invoiceData.invoice.date || new Date().toISOString().split('T')[0],
           });
         }
 
@@ -687,7 +702,8 @@ export function WarehouseStock() {
             : null;
 
         invoiceItemsEntries.push({
-          farm_id: null,
+          client_id: clientId,
+          farm_id: assignToFarmId,
           invoice_id: invoice.id,
           product_id: matched.id,
           line_no: itemData.line_no,
@@ -1038,7 +1054,7 @@ export function WarehouseStock() {
           </div>
           <div>
             <h2 className="text-xl font-bold text-gray-900">Sandėlio pajamavimas</h2>
-            <p className="text-sm text-gray-600">Pridėti produktus į bendrą Vetpraktika UAB sandėlį</p>
+            <p className="text-sm text-gray-600">Pridėti produktus į bendrą sandėlį</p>
           </div>
         </div>
 
@@ -1661,7 +1677,7 @@ export function WarehouseStock() {
                   onChange={(e) => setAssignToFarmId(e.target.value || null)}
                   className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
                 >
-                  <option value="">🏢 Bendras sandėlis (Vetpraktika)</option>
+                  <option value="">🏢 Bendras sandėlis</option>
                   {farms.filter(f => f.is_active).map(farm => (
                     <option key={farm.id} value={farm.id}>
                       🏠 {farm.name} ({farm.code})

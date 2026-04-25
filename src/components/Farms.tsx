@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { Plus, Edit2, Save, X, Building2, Phone, Mail, MapPin, Hash, CheckCircle, XCircle } from 'lucide-react';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 
 interface Farm {
   id?: string;
@@ -18,6 +20,7 @@ interface Farm {
 }
 
 export function Farms() {
+  const { user } = useAuth();
   const { loadFarms } = useFarm();
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -45,9 +48,12 @@ export function Farms() {
 
   const loadData = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('farms')
         .select('*')
+        .eq('client_id', clientId)
         .order('name');
 
       if (error) throw error;
@@ -67,6 +73,8 @@ export function Farms() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       if (editing) {
         const { error } = await supabase
           .from('farms')
@@ -90,6 +98,7 @@ export function Farms() {
         const { error } = await supabase
           .from('farms')
           .insert([{
+            client_id: clientId,
             name: formData.name,
             code: formData.code,
             address: formData.address || null,

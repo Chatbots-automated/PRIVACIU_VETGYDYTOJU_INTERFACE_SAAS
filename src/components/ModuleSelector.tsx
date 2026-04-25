@@ -21,10 +21,10 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
       <div className="w-full max-w-6xl">
         <div className="text-center mb-12">
           <h1 className="text-4xl lg:text-5xl font-bold text-white mb-3">
-            VET Praktika, UAB
+            Veterinarinė apskaita
           </h1>
           <p className="text-blue-200 text-base mb-2">
-            Veterinarijos valdymo sistema
+            Valdymo sistema
           </p>
           <p className="text-blue-300 text-sm mt-4">
             Pasirinkite modulį
@@ -163,7 +163,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
                 <Warehouse className="w-12 h-12 text-slate-700" />
               </div>
               <h2 className="text-3xl font-bold text-white mb-2">
-                Vetpraktika UAB
+                Veterinarinė apskaitos sistema
               </h2>
               <p className="text-base text-gray-300">
                 Bendras sandėlis

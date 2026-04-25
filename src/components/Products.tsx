@@ -4,17 +4,18 @@ import { Product, ProductCategory, Unit } from '../lib/types';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Edit2, Save, X, Pill, AlertTriangle } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
 import { showNotification } from './NotificationToast';
 
 interface ProductsProps {
-  showAllFarms?: boolean; // When true, shows all products from all farms (Vetpraktika module)
+  showAllFarms?: boolean; // When true, shows all products from all farms
 }
 
 export function Products({ showAllFarms = false }: ProductsProps = {}) {
-  const { logAction } = useAuth();
+  const { user, logAction } = useAuth();
   const { selectedFarm: contextFarm } = useFarm();
   const selectedFarm = showAllFarms ? null : contextFarm;
   const [products, setProducts] = useState<Product[]>([]);
@@ -75,10 +76,13 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
       
       if (selectedFarm) {
         // Load products that belong to this farm
+        const clientId = requireClientId(user);
+        
         const { data: farmProducts, error: farmError } = await supabase
           .from('products')
           .select('*, farm:farms(name, code)')
-          .eq('farm_id', selectedFarm.id);
+          .eq('client_id', clientId)
+          .or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`);
         
         if (farmError) throw farmError;
         
@@ -99,6 +103,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
             const { data: additionalProducts, error: additionalError } = await supabase
               .from('products')
               .select('*, farm:farms(name, code)')
+              .eq('client_id', clientId)
               .in('id', additionalProductIds);
             
             if (!additionalError && additionalProducts) {
@@ -113,11 +118,13 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
           finalData = farmProducts || [];
         }
       } else {
-        // In Vetpraktika module, load all products
+        // Load all products
+        const clientId = requireClientId(user);
+        
         const { data, error } = await supabase
           .from('products')
           .select('*, farm:farms(name, code)')
-          .not('farm_id', 'is', null);
+          .eq('client_id', clientId);
         
         if (error) throw error;
         
@@ -154,7 +161,10 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       const productData = {
+        client_id: clientId,
         farm_id: farmId,
         name: formData.name,
         category: formData.category,

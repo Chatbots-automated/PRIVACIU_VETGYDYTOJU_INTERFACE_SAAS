@@ -84,7 +84,7 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
                 </div>
               </div>
               <div>
-                <h1 className="font-bold text-base xl:text-xl text-white">Vetpraktika UAB</h1>
+                <h1 className="font-bold text-base xl:text-xl text-white">Veterinarinė apskaitos sistema</h1>
                 <p className="text-xs text-gray-300 xl:mt-1">Sandėlio Valdymas</p>
               </div>
             </div>
@@ -125,7 +125,7 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
               <span className="truncate">Modulių pasirinkimas</span>
             </button>
             <div className="text-xs text-gray-400 text-center pt-3">
-              <p>Vetpraktika UAB v1.0.0</p>
+              <p>Veterinarinė apskaitos sistema v1.0.0</p>
             </div>
           </div>
         </div>
@@ -146,7 +146,7 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
                   <h2 className="text-lg xl:text-2xl font-bold text-gray-900">
                     {menuItems.find(item => item.id === currentView)?.label || 'Sandėlis'}
                   </h2>
-                  <p className="text-xs xl:text-sm text-gray-600 mt-0.5 hidden xl:block">Vetpraktika UAB</p>
+                  <p className="text-xs xl:text-sm text-gray-600 mt-0.5 hidden xl:block">Veterinarinė apskaitos sistema</p>
                 </div>
               </div>
 
@@ -197,7 +197,7 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div className="flex items-center gap-2">
                 <Warehouse className="w-5 h-5 text-gray-700" />
-                <span>© 2025 Vetpraktika UAB. Visos teisės saugomos.</span>
+                <span>© 2025 Veterinarinė apskaitos sistema. Visos teisės saugomos.</span>
               </div>
               <div className="text-xs text-gray-500">
                 Sandėlio Valdymo Sistema · Versija 1.0.0

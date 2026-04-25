@@ -29,7 +29,7 @@ export function AuthForm() {
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
           <div className="bg-blue-600 px-8 py-10 text-center">
             <h1 className="text-3xl font-bold text-white mb-4">
-              VET Praktika, UAB
+              Veterinarinė apskaita
             </h1>
             <p className="text-blue-100">
               Veterinarijos Valdymo Sistema
@@ -126,7 +126,7 @@ export function AuthForm() {
         </div>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          <p>© 2026 VET Praktika, UAB · Veterinarijos Valdymo Sistema v1.0.0</p>
+          <p>© 2026 Veterinarinė apskaitos sistema v1.0.0</p>
         </div>
       </div>
     </div>

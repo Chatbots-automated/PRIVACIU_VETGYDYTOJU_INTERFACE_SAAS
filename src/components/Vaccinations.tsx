@@ -5,6 +5,7 @@ import { Product, Animal, Batch, Unit } from '../lib/types';
 import { Syringe, Check, Search, CheckSquare, Square, Calendar, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { showNotification } from './NotificationToast';
 
@@ -85,11 +86,13 @@ export function Vaccinations() {
     try {
       if (!selectedFarm) return;
 
+      const clientId = requireClientId(user);
+      
       const [vacsRes, prodsRes, animalsRes, batchesRes] = await Promise.all([
-        supabase.from('vaccinations').select('*').eq('farm_id', selectedFarm.id).order('vaccination_date', { ascending: false }),
-        supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).in('category', ['prevention', 'vakcina']).order('name'),
-        supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).eq('active', true).order('tag_no'),
-        supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date', { ascending: false }),
+        supabase.from('vaccinations').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('vaccination_date', { ascending: false }),
+        supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true).in('category', ['prevention', 'vakcina']).order('name'),
+        supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).eq('active', true).order('tag_no'),
+        supabase.from('batches').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('expiry_date', { ascending: false }),
       ]);
 
       setVaccinations(vacsRes.data || []);
@@ -182,8 +185,11 @@ export function Vaccinations() {
         return;
       }
 
+      const clientId = requireClientId(user);
+      
       for (const vaccine of validVaccines) {
         const vaccinationEntries = Array.from(selectedAnimals).map(animalId => ({
+          client_id: clientId,
           farm_id: selectedFarm.id,
           animal_id: animalId,
           product_id: vaccine.product_id,
@@ -231,6 +237,8 @@ export function Vaccinations() {
         }).join(', ');
 
         const futureVisits = Array.from(selectedAnimals).map(animalId => ({
+          client_id: clientId,
+          farm_id: selectedFarm.id,
           animal_id: animalId,
           visit_datetime: `${massVaccinationData.next_booster_date}T10:00:00`,
           procedures: ['Vakcina'],

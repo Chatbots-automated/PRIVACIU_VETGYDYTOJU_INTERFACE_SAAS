@@ -111,8 +111,8 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
             </div>
             <div className="flex items-center gap-3 xl:gap-4">
               <div>
-                <h1 className="font-bold text-base xl:text-xl text-white">VET Praktika, UAB</h1>
-                <p className="text-xs text-gray-400 xl:mt-1">Veterinarija Sistema</p>
+                <h1 className="font-bold text-base xl:text-xl text-white">Veterinarinė apskaita</h1>
+                <p className="text-xs text-gray-400 xl:mt-1">Valdymo sistema</p>
               </div>
             </div>
           </div>
@@ -260,7 +260,7 @@ export function Layout({ children, currentView, onNavigate, onBackToModules }: L
           <div className="px-4 sm:px-6 lg:px-8 py-4">
             <div className="flex items-center justify-between text-sm text-gray-600">
               <div className="flex items-center gap-2">
-                <span>© 2025 VET Praktika, UAB. Visos teisės saugomos.</span>
+                <span>© 2025 Veterinarinė apskaitos sistema. Visos teisės saugomos.</span>
               </div>
               <div className="text-xs text-gray-500">
                 Veterinarijos Valdymo Sistema · Versija 1.0.0

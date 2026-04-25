@@ -3,6 +3,7 @@ import { Users, UserPlus, Trash2, Edit2, Shield, Eye, Stethoscope, Wrench, Mail,
 import { supabase } from '../lib/supabase';
 import { useAuth, UserRole, User } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { formatDateLT } from '../lib/formatters';
 
 export function UserManagement() {
@@ -57,9 +58,12 @@ export function UserManagement() {
   const fetchUsers = async () => {
     setLoading(true);
     try {
+      const clientId = requireClientId(currentUser);
+      
       const { data, error: fetchError } = await supabase
         .from('users')
         .select('*')
+        .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
       if (fetchError) throw fetchError;
@@ -268,9 +272,12 @@ export function UserManagement() {
         .eq('user_id', permissionsUserId);
 
       // Insert only permissions that have at least one permission enabled
+      const clientId = requireClientId(currentUser);
+      
       const permissionsToInsert = modulePermissions
         .filter(p => p.can_view || p.can_edit || p.can_delete || p.can_create)
         .map(p => ({
+          client_id: clientId,
           user_id: permissionsUserId,
           module_name: p.module_name,
           can_view: p.can_view,

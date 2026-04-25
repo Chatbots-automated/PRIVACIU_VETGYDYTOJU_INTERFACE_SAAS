@@ -725,7 +725,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           <div className="text-center py-12">
             <Package className="w-16 h-16 text-gray-400 mx-auto mb-4" />
             <p className="text-lg text-gray-600">Nėra paskirstytų atsargų</p>
-            <p className="text-sm text-gray-500 mt-2">Paskirstykite produktus iš Vetpraktika UAB sandėlio</p>
+            <p className="text-sm text-gray-500 mt-2">Paskirstykite produktus iš bendro sandėlio</p>
           </div>
         ) : isDetailedView ? (
           <div className="overflow-x-auto">
