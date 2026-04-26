@@ -9,21 +9,57 @@
   VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsZmptZmZid3JtYmx2bHNic256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTY1ODMsImV4cCI6MjA5MjYzMjU4M30.9qKqv0WwRON_b3FyaZOVVYMSS-HAGdIzTtSygsT8PEI"
   VITE_SUPABASE_SERVICE_ROLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsZmptZmZid3JtYmx2bHNic256Iiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImlhdCI6MTc3NzA1NjU4MywiZXhwIjoyMDkyNjMyNTgzfQ.pyqvmVayt0rkYwXWYy6tqGvgvirfWaPOBAoQlhmRTxM"
 
+# Build plugins for optimization
+[[plugins]]
+  package = "@netlify/plugin-lighthouse"
+
+# Optimize images and assets
+[build.processing]
+  skip_processing = false
+[build.processing.css]
+  bundle = true
+  minify = true
+[build.processing.js]
+  bundle = true
+  minify = true
+[build.processing.html]
+  pretty_urls = true
+[build.processing.images]
+  compress = true
+
 # Redirect rules for SPA
 [[redirects]]
   from = "/*"
   to = "/index.html"
   status = 200
 
-# Headers for security
+# Security headers
 [[headers]]
   for = "/*"
   [headers.values]
+    # Security
     X-Frame-Options = "DENY"
     X-Content-Type-Options = "nosniff"
     X-XSS-Protection = "1; mode=block"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Permissions-Policy = "camera=(), microphone=(), geolocation=()"
+    
+    # Permissions Policy
+    Permissions-Policy = "camera=(), microphone=(), geolocation=(), interest-cohort=()"
+    
+    # Content Security Policy
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://vlfjmffbwrmblvlsbsnz.supabase.co https://*.supabase.co; frame-ancestors 'none'; base-uri 'self'; form-action 'self'"
+    
+    # Strict Transport Security (HTTPS only)
+    Strict-Transport-Security = "max-age=63072000; includeSubDomains; preload"
+    
+    # Prevent MIME sniffing
+    X-Download-Options = "noopen"
+    
+    # DNS Prefetch Control
+    X-DNS-Prefetch-Control = "on"
+    
+    # Feature Policy
+    Feature-Policy = "geolocation 'none'; midi 'none'; camera 'none'; usb 'none'; magnetometer 'none'; accelerometer 'none'; vr 'none'; speaker 'none'; ambient-light-sensor 'none'; gyroscope 'none'; microphone 'none'"
 
 # Cache static assets
 [[headers]]
@@ -42,3 +78,23 @@
   for = "/index.html"
   [headers.values]
     Cache-Control = "no-cache, no-store, must-revalidate"
+    
+# Preload critical resources
+[[headers]]
+  for = "/assets/*.js"
+  [headers.values]
+    Link = "</assets/*.js>; rel=preload; as=script"
+    
+# Service Worker headers
+[[headers]]
+  for = "/sw.js"
+  [headers.values]
+    Cache-Control = "no-cache, no-store, must-revalidate"
+    Service-Worker-Allowed = "/"
+
+# API response headers
+[[headers]]
+  for = "/api/*"
+  [headers.values]
+    Cache-Control = "no-store, no-cache, must-revalidate, proxy-revalidate"
+    X-Content-Type-Options = "nosniff"

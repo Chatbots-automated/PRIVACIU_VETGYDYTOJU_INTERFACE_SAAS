@@ -1,0 +1,79 @@
+{
+  "name": "Veterinarijos valdymo sistema",
+  "short_name": "Veterinarija",
+  "description": "Profesionali veterinarijos valdymo sistema gyvūnų gydymo apskaitai, sandėlio valdymui ir finansų kontrolei.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#2563eb",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "lt-LT",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "/vite.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": [
+    "business",
+    "productivity",
+    "medical"
+  ],
+  "screenshots": [],
+  "shortcuts": [
+    {
+      "name": "Greitoji paskyra",
+      "short_name": "Dashboard",
+      "description": "Atidaryti greitąją paskyrą",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "/vite.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Gyvūnai",
+      "short_name": "Gyvūnai",
+      "description": "Peržiūrėti gyvūnų sąrašą",
+      "url": "/animals",
+      "icons": [
+        {
+          "src": "/vite.svg",
+          "sizes": "any"
+        }
+      ]
+    },
+    {
+      "name": "Ūkiai",
+      "short_name": "Ūkiai",
+      "description": "Valdyti ūkius",
+      "url": "/farms",
+      "icons": [
+        {
+          "src": "/vite.svg",
+          "sizes": "any"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false
+}

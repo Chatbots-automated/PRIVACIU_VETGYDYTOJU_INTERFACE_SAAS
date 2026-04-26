@@ -1,0 +1,58 @@
+# Additional headers for specific files
+# This file supplements netlify.toml headers
+
+/*.html
+  X-UA-Compatible: IE=edge
+  Cache-Control: no-cache
+
+/*.js
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.css
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.woff
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.ttf
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.eot
+  Cache-Control: public, max-age=31536000, immutable
+  Access-Control-Allow-Origin: *
+
+/*.svg
+  Cache-Control: public, max-age=604800
+
+/*.jpg
+  Cache-Control: public, max-age=604800
+
+/*.jpeg
+  Cache-Control: public, max-age=604800
+
+/*.png
+  Cache-Control: public, max-age=604800
+
+/*.webp
+  Cache-Control: public, max-age=604800
+
+/*.gif
+  Cache-Control: public, max-age=604800
+
+/manifest.json
+  Content-Type: application/manifest+json
+  Cache-Control: public, max-age=604800
+
+/robots.txt
+  Content-Type: text/plain
+  Cache-Control: public, max-age=3600
+
+/sitemap.xml
+  Content-Type: application/xml
+  Cache-Control: public, max-age=3600

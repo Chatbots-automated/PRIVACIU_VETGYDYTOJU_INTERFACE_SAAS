@@ -1,4 +1,17 @@
-# Netlify redirects for SPA routing
-# This ensures all routes are handled by the React app
+# Netlify Redirects
+# https://docs.netlify.com/routing/redirects/
 
+# SPA fallback - must be last
 /*    /index.html   200
+
+# Redirect old URLs (if any)
+# /old-path    /new-path    301
+
+# API proxy (if needed in future)
+# /api/*    https://api.example.com/:splat    200
+
+# Force HTTPS (already handled by Netlify but can be explicit)
+# http://*    https://:splat    301!
+
+# Redirect trailing slashes
+# /path/    /path    301!
