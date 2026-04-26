@@ -21,7 +21,6 @@ import {
   Calendar,
   Repeat,
   Euro,
-  Heart,
   StickyNote,
   ChevronDown,
   Search
@@ -43,7 +42,6 @@ const menuItems = [
   { id: 'animals', label: 'Gyvūnai', icon: Stethoscope, permission: 'animals' },
   { id: 'visits', label: 'Vizitai', icon: Calendar, permission: 'animals' },
   { id: 'synchronizations', label: 'Sinchronizacijos', icon: Repeat, permission: 'animals' },
-  { id: 'insemination', label: 'Sėklinimas', icon: Heart, permission: 'animals' },
   { id: 'bulk-treatment', label: 'Masinis Gydymas ir Vakcinacijos', icon: Users, permission: 'treatment' },
   { id: 'treatment-history', label: 'Gydymų Istorija', icon: Activity, permission: 'view' },
   { id: 'treatment-costs', label: 'Gydymų Savikaina', icon: Euro, permission: 'view' },

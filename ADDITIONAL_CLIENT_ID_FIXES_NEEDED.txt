@@ -1,0 +1,124 @@
+=================================================================
+ADDITIONAL FIXES NEEDED
+=================================================================
+Created: 2026-04-25
+Last Updated: 2026-04-25 18:02
+Status: IN PROGRESS
+
+PART 1: CLIENT_ID FIXES IN OTHER COMPONENTS
+============================================
+
+The following components also have missing client_id in their insert/upsert operations:
+
+1. ✅ AnimalDetailSidebar.tsx - FIXED (all 20+ inserts)
+   - teat_status (upsert) - FIXED
+
+2. ❌ Seklinimas.tsx - NEEDS FIXING
+   - insemination_products.insert (line ~135)
+   - insemination_inventory.insert (line ~168)
+   
+3. ❌ InseminationModal.tsx - NEEDS FIXING
+   - insemination_records.insert (line ~86)
+   
+4. ❌ ReceiveStock.tsx - NEEDS FIXING
+   - insemination_inventory.insert (line ~850)
+   
+5. ❌ SynchronizationProtocol.tsx - CHECK
+   - May have inserts for synchronization tables
+   
+6. ❌ BulkTreatment.tsx - CHECK
+   - May have treatment-related inserts
+   
+7. ❌ Treatment.tsx - CHECK
+   - May have treatment-related inserts
+   
+8. ❌ Visits.tsx - CHECK
+   - May have animal_visits inserts
+   
+9. ❌ Vaccinations.tsx - CHECK
+   - May have vaccinations inserts
+   
+10. ❌ Biocides.tsx - CHECK
+    - May have biocide_usage inserts
+    
+11. ❌ Hoofs.tsx - CHECK
+    - May have hoof_records inserts
+    
+12. ❌ OwnerMeds.tsx - CHECK
+    - May have related inserts
+    
+13. ❌ MedicalWaste.tsx - CHECK
+    - May have waste tracking inserts
+    
+14. ❌ TreatmentCompact.tsx - CHECK
+    - May have treatment inserts
+    
+15. ❌ Notepad.tsx - CHECK
+    - May have notepad/notes inserts
+
+PATTERN TO FOLLOW:
+==================
+1. Import requireClientId: import { requireClientId } from '../lib/clientHelpers';
+2. Import useAuth if not already: import { useAuth } from '../contexts/AuthContext';
+3. Destructure user: const { user } = useAuth();
+4. Get clientId: const clientId = requireClientId(user);
+5. Add client_id: clientId to ALL insert/upsert objects
+
+SCHEMA TABLES REQUIRING client_id (NOT NULL):
+==============================================
+- animals
+- animal_visits
+- animal_synchronizations
+- batches
+- biocide_usage
+- clients
+- diseases
+- farms
+- farm_stock_allocations
+- hoof_records
+- insemination_inventory
+- insemination_products
+- insemination_records
+- invoices
+- invoice_items
+- preventions
+- products
+- species
+- suppliers
+- synchronization_protocols
+- synchronization_steps
+- teat_status
+- treatments
+- treatment_courses
+- usage_items
+- vaccinations
+- warehouse_batches
+
+NEXT STEPS:
+===========
+1. Systematically go through each component file listed above
+2. Find ALL insert/upsert operations
+3. Add client_id to each one
+4. Test each module to ensure it works
+5. Update this file to mark components as FIXED ✅
+
+PART 2: MISSING DATABASE VIEWS
+===============================
+Status: PARTIALLY FIXED
+
+Reports.tsx needs (NOW FIXED ✅):
+- ✅ vw_treated_animals_detailed - ADDED TO MIGRATION
+- ✅ vw_withdrawal_report - ADDED TO MIGRATION
+- ✅ vw_vet_drug_journal - ADDED TO MIGRATION
+
+AnimalAnalytics.tsx needs (STILL MISSING - LOW PRIORITY):
+- ❌ vw_animal_cost_analytics (404)
+- ❌ vw_teat_treatment_analytics (404)
+- ❌ vw_animal_product_usage (404)
+- ❌ vw_animal_visit_analytics (404)
+- ❌ vw_animal_treatment_outcomes (404)
+
+RECOMMENDATION: 
+- Reports views are now fixed - run the migration
+- Analytics views can wait - they're optional dashboard features
+- App handles missing analytics views gracefully (no crashes)

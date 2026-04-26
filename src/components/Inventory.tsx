@@ -306,7 +306,8 @@ export function Inventory() {
         cellPadding: 2.5,
         lineColor: [100, 100, 100],
         lineWidth: 0.1,
-        overflow: 'linebreak'
+        overflow: 'linebreak',
+        textColor: [0, 0, 0]
       },
       headStyles: {
         fillColor: [200, 220, 240],

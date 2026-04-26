@@ -180,7 +180,8 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
         lineColor: [100, 100, 100],
         lineWidth: 0.1,
         overflow: 'linebreak',
-        cellWidth: 'wrap'
+        cellWidth: 'wrap',
+        textColor: [0, 0, 0]
       },
       headStyles: {
         fillColor: [200, 220, 240],
@@ -607,7 +608,8 @@ export function DrugJournalReport({ data }: DrugJournalReportProps) {
           cellPadding: 2,
           lineColor: [100, 100, 100],
           lineWidth: 0.1,
-          overflow: 'linebreak'
+          overflow: 'linebreak',
+          textColor: [0, 0, 0]
         },
         headStyles: {
           fillColor: [200, 220, 240],
@@ -1313,7 +1315,7 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
     
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(toAscii('Gyvunai su karencijos laikotarpiu'), doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+    doc.text(toAscii('Visi gydyti gyvunai'), doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
     doc.text(toAscii(`Sugeneruota: ${formatDateLT(new Date().toISOString())}`), doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
 
     const tableData = data.map((row, idx) => {
@@ -1359,7 +1361,8 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
         cellPadding: 2,
         lineColor: [100, 100, 100],
         lineWidth: 0.1,
-        overflow: 'linebreak'
+        overflow: 'linebreak',
+        textColor: [0, 0, 0]
       },
       headStyles: {
         fillColor: [200, 220, 240],
@@ -1400,13 +1403,13 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
             PDF
           </button>
         </div>
-        <p className="text-sm text-gray-500 mt-2">Gyvūnai su karencijos laikotarpiu</p>
+        <p className="text-sm text-gray-500 mt-2">Visi gydyti gyvūnai</p>
         <p className="text-sm text-gray-500">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
       </div>
 
       {data.length === 0 && (
         <div className="text-center py-16">
-          <p className="text-lg text-gray-500">Nėra gyvūnų su aktyvia karencija</p>
+          <p className="text-lg text-gray-500">Nėra gydytų gyvūnų</p>
         </div>
       )}
 
@@ -1548,7 +1551,7 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
 
       {data.length > 0 && (
         <div className="mt-4 text-sm text-gray-600 no-print">
-          <p>Viso gyvūnų su karencija: <span className="font-semibold text-gray-900">{data.length}</span></p>
+          <p>Viso gydymų: <span className="font-semibold text-gray-900">{data.length}</span></p>
         </div>
       )}
     </div>

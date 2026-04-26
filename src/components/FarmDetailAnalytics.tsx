@@ -72,6 +72,7 @@ interface AllocatedStockSummary {
 
 export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: FarmDetailProps) {
   const [allocatedStock, setAllocatedStock] = useState<AllocatedStockSummary[]>([]);
+  const [unpaidCharges, setUnpaidCharges] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
@@ -79,6 +80,10 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
 
   useEffect(() => {
     loadFarmData();
+  }, [farmId, dateFrom, dateTo]);
+
+  useEffect(() => {
+    loadUnpaidCharges();
   }, [farmId, dateFrom, dateTo]);
 
   const loadFarmData = async () => {
@@ -123,7 +128,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         .select(`
           id,
           product_id,
-          received_qty,
+          qty_received,
           qty_left,
           purchase_price,
           invoice_id,
@@ -150,7 +155,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       // Also get usage data for allocated stock (from warehouse)
       const { data: batchesData, error: batchError } = await supabase
         .from('batches')
-        .select('product_id, received_qty, qty_left, allocation_id')
+        .select('product_id, qty_received, qty_left, allocation_id')
         .eq('farm_id', farmId)
         .not('allocation_id', 'is', null);
       
@@ -270,7 +275,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
             if (!product) return;
 
             const productName = product.name;
-            const receivedQty = parseFloat(batch.received_qty) || 0;
+            const receivedQty = parseFloat(batch.qty_received) || 0;
             const qtyLeft = parseFloat(batch.qty_left) || 0;
             const usedQty = receivedQty - qtyLeft;
             const purchasePrice = parseFloat(batch.purchase_price) || 0;
@@ -338,6 +343,92 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
     }
   };
 
+  const loadUnpaidCharges = async () => {
+    try {
+      console.log('Loading unpaid visits for farm:', farmId, 'dateFrom:', dateFrom, 'dateTo:', dateTo);
+      
+      // Load all uninvoiced visits for the farm
+      let visitsQuery = supabase
+        .from('animal_visits')
+        .select(`
+          id,
+          visit_datetime,
+          procedures,
+          animal_id,
+          animals(tag_no)
+        `)
+        .eq('farm_id', farmId)
+        .eq('status', 'Baigtas')
+        .order('visit_datetime', { ascending: false });
+
+      if (dateFrom) visitsQuery = visitsQuery.gte('visit_datetime', dateFrom);
+      if (dateTo) visitsQuery = visitsQuery.lte('visit_datetime', dateTo + 'T23:59:59');
+
+      const { data: visitsData, error: visitsError } = await visitsQuery;
+
+      if (visitsError) {
+        console.error('Error loading visits:', visitsError);
+        return;
+      }
+
+      // Check which visits have already been invoiced via visit_charges
+      const visitIds = visitsData?.map(v => v.id) || [];
+      const { data: invoicedCharges } = await supabase
+        .from('visit_charges')
+        .select('visit_id')
+        .in('visit_id', visitIds)
+        .eq('charge_type', 'paslauga')
+        .eq('invoiced', true);
+
+      const invoicedVisitIds = new Set(invoicedCharges?.map(c => c.visit_id) || []);
+
+      // Filter out visits that are already invoiced
+      const uninvoicedVisits = visitsData?.filter(v => !invoicedVisitIds.has(v.id)) || [];
+
+      // Load service prices to calculate costs
+      const { data: farm } = await supabase
+        .from('farms')
+        .select('client_id')
+        .eq('id', farmId)
+        .single();
+
+      const { data: servicePricesData } = await supabase
+        .from('service_prices')
+        .select('procedure_type, base_price')
+        .eq('client_id', farm?.client_id)
+        .eq('active', true);
+
+      const servicePrices = new Map<string, number>();
+      (servicePricesData || []).forEach(sp => {
+        servicePrices.set(sp.procedure_type, sp.base_price);
+      });
+
+      // Calculate service costs for each visit
+      const charges = uninvoicedVisits.map(visit => {
+        const procedures = Array.isArray(visit.procedures) ? visit.procedures : [];
+        const totalPrice = procedures.reduce((sum, proc) => sum + (servicePrices.get(proc) || 0), 0);
+
+        return {
+          id: visit.id,
+          visit_id: visit.id,
+          animal_id: visit.animal_id,
+          total_price: totalPrice,
+          animal_visits: {
+            visit_datetime: visit.visit_datetime,
+            procedures: visit.procedures
+          },
+          animals: visit.animals
+        };
+      });
+
+      console.log('Uninvoiced visits with service costs:', charges);
+      console.log('Total service charges:', charges.reduce((sum, c) => sum + c.total_price, 0));
+      setUnpaidCharges(charges);
+    } catch (error) {
+      console.error('Error loading unpaid charges:', error);
+    }
+  };
+
   const totalStockValue = allocatedStock.reduce((sum, item) => sum + item.total_value, 0);
   const totalStockValueBeforeDiscount = allocatedStock.reduce(
     (sum, item) => sum + item.remaining_qty * item.avg_price_before_discount,
@@ -345,7 +436,10 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
   );
 
   const handleExportExcel = () => {
-    const exportData = isDetailedView 
+    const wb = XLSX.utils.book_new();
+
+    // Sheet 1: Products
+    const productData = isDetailedView
       ? allocatedStock.map(item => ({
           'Produktas': item.product_name,
           'Kategorija': translateCategory(item.category),
@@ -359,7 +453,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           'Likutis vertė (su nuol.)': item.total_value.toFixed(2)
         }))
       : allocatedStock.map(item => ({
-          'Vaistas': item.product_name,
+          'Produktas': item.product_name,
           'Kiekis': item.total_allocated_qty.toFixed(2) + ' ' + item.unit,
           'Kaina (be nuol.)': '€' + item.avg_price_before_discount.toFixed(4),
           'Bendra suma': '€' + (item.total_allocated_qty * item.avg_price_before_discount).toFixed(2)
@@ -371,7 +465,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       const vat = totalStockValueBeforeDiscount * 0.21;
       const totalWithVat = totalStockValueBeforeDiscount * 1.21;
 
-      exportData.push({
+      productData.push({
         'Produktas': '',
         'Kategorija': '',
         'Paskirstyta': '',
@@ -384,7 +478,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         'Likutis vertė (su nuol.)': ''
       } as any);
 
-      exportData.push({
+      productData.push({
         'Produktas': '',
         'Kategorija': '',
         'Paskirstyta': '',
@@ -397,7 +491,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         'Likutis vertė (su nuol.)': ''
       } as any);
 
-      exportData.push({
+      productData.push({
         'Produktas': '',
         'Kategorija': '',
         'Paskirstyta': '',
@@ -410,7 +504,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         'Likutis vertė (su nuol.)': '€' + totalStockValue.toFixed(2)
       } as any);
 
-      exportData.push({
+      productData.push({
         'Produktas': '',
         'Kategorija': '',
         'Paskirstyta': '',
@@ -423,19 +517,19 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         'Likutis vertė (su nuol.)': '€' + vat.toFixed(2)
       } as any);
 
-      exportData.push({
+      productData.push({
         'Produktas': '',
         'Kategorija': '',
         'Paskirstyta': '',
         'Sunaudota': '',
         'Vienetas': '',
-        'Kaina (be nuol.)': 'IŠ VISO MOKĖTI (su PVM):',
+        'Kaina (be nuol.)': 'Produktų vertė (su PVM):',
         'Kaina (su nuol.)': '',
         'Nuolaida': '',
         'Likutis vertė (be nuol.)': '',
         'Likutis vertė (su nuol.)': '€' + totalWithVat.toFixed(2)
       } as any);
-    } else if (!isDetailedView) {
+    } else {
       // Add summary rows for simple view
       const subtotal = allocatedStock.reduce((sum, item) => 
         sum + (item.total_allocated_qty * item.avg_price_before_discount), 0
@@ -443,46 +537,93 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       const vat = subtotal * 0.21;
       const totalWithVat = subtotal * 1.21;
 
-      exportData.push({
-        'Vaistas': '',
+      productData.push({
+        'Produktas': '',
         'Kiekis': '',
         'Kaina (be nuol.)': 'Tarpinė suma (be PVM):',
         'Bendra suma': '€' + subtotal.toFixed(2)
       } as any);
 
-      exportData.push({
-        'Vaistas': '',
+      productData.push({
+        'Produktas': '',
         'Kiekis': '',
         'Kaina (be nuol.)': 'PVM (21%):',
         'Bendra suma': '€' + vat.toFixed(2)
       } as any);
 
-      exportData.push({
-        'Vaistas': '',
+      productData.push({
+        'Produktas': '',
         'Kiekis': '',
-        'Kaina (be nuol.)': 'IŠ VISO MOKĖTI (su PVM):',
+        'Kaina (be nuol.)': 'Produktų vertė (su PVM):',
         'Bendra suma': '€' + totalWithVat.toFixed(2)
       } as any);
     }
 
-    const ws = XLSX.utils.json_to_sheet(exportData);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Paskirstytos atsargos');
-    XLSX.writeFile(wb, `${farmName}_paskirstytos_atsargos.xlsx`);
+    const wsProducts = XLSX.utils.json_to_sheet(productData);
+    XLSX.utils.book_append_sheet(wb, wsProducts, 'Produktai');
+
+    // Sheet 2: Services (if any)
+    if (unpaidCharges.length > 0) {
+      const servicesData = unpaidCharges.map(charge => ({
+        'Data': new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
+        'Gyvūnas': charge.animals?.tag_no || '-',
+        'Procedūros': (charge.animal_visits.procedures || []).join(', '),
+        'Aprašymas': charge.description || '-',
+        'Suma (€)': charge.total_price.toFixed(2)
+      }));
+
+      const unpaidTotal = unpaidCharges.reduce((sum, c) => sum + c.total_price, 0);
+      servicesData.push({
+        'Data': '',
+        'Gyvūnas': '',
+        'Procedūros': '',
+        'Aprašymas': 'Bendra paslaugų suma:',
+        'Suma (€)': '€' + unpaidTotal.toFixed(2)
+      } as any);
+
+      const wsServices = XLSX.utils.json_to_sheet(servicesData);
+      XLSX.utils.book_append_sheet(wb, wsServices, 'Paslaugos');
+
+      // Sheet 3: Summary
+      const productTotal = allocatedStock.reduce((sum, item) =>
+        sum + (item.total_allocated_qty * item.avg_price_before_discount), 0
+      ) * 1.21;
+      const combinedTotal = productTotal + unpaidTotal;
+
+      const summaryData = [
+        { 'Aprašymas': 'Produktų vertė (su PVM)', 'Suma (€)': '€' + productTotal.toFixed(2) },
+        { 'Aprašymas': 'Paslaugų mokesčiai', 'Suma (€)': '€' + unpaidTotal.toFixed(2) },
+        { 'Aprašymas': 'VISO MOKĖTI', 'Suma (€)': '€' + combinedTotal.toFixed(2) }
+      ];
+
+      const wsSummary = XLSX.utils.json_to_sheet(summaryData);
+      XLSX.utils.book_append_sheet(wb, wsSummary, 'Bendra suma');
+    }
+
+    XLSX.writeFile(wb, `${farmName}_finansine_ataskaita.xlsx`);
   };
 
   const handleExportPDF = () => {
     const doc = new jsPDF('p', 'mm', 'a4');
+    const pageWidth = doc.internal.pageSize.getWidth();
+
+    // Professional header with background
+    doc.setFillColor(37, 99, 235); // Blue
+    doc.rect(0, 0, pageWidth, 35, 'F');
     
-    doc.setFontSize(14);
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(18);
     doc.setFont('helvetica', 'bold');
-    doc.text(toAscii('PASKIRSTYTOS ATSARGOS'), doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
-    
-    doc.setFontSize(10);
+    doc.text(toAscii('UKIO FINANSINE ATASKAITA'), pageWidth / 2, 12, { align: 'center' });
+
+    doc.setFontSize(11);
     doc.setFont('helvetica', 'normal');
-    doc.text(toAscii(`Ukis: ${farmName}`), doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
-    doc.text(toAscii(`Kodas: ${farmCode}`), doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
-    doc.text(toAscii(`Sugeneruota: ${new Date().toLocaleDateString('lt-LT')}`), doc.internal.pageSize.getWidth() / 2, 34, { align: 'center' });
+    doc.text(toAscii(`Ukis: ${farmName}`), pageWidth / 2, 20, { align: 'center' });
+    doc.text(toAscii(`Kodas: ${farmCode}`), pageWidth / 2, 26, { align: 'center' });
+    doc.text(toAscii(`Data: ${new Date().toLocaleDateString('lt-LT')}`), pageWidth / 2, 32, { align: 'center' });
+    
+    // Reset text color for body
+    doc.setTextColor(0, 0, 0);
 
     if (isDetailedView) {
       // Detailed view PDF
@@ -535,8 +676,16 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         { content: `EUR ${totalWithVat.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [220, 252, 231], fontSize: 10 } } as any
       ]);
 
+      // Section 1: Products
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, 42, pageWidth - 28, 8, 'F');
+      doc.text(toAscii('1. PASKIRSTYTI PRODUKTAI'), 16, 47);
+
       autoTable(doc, {
-        startY: 40,
+        startY: 52,
         head: [[
           'Produktas',
           'Kategorija',
@@ -549,9 +698,82 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           toAscii('Likutis su nuol.')
         ]],
         body: tableData,
-        styles: { fontSize: 7, cellPadding: 2 },
-        headStyles: { fillColor: [200, 220, 240], fontStyle: 'bold', halign: 'center' }
+        styles: { fontSize: 7, cellPadding: 2, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] }
       });
+
+      // Add unpaid charges section if there are any
+      if (unpaidCharges.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 40;
+
+        // Section 2: Services
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, finalY + 10, pageWidth - 28, 8, 'F');
+        doc.text(toAscii('2. PASLAUGU MOKESCIAI'), 16, finalY + 15);
+        
+        const chargesData = unpaidCharges.map(charge => [
+          new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
+          charge.animals?.tag_no || '-',
+          toAscii((charge.animal_visits.procedures || []).join(', ')),
+          toAscii(charge.description || '-'),
+          `EUR ${charge.total_price.toFixed(2)}`
+        ]);
+
+        const unpaidTotal = unpaidCharges.reduce((sum, c) => sum + c.total_price, 0);
+        chargesData.push([
+          { content: toAscii('Bendra paslaugu suma:'), colSpan: 4, styles: { fontStyle: 'bold', halign: 'right' } } as any,
+          { content: `EUR ${unpaidTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [255, 237, 213] } } as any
+        ]);
+
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: [['Data', toAscii('Gyvunas'), toAscii('Procedūros'), toAscii('Aprasymas'), 'Suma']],
+          body: chargesData,
+          styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0] },
+          headStyles: { fillColor: [249, 115, 22], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+          alternateRowStyles: { fillColor: [255, 247, 237] }
+        });
+
+        // Add combined total - Professional Summary Box
+        const productTotal = allocatedStock.reduce((sum, item) =>
+          sum + (item.total_allocated_qty * item.avg_price_before_discount), 0
+        ) * 1.21;
+        const combinedTotal = productTotal + unpaidTotal;
+
+        const finalYAfterCharges = (doc as any).lastAutoTable.finalY || 40;
+        
+        // Section 3: Summary
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, finalYAfterCharges + 10, pageWidth - 28, 8, 'F');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(toAscii('3. BENDRA FINANSINE APZVALGA'), 16, finalYAfterCharges + 15);
+
+        const summaryY = finalYAfterCharges + 25;
+        
+        // Summary table
+        autoTable(doc, {
+          startY: summaryY,
+          head: [[toAscii('Aprasymas'), 'Suma (EUR)']],
+          body: [
+            [toAscii('Produktu verte (su PVM)'), `${productTotal.toFixed(2)}`],
+            [toAscii('Paslaugu mokesciai'), `${unpaidTotal.toFixed(2)}`],
+            [{ content: toAscii('VISO MOKETI'), styles: { fontStyle: 'bold', fontSize: 11 } }, 
+             { content: `${combinedTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fontSize: 11, fillColor: [220, 252, 231] } }]
+          ],
+          styles: { fontSize: 10, cellPadding: 3, textColor: [0, 0, 0] },
+          headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 130 },
+            1: { halign: 'right', fontStyle: 'bold' }
+          }
+        });
+      }
     } else {
       // Simple view PDF
       const tableData = allocatedStock.map(item => {
@@ -588,23 +810,128 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         { content: `EUR ${totalWithVat.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [220, 240, 220] } } as any
       ]);
 
+      // Section 1: Products
+      doc.setFontSize(12);
+      doc.setFont('helvetica', 'bold');
+      doc.setTextColor(0, 0, 0);
+      doc.setFillColor(241, 245, 249);
+      doc.rect(14, 42, pageWidth - 28, 8, 'F');
+      doc.text(toAscii('1. PASKIRSTYTI PRODUKTAI'), 16, 47);
+
       autoTable(doc, {
-        startY: 40,
+        startY: 52,
         head: [[
-          'Vaistas',
+          'Produktas',
           'Kiekis',
           toAscii('Kaina (be nuol.)'),
           'Bendra suma'
         ]],
         body: tableData,
-        styles: { fontSize: 9, cellPadding: 3 },
-        headStyles: { fillColor: [200, 220, 240], fontStyle: 'bold', halign: 'center' },
+        styles: { fontSize: 9, cellPadding: 3, textColor: [0, 0, 0] },
+        headStyles: { fillColor: [59, 130, 246], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+        alternateRowStyles: { fillColor: [248, 250, 252] },
         columnStyles: {
           1: { halign: 'right' },
           2: { halign: 'right' },
           3: { halign: 'right' }
         }
       });
+
+      // Add unpaid charges if any
+      if (unpaidCharges.length > 0) {
+        const finalY = (doc as any).lastAutoTable.finalY || 40;
+
+        // Section 2: Services
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, finalY + 10, pageWidth - 28, 8, 'F');
+        doc.text(toAscii('2. PASLAUGU MOKESCIAI'), 16, finalY + 15);
+
+        const chargesData = unpaidCharges.map(charge => [
+          new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
+          charge.animals?.tag_no || '-',
+          toAscii((charge.animal_visits.procedures || []).join(', ')),
+          `EUR ${charge.total_price.toFixed(2)}`
+        ]);
+
+        const unpaidTotal = unpaidCharges.reduce((sum, c) => sum + c.total_price, 0);
+        chargesData.push([
+          { content: toAscii('Bendra paslaugu suma:'), colSpan: 3, styles: { fontStyle: 'bold', halign: 'right' } } as any,
+          { content: `EUR ${unpaidTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fillColor: [255, 237, 213] } } as any
+        ]);
+
+        autoTable(doc, {
+          startY: finalY + 20,
+          head: [['Data', toAscii('Gyvunas'), toAscii('Procedūros'), 'Suma']],
+          body: chargesData,
+          styles: { fontSize: 8, cellPadding: 2, textColor: [0, 0, 0] },
+          headStyles: { fillColor: [249, 115, 22], textColor: [255, 255, 255], fontStyle: 'bold', halign: 'center' },
+          alternateRowStyles: { fillColor: [255, 247, 237] }
+        });
+
+        // Add combined total - Professional Summary Box
+        const combinedTotal = totalWithVat + unpaidTotal;
+
+        const finalYAfterCharges = (doc as any).lastAutoTable.finalY || 40;
+        
+        // Section 3: Summary
+        doc.setFillColor(241, 245, 249);
+        doc.rect(14, finalYAfterCharges + 10, pageWidth - 28, 8, 'F');
+        doc.setFontSize(12);
+        doc.setFont('helvetica', 'bold');
+        doc.setTextColor(0, 0, 0);
+        doc.text(toAscii('3. BENDRA FINANSINE APZVALGA'), 16, finalYAfterCharges + 15);
+
+        const summaryY = finalYAfterCharges + 25;
+        
+        // Summary table
+        autoTable(doc, {
+          startY: summaryY,
+          head: [[toAscii('Aprasymas'), 'Suma (EUR)']],
+          body: [
+            [toAscii('Produktu verte (su PVM)'), `${totalWithVat.toFixed(2)}`],
+            [toAscii('Paslaugu mokesciai'), `${unpaidTotal.toFixed(2)}`],
+            [{ content: toAscii('VISO MOKETI'), styles: { fontStyle: 'bold', fontSize: 11 } }, 
+             { content: `${combinedTotal.toFixed(2)}`, styles: { fontStyle: 'bold', fontSize: 11, fillColor: [220, 252, 231] } }]
+          ],
+          styles: { fontSize: 10, cellPadding: 3, textColor: [0, 0, 0] },
+          headStyles: { fillColor: [37, 99, 235], textColor: [255, 255, 255], fontStyle: 'bold' },
+          columnStyles: {
+            0: { cellWidth: 130 },
+            1: { halign: 'right', fontStyle: 'bold' }
+          }
+        });
+      }
+    }
+
+    // Add footer with page numbers and generation info
+    const pageCount = doc.internal.pages.length - 1; // Subtract 1 because first element is null
+    for (let i = 1; i <= pageCount; i++) {
+      doc.setPage(i);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.setTextColor(128, 128, 128);
+      
+      // Footer line
+      doc.setDrawColor(200, 200, 200);
+      doc.line(14, doc.internal.pageSize.height - 15, pageWidth - 14, doc.internal.pageSize.height - 15);
+      
+      // Page number
+      doc.text(
+        `Puslapis ${i} is ${pageCount}`,
+        pageWidth / 2,
+        doc.internal.pageSize.height - 10,
+        { align: 'center' }
+      );
+      
+      // Generated by info
+      doc.text(
+        toAscii(`Sugeneruota: ${new Date().toLocaleString('lt-LT')}`),
+        14,
+        doc.internal.pageSize.height - 10
+      );
     }
 
     doc.save(`${farmName}_ataskaita_${new Date().toISOString().split('T')[0]}.pdf`);
@@ -883,6 +1210,102 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                 </tr>
               </tfoot>
             </table>
+          </div>
+        )}
+
+        {/* Service Charges Section */}
+        {unpaidCharges.length > 0 && (
+          <div className="mt-8 bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+            <div className="px-6 py-4 bg-orange-50 border-b border-orange-200">
+              <h3 className="text-lg font-semibold text-gray-900">
+                Paslaugos mokesčiai
+              </h3>
+              <p className="text-sm text-gray-600 mt-1">
+                Paslaugos, kurios dar neišrašytos sąskaitose faktūrose
+              </p>
+            </div>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Data</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Gyvūnas</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Procedūros</th>
+                    <th className="px-4 py-3 text-left text-xs font-semibold text-gray-700">Tipas</th>
+                    <th className="px-4 py-3 text-right text-xs font-semibold text-gray-700">Suma (€)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-gray-200">
+                  {unpaidCharges.map((charge) => (
+                    <tr key={charge.id} className="hover:bg-gray-50">
+                      <td className="px-4 py-3 text-sm text-gray-900">
+                        {new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT')}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {charge.animals?.tag_no || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm text-gray-700">
+                        {charge.animal_visits.procedures?.join(', ') || '-'}
+                      </td>
+                      <td className="px-4 py-3 text-sm">
+                        <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                          Paslauga
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-sm text-right font-semibold text-gray-900">
+                        €{charge.total_price.toFixed(2)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-orange-50 border-t-2 border-orange-200">
+                    <td colSpan={4} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
+                      Bendra paslaugų suma:
+                    </td>
+                    <td className="px-4 py-3 text-sm font-bold text-orange-700 text-right">
+                      €{unpaidCharges.reduce((sum, charge) => sum + charge.total_price, 0).toFixed(2)}
+                    </td>
+                  </tr>
+                </tfoot>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Combined Total Section */}
+        {(allocatedStock.length > 0 || unpaidCharges.length > 0) && (
+          <div className="mt-6 bg-white rounded-lg border border-gray-300 overflow-hidden">
+            <div className="px-4 py-3 bg-gray-100 border-b border-gray-300">
+              <h3 className="text-sm font-semibold text-gray-900">Bendra finansinė apžvalga</h3>
+            </div>
+            <div className="px-4 py-3">
+              <div className="space-y-2 text-sm">
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Produktų vertė (su PVM):</span>
+                  <span className="font-medium text-gray-900">
+                    €{(allocatedStock.reduce((sum, item) => sum + (item.total_allocated_qty * item.avg_price_before_discount), 0) * 1.21).toFixed(2)}
+                  </span>
+                </div>
+                <div className="flex justify-between items-center">
+                  <span className="text-gray-700">Paslaugų mokesčiai:</span>
+                  <span className="font-medium text-gray-900">
+                    €{unpaidCharges.reduce((sum, charge) => sum + charge.total_price, 0).toFixed(2)}
+                  </span>
+                </div>
+                <div className="border-t border-gray-300 pt-2 mt-2">
+                  <div className="flex justify-between items-center">
+                    <span className="font-bold text-gray-900">VISO MOKĖTI:</span>
+                    <span className="text-lg font-bold text-gray-900">
+                      €{(
+                        (allocatedStock.reduce((sum, item) => sum + (item.total_allocated_qty * item.avg_price_before_discount), 0) * 1.21) +
+                        unpaidCharges.reduce((sum, charge) => sum + charge.total_price, 0)
+                      ).toFixed(2)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
           </div>
         )}
       </div>

@@ -25,7 +25,6 @@ interface Product {
 
 interface Batch {
   id: string;
-  batch_number: string;
   lot: string | null;
   qty_left: number;
 }
@@ -142,7 +141,7 @@ export function CourseMedicationScheduler({
     console.log('Loading batches for product:', productId, 'farm:', farmId);
     const { data, error } = await supabase
       .from('batches')
-      .select('id, batch_number, qty_left, lot')
+      .select('id, lot, qty_left')
       .eq('product_id', productId)
       .eq('farm_id', farmId)
       .gt('qty_left', 0)
@@ -260,16 +259,24 @@ export function CourseMedicationScheduler({
   const canProceedToMedications = selectedDates.length >= 2;
 
   const canProceedToReview = () => {
+    // Check all dates have medications and products selected
     for (let i = 0; i < selectedDates.length; i++) {
       const date = selectedDates[i];
       const meds = dateSchedule.get(date) || [];
 
       if (meds.length === 0) return false;
       if (meds.some(m => !m.product_id)) return false;
-
-      // For ALL days, batch_id and qty are now required
-      if (meds.some(m => !m.batch_id || !m.qty)) return false;
     }
+
+    // Only TODAY (first date) needs batch_id and qty
+    const todayDate = selectedDates[0];
+    const todayMeds = dateSchedule.get(todayDate) || [];
+    
+    for (const med of todayMeds) {
+      if (!med.batch_id) return false;
+      if (!med.qty || parseFloat(med.qty) <= 0) return false;
+    }
+
     return true;
   };
 
@@ -385,22 +392,24 @@ export function CourseMedicationScheduler({
 
           {step === 'medications' && (
             <div className="space-y-4">
-              <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg">
-                <p className="text-sm text-green-900">
-                  ✅ Įveskite visų dienų vaistų kiekius iš karto. Visi vizitai bus automatiškai užbaigti ir atsargos nurašytos.
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-sm text-blue-900">
+                  📅 Įveskite šiandienos dozę. Kitos dienos bus suplanuotos kaip atskiri vizitai.
                 </p>
               </div>
               {selectedDates.map((date, dayIndex) => {
                 const dayMeds = dateSchedule.get(date) || [];
+                const isToday = dayIndex === 0; // First date is today
+                const isFutureDate = !isToday;
                 return (
-                  <div key={date} className="border-2 border-purple-200 rounded-lg p-4 bg-purple-50">
+                  <div key={date} className={`border-2 rounded-lg p-4 ${isFutureDate ? 'border-gray-300 bg-gray-50' : 'border-purple-200 bg-purple-50'}`}>
                     <div className="flex items-center gap-3 mb-4">
-                      <div className="w-10 h-10 bg-purple-600 text-white rounded-lg flex items-center justify-center font-bold">
+                      <div className={`w-10 h-10 text-white rounded-lg flex items-center justify-center font-bold ${isFutureDate ? 'bg-gray-500' : 'bg-purple-600'}`}>
                         {dayIndex + 1}
                       </div>
                       <div>
                         <h3 className="text-lg font-semibold text-gray-900">
-                          Diena {dayIndex + 1} iš {selectedDates.length}
+                          {isToday ? '📅 Šiandien' : `Diena ${dayIndex + 1}`} {isFutureDate && '(Planuojama)'}
                         </h3>
                         <p className="text-sm text-gray-600">{formatDateLT(date)}</p>
                       </div>
@@ -436,34 +445,45 @@ export function CourseMedicationScheduler({
                                 />
                               </div>
 
-                              <div className="col-span-2">
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Serija *</label>
-                                <select
-                                  value={med.batch_id || ''}
-                                  onChange={(e) => updateMedication(date, med.id, 'batch_id', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                  disabled={!med.product_id}
-                                >
-                                  <option value="">Pasirinkite seriją...</option>
-                                  {productBatches.map((batch) => (
-                                    <option key={batch.id} value={batch.id}>
-                                      {batch.lot || batch.batch_number} (Likutis: {batch.qty_left})
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
+                              {isToday && (
+                                <>
+                                  <div className="col-span-2">
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Serija *</label>
+                                    <select
+                                      value={med.batch_id || ''}
+                                      onChange={(e) => updateMedication(date, med.id, 'batch_id', e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                      disabled={!med.product_id}
+                                    >
+                                      <option value="">Pasirinkite seriją...</option>
+                                      {productBatches.map((batch) => (
+                                        <option key={batch.id} value={batch.id}>
+                                          {batch.lot || 'N/A'} (Likutis: {batch.qty_left})
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
 
-                              <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Kiekis *</label>
-                                <input
-                                  type="number"
-                                  step="0.01"
-                                  value={med.qty || ''}
-                                  onChange={(e) => updateMedication(date, med.id, 'qty', e.target.value)}
-                                  className="w-full px-3 py-2 border border-gray-300 rounded-lg"
-                                  placeholder="0.00"
-                                />
-                              </div>
+                                  <div>
+                                    <label className="block text-sm font-medium text-gray-700 mb-1">Kiekis *</label>
+                                    <input
+                                      type="number"
+                                      step="0.01"
+                                      value={med.qty || ''}
+                                      onChange={(e) => updateMedication(date, med.id, 'qty', e.target.value)}
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg"
+                                      placeholder="0.00"
+                                    />
+                                  </div>
+                                </>
+                              )}
+                              {isFutureDate && (
+                                <div className="col-span-2">
+                                  <p className="text-sm text-gray-600 italic">
+                                    ⏳ Kiekis bus įvestas vėliau, kai bus užbaigtas vizitas
+                                  </p>
+                                </div>
+                              )}
 
                               <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-1">Spenis (jei reikia)</label>
@@ -580,21 +600,6 @@ export function CourseMedicationScheduler({
 
           {step === 'review' && (
             <div>
-              <div className="mb-4 bg-green-50 border border-green-200 rounded-lg p-4">
-                <div className="flex items-start gap-3">
-                  <CheckCircle className="w-5 h-5 text-green-600 flex-shrink-0 mt-0.5" />
-                  <div className="text-sm text-green-900">
-                    <p className="font-semibold mb-1">Kaip veiks kursas:</p>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Visi vizitai bus automatiškai sukurti ir užbaigti</li>
-                      <li>Visos atsargos bus nurašytos iš karto pagal nurodytus kiekius</li>
-                      <li>Karencijos laikotarpiai bus automatiškai apskaičiuoti</li>
-                      <li>Galėsite peržiūrėti visą gydymo istoriją gyvūno kortelėje</li>
-                    </ul>
-                  </div>
-                </div>
-              </div>
-
               <div className="space-y-4">
                 {selectedDates.map((date, index) => {
                   const meds = dateSchedule.get(date) || [];
@@ -620,7 +625,7 @@ export function CourseMedicationScheduler({
                               <CheckCircle className="w-4 h-4 text-purple-600 flex-shrink-0" />
                               <span className="font-medium">{product?.name || 'Nežinomas'}</span>
                               {med.qty && <span className="text-gray-700 font-medium">{med.qty} {med.unit}</span>}
-                              {batch && <span className="text-gray-600 text-xs">({batch.batch_number})</span>}
+                              {batch && <span className="text-gray-600 text-xs">({batch.lot})</span>}
                               {med.teat && <span className="text-gray-600">({med.teat})</span>}
                             </div>
                           );

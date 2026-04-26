@@ -69,7 +69,7 @@ export function ProductUsageAnalysis() {
       // 1. Get all usage_items
       const usageItemsRes = await supabase
         .from('usage_items')
-        .select('id, qty, created_at, treatment_id, product_id, batch_id')
+        .select('id, quantity, created_at, treatment_id, product_id, batch_id')
         .eq('farm_id', selectedFarm.id);
       const usageItems = usageItemsRes.data || [];
 
@@ -84,28 +84,11 @@ export function ProductUsageAnalysis() {
 
       console.log('✅ Vaccinations loaded:', vaccinations.length);
 
-      // 3. Get all synchronization steps
-      const { data: syncSteps, error: syncStepsError } = await supabase
-        .from('synchronization_steps')
-        .select(`
-          id,
-          synchronization_id,
-          dosage,
-          batch_id,
-          completed,
-          completed_at,
-          batches(id, product_id, purchase_price, received_qty)
-        `)
-        .eq('farm_id', selectedFarm.id)
-        .eq('completed', true)
-        .not('batch_id', 'is', null);
-
-      if (syncStepsError) {
-        console.error('Sync steps error:', syncStepsError);
-        throw syncStepsError;
-      }
-
-      console.log('✅ Sync steps loaded:', syncSteps?.length || 0);
+      // 3. Synchronization steps 
+      // Note: In SaaS schema, sync medication usage is tracked via usage_items table
+      // Synchronization steps only track protocol scheduling, not actual usage
+      // Skipping sync steps query as it's not needed for product usage analysis
+      console.log('ℹ️ Sync steps not loaded (usage tracked via usage_items in SaaS schema)');
 
       // Get synchronizations for animal lookup
       const synchronizationsRes = await supabase
@@ -132,7 +115,7 @@ export function ProductUsageAnalysis() {
       const productsRes = productIds.length > 0
         ? await supabase.from('products').select('id, name, category, subcategory, primary_pack_unit').in('id', productIds)
         : { data: [] };
-      const batchesRes = await supabase.from('batches').select('id, product_id, purchase_price, received_qty, qty_left, created_at, supplier_id').eq('farm_id', selectedFarm.id);
+      const batchesRes = await supabase.from('batches').select('id, product_id, purchase_price, qty_received, qty_left, created_at, supplier_id').eq('farm_id', selectedFarm.id);
       const suppliersRes = await supabase.from('suppliers').select('id, name').eq('farm_id', selectedFarm.id);
       const treatmentsRes = await supabase.from('treatments').select('id, animal_id').eq('farm_id', selectedFarm.id);
       const animalsRes = await supabase.from('animals').select('id, tag_no').eq('farm_id', selectedFarm.id);
@@ -157,7 +140,7 @@ export function ProductUsageAnalysis() {
       // Process usage_items
       console.log('📦 Processing usage_items...');
       for (const item of usageItems || []) {
-        if (!item.product_id || !item.batch_id || !item.qty) continue;
+        if (!item.product_id || !item.batch_id || !item.quantity) continue;
 
         const product = productMap.get(item.product_id);
         const batch = batchMap.get(item.batch_id);
@@ -175,8 +158,8 @@ export function ProductUsageAnalysis() {
           }
         }
 
-        const unitCost = calculateSafeUnitCost(batch.purchase_price, batch.received_qty);
-        const totalCost = item.qty * unitCost;
+        const unitCost = calculateSafeUnitCost(batch.purchase_price, batch.qty_received);
+        const totalCost = item.quantity * unitCost;
 
         const productId = product.id;
         if (!usageByProduct.has(productId)) {
@@ -199,14 +182,14 @@ export function ProductUsageAnalysis() {
         }
 
         const record = usageByProduct.get(productId)!;
-        record.total_quantity += item.qty;
+        record.total_quantity += item.quantity;
         record.total_cost += totalCost;
         record.usage_count += 1;
         record.usages.push({
           date: item.created_at,
           animal_tag: animalTag,
           animal_id: animalId || '',
-          quantity: item.qty,
+          quantity: item.quantity,
           unit_cost: unitCost,
           total_cost: totalCost,
           visit_id: null,
@@ -253,7 +236,7 @@ export function ProductUsageAnalysis() {
 
         const animal = animalMap.get(vacc.animal_id);
 
-        const unitCost = calculateSafeUnitCost(batch.purchase_price, batch.received_qty);
+        const unitCost = calculateSafeUnitCost(batch.purchase_price, batch.qty_received);
         const totalCost = vacc.dose_amount * unitCost;
 
         const productId = product.id;
@@ -296,68 +279,10 @@ export function ProductUsageAnalysis() {
       console.log(`✅ Vaccinations processed: ${processedCount} legacy, ${skippedCount} skipped (already in usage_items)`);
 
       // Process synchronization steps (sync medications)
-      console.log('🔄 Processing sync medications...');
-      for (const step of syncSteps || []) {
-        // Skip if no batch info or dosage
-        if (!step.batches || !step.dosage) continue;
-
-        const batch = step.batches;
-        // CRITICAL: Skip if batch doesn't have a product_id (orphaned batch reference)
-        if (!batch.product_id) continue;
-        
-        const product = productMap.get(batch.product_id);
-        if (!product) continue;
-
-        // Get animal info from synchronization
-        const sync = syncMap.get(step.synchronization_id);
-        let animalTag = null;
-        let animalId = null;
-        if (sync) {
-          animalId = sync.animal_id;
-          const animal = animalMap.get(sync.animal_id);
-          animalTag = animal?.tag_no || null;
-        }
-
-        const unitCost = calculateSafeUnitCost(batch.purchase_price, batch.received_qty);
-        const totalCost = step.dosage * unitCost;
-
-        const productId = product.id;
-        if (!usageByProduct.has(productId)) {
-          usageByProduct.set(productId, {
-            product_id: productId,
-            product_name: product.name,
-            category: product.category,
-            subcategory: product.subcategory,
-            total_quantity: 0,
-            unit: product.primary_pack_unit || 'vnt',
-            total_cost: 0,
-            usage_count: 0,
-            animals_treated: 0,
-            usages: [],
-            inventory_additions: [],
-            total_received: 0,
-            total_used: 0,
-            remaining_stock: 0
-          });
-        }
-
-        const record = usageByProduct.get(productId)!;
-        record.total_quantity += step.dosage;
-        record.total_cost += totalCost;
-        record.usage_count += 1;
-        record.usages.push({
-          date: step.completed_at || new Date().toISOString(),
-          animal_tag: animalTag,
-          animal_id: animalId || '',
-          quantity: step.dosage,
-          unit_cost: unitCost,
-          total_cost: totalCost,
-          visit_id: null,
-          treatment_id: null,
-          source: 'sync', // sync medications are tracked separately
-        });
-      }
-      console.log('✅ Sync medications processed');
+      // NOTE: In SaaS schema, synchronization_steps don't have batch_id
+      // Sync medication usage is tracked via usage_items table instead
+      // Skipping sync steps processing to avoid incompatibility and double-counting
+      console.log('ℹ️ Skipping sync medications (tracked via usage_items in SaaS schema)');
 
       // NOTE: We skip planned_medications processing to avoid double-counting
       // (they're already included in usage_items after visit completion)
@@ -379,12 +304,12 @@ export function ProductUsageAnalysis() {
         record.inventory_additions = productBatches.map(batch => ({
           batch_id: batch.id,
           received_date: batch.created_at || 'N/A',
-          received_qty: batch.received_qty || 0,
+          received_qty: batch.qty_received || 0,
           purchase_price: batch.purchase_price || 0,
           supplier_name: batch.supplier_id ? (supplierMap.get(batch.supplier_id)?.name || 'N/A') : 'N/A'
         })).sort((a, b) => new Date(b.received_date).getTime() - new Date(a.received_date).getTime());
 
-        record.total_received = productBatches.reduce((sum, b) => sum + (b.received_qty || 0), 0);
+        record.total_received = productBatches.reduce((sum, b) => sum + (b.qty_received || 0), 0);
         
         // CRITICAL FIX: Use qty_left from batches as the source of truth
         // The database triggers maintain qty_left accurately, so we should trust it

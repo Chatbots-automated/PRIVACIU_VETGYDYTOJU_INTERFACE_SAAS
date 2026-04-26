@@ -99,7 +99,20 @@ export function TreatmentCostAnalysis() {
     if (!rawData) return;
 
     const recalculateCosts = () => {
-      const { animals, treatments, usageItems, vaccinations, visits, syncs, syncSteps } = rawData;
+      const { animals, treatments, usageItems, vaccinations, visits, syncs, syncSteps, servicePrices } = rawData;
+      
+      // Helper function to calculate visit service cost based on procedures
+      const calculateVisitServiceCost = (procedures: string[] | string | null): number => {
+        if (!procedures || (Array.isArray(procedures) && procedures.length === 0)) return 0;
+        
+        const proceduresArray = Array.isArray(procedures) ? procedures : [procedures];
+        let totalCost = 0;
+        for (const procedure of proceduresArray) {
+          const price = servicePrices.get(procedure) || 0;
+          totalCost += price;
+        }
+        return totalCost;
+      };
 
       const animalCosts: AnimalCostData[] = [];
 
@@ -161,31 +174,17 @@ export function TreatmentCostAnalysis() {
         // Calculate medication costs from usage items (only for treatments with visits in range)
         let medicationCostsFromUsageItems = 0;
         for (const usage of usageItems) {
-          if (treatmentIdsInRange.has(usage.treatment_id) && usage.batches && usage.qty) {
+          if (treatmentIdsInRange.has(usage.treatment_id) && usage.batches && usage.quantity) {
             const unitCost = calculateSafeUnitCost(
               usage.batches.purchase_price,
-              usage.batches.received_qty
+              usage.batches.qty_received
             );
-            medicationCostsFromUsageItems += usage.qty * unitCost;
+            medicationCostsFromUsageItems += usage.quantity * unitCost;
           }
         }
 
-        // Add costs from synchronization steps (only for syncs in range)
-        let medicationCostsFromSync = 0;
-        for (const sync of filteredSyncs) {
-          const syncStepsForAnimal = syncSteps.filter(ss => ss.synchronization_id === sync.id);
-          for (const step of syncStepsForAnimal) {
-            if (step.batches && step.dosage) {
-              const unitCost = calculateSafeUnitCost(
-                step.batches.purchase_price,
-                step.batches.received_qty
-              );
-              medicationCostsFromSync += step.dosage * unitCost;
-            }
-          }
-        }
-
-        const medicationCosts = medicationCostsFromUsageItems + medicationCostsFromSync;
+        // In SaaS schema, all medication costs (including sync) are tracked in usage_items
+        const medicationCosts = medicationCostsFromUsageItems;
 
         // Calculate vaccination costs (only for vaccinations in range)
         let vaccinationCosts = 0;
@@ -195,15 +194,18 @@ export function TreatmentCostAnalysis() {
           if (vaccination.batches && vaccination.dose_amount) {
             const unitCost = calculateSafeUnitCost(
               vaccination.batches.purchase_price,
-              vaccination.batches.received_qty
+              vaccination.batches.qty_received
             );
             vaccinationCosts += vaccination.dose_amount * unitCost;
           }
         }
 
-        // Calculate visit costs (only for visits in range)
+        // Calculate visit costs based on actual service prices (only for visits in range)
         const visitCount = completedVisits.length;
-        const visitCosts = visitCount * TREATMENT_COST_CONFIG.VISIT_BASE_COST;
+        let visitCosts = 0;
+        for (const visit of completedVisits) {
+          visitCosts += calculateVisitServiceCost(visit.procedures);
+        }
 
         const totalCosts = visitCosts + medicationCosts + vaccinationCosts;
 
@@ -226,7 +228,7 @@ export function TreatmentCostAnalysis() {
             visit_costs: visitCosts,
             medication_costs: medicationCosts,
             medication_costs_from_usage_items: medicationCostsFromUsageItems,
-            medication_costs_from_sync: medicationCostsFromSync,
+            medication_costs_from_sync: 0, // SaaS: included in usage_items
             vaccination_count: filteredVaccinations.length,
             vaccination_costs: vaccinationCosts,
             total_costs: totalCosts,
@@ -281,10 +283,9 @@ export function TreatmentCostAnalysis() {
           vaccination_id,
           product_id,
           batch_id,
-          qty,
-          purpose,
+          quantity,
           administered_date,
-          batches(purchase_price, received_qty)
+          batches(purchase_price, qty_received)
         `)
         .eq('farm_id', selectedFarm.id);
 
@@ -310,7 +311,7 @@ export function TreatmentCostAnalysis() {
       const vaccinationBatchIds = [...new Set(vaccinationsData?.filter(v => v.batch_id).map(v => v.batch_id))];
       const { data: vaccinationBatches } = await supabase
         .from('batches')
-        .select('id, purchase_price, received_qty')
+        .select('id, purchase_price, qty_received')
         .in('id', vaccinationBatchIds.length > 0 ? vaccinationBatchIds : ['00000000-0000-0000-0000-000000000000']);
 
       // Merge batch data with vaccinations
@@ -321,37 +322,59 @@ export function TreatmentCostAnalysis() {
 
       console.log('Vaccinations loaded:', vaccinations?.length);
 
-      // Get all visits with dates for filtering
+      // Get all visits with dates and procedures for cost calculation
       const { data: visits, error: visitsError } = await supabase
         .from('animal_visits')
-        .select('id, animal_id, visit_datetime, status')
+        .select('id, animal_id, visit_datetime, status, procedures')
         .eq('farm_id', selectedFarm.id);
 
       if (visitsError) throw visitsError;
 
-      // Get all synchronization data for sync medication costs
-      const syncsRes = await supabase.from('animal_synchronizations').select('id, animal_id, start_date').eq('farm_id', selectedFarm.id);
-      const syncs = syncsRes.data || [];
+      // NOTE: In SaaS schema, synchronization medication costs are tracked via usage_items table
+      // Synchronization steps only track protocol scheduling, not actual usage/costs
+      // Skipping synchronization_steps query to avoid schema incompatibility
+      console.log('ℹ️ Sync medication costs tracked via usage_items (SaaS schema)');
+      
+      // Load service prices for visit cost calculations
+      // Note: service_prices are per client, not per farm
+      const { data: clientData } = await supabase
+        .from('farms')
+        .select('client_id')
+        .eq('id', selectedFarm.id)
+        .single();
+      
+      const { data: servicePricesData, error: servicePricesError} = await supabase
+        .from('service_prices')
+        .select('procedure_type, base_price')
+        .eq('client_id', clientData?.client_id)
+        .eq('active', true);
+      
+      if (servicePricesError) {
+        console.error('Service prices error:', servicePricesError);
+      }
+      
+      // Create a map of procedure_type -> price
+      const servicePricesMap = new Map<string, number>();
+      if (servicePricesData) {
+        for (const price of servicePricesData) {
+          servicePricesMap.set(price.procedure_type, price.base_price);
+        }
+      }
+      
+      console.log('Service prices loaded:', servicePricesMap.size);
 
-      // Get completed synchronization steps with batch info
-      const { data: syncSteps, error: syncStepsError } = await supabase
-        .from('synchronization_steps')
-        .select(`
-          id,
-          synchronization_id,
-          dosage,
-          batch_id,
-          completed,
-          completed_at,
-          batches(purchase_price, received_qty)
-        `)
-        .eq('farm_id', selectedFarm.id)
-        .eq('completed', true)
-        .not('batch_id', 'is', null);
-
-      if (syncStepsError) throw syncStepsError;
-
-      console.log('Sync steps loaded:', syncSteps?.length);
+      // Helper function to calculate visit service cost based on procedures
+      const calculateVisitServiceCost = (procedures: string[] | string | null): number => {
+        if (!procedures || (Array.isArray(procedures) && procedures.length === 0)) return 0;
+        
+        const proceduresArray = Array.isArray(procedures) ? procedures : [procedures];
+        let totalCost = 0;
+        for (const procedure of proceduresArray) {
+          const price = servicePricesMap.get(procedure) || 0;
+          totalCost += price;
+        }
+        return totalCost;
+      };
 
       // Calculate costs for each animal
       const animalCosts: AnimalCostData[] = [];
@@ -368,12 +391,12 @@ export function TreatmentCostAnalysis() {
         for (const treatment of animalTreatments) {
           const treatmentUsage = (usageItems || []).filter(ui => ui.treatment_id === treatment.id);
           for (const usage of treatmentUsage) {
-            if (usage.batches && usage.qty) {
+            if (usage.batches && usage.quantity) {
               const unitCost = calculateSafeUnitCost(
                 usage.batches.purchase_price,
-                usage.batches.received_qty
+                usage.batches.qty_received
               );
-              medicationCostsFromUsageItems += usage.qty * unitCost;
+              medicationCostsFromUsageItems += usage.quantity * unitCost;
             }
           }
         }
@@ -382,23 +405,8 @@ export function TreatmentCostAnalysis() {
         // when visits are completed. Adding both would be double-counting!
         // The dropdown detail view handles planned_medications with proper duplicate detection.
 
-        // Add costs from synchronization steps (to match profitability view)
-        let medicationCostsFromSync = 0;
-        const animalSyncs = (syncs || []).filter(s => s.animal_id === animal.id);
-        for (const sync of animalSyncs) {
-          const syncStepsForAnimal = (syncSteps || []).filter(ss => ss.synchronization_id === sync.id);
-          for (const step of syncStepsForAnimal) {
-            if (step.batches && step.dosage) {
-              const unitCost = calculateSafeUnitCost(
-                step.batches.purchase_price,
-                step.batches.received_qty
-              );
-              medicationCostsFromSync += step.dosage * unitCost;
-            }
-          }
-        }
-
-        const medicationCosts = medicationCostsFromUsageItems + medicationCostsFromSync;
+        // In SaaS schema, all medication costs (including sync medications) are in usage_items
+        const medicationCosts = medicationCostsFromUsageItems;
 
         // Calculate vaccination costs
         // NOTE: New vaccinations are tracked in usage_items with purpose='vaccination'
@@ -411,13 +419,14 @@ export function TreatmentCostAnalysis() {
         });
         
         // Get vaccination costs from usage_items (NEW method)
+        // In SaaS schema, vaccination usage has vaccination_id set (no purpose field)
         for (const item of animalUsageItems) {
-          if (item.batches && item.qty && item.purpose === 'vaccination') {
+          if (item.batches && item.quantity && item.vaccination_id) {
             const unitCost = calculateSafeUnitCost(
               item.batches.purchase_price,
-              item.batches.received_qty
+              item.batches.qty_received
             );
-            vaccinationCosts += item.qty * unitCost;
+            vaccinationCosts += item.quantity * unitCost;
           }
         }
         
@@ -430,15 +439,18 @@ export function TreatmentCostAnalysis() {
           if (vaccination.batches && vaccination.dose_amount) {
             const unitCost = calculateSafeUnitCost(
               vaccination.batches.purchase_price,
-              vaccination.batches.received_qty
+              vaccination.batches.qty_received
             );
             vaccinationCosts += vaccination.dose_amount * unitCost;
           }
         }
 
-        // Calculate visit costs
+        // Calculate visit costs based on actual service prices
         const visitCount = completedVisits.length;
-        const visitCosts = visitCount * TREATMENT_COST_CONFIG.VISIT_BASE_COST;
+        let visitCosts = 0;
+        for (const visit of completedVisits) {
+          visitCosts += calculateVisitServiceCost(visit.procedures);
+        }
 
         const totalCosts = visitCosts + medicationCosts + vaccinationCosts;
 
@@ -461,7 +473,7 @@ export function TreatmentCostAnalysis() {
             visit_costs: visitCosts,
             medication_costs: medicationCosts,
             medication_costs_from_usage_items: medicationCostsFromUsageItems,
-            medication_costs_from_sync: medicationCostsFromSync,
+            medication_costs_from_sync: 0, // SaaS: included in usage_items
             vaccination_count: animalVaccinations.length,
             vaccination_costs: vaccinationCosts,
             total_costs: totalCosts,
@@ -482,8 +494,9 @@ export function TreatmentCostAnalysis() {
         usageItems: usageItems || [],
         vaccinations: vaccinations || [],
         visits: visits || [],
-        syncs: syncs || [],
-        syncSteps: syncSteps || [],
+        syncs: [], // SaaS: not loaded (sync costs in usage_items)
+        syncSteps: [], // SaaS: not loaded (sync costs in usage_items)
+        servicePrices: servicePricesMap,
       });
     } catch (error) {
       console.error('Error loading cost data:', error);
@@ -529,29 +542,29 @@ export function TreatmentCostAnalysis() {
           const { data: usageItems } = await supabase
             .from('usage_items')
             .select(`
-              qty,
+              quantity,
               products(name, primary_pack_unit, category, subcategory),
-              batches(purchase_price, received_qty)
+              batches(purchase_price, qty_received)
             `)
             .eq('treatment_id', treatment.id);
 
           for (const usage of usageItems || []) {
-            if (usage.batches && usage.qty) {
+            if (usage.batches && usage.quantity) {
               const unitCost = calculateSafeUnitCost(
                 usage.batches.purchase_price,
-                usage.batches.received_qty
+                usage.batches.qty_received
               );
-              const itemCost = usage.qty * unitCost;
+              const itemCost = usage.quantity * unitCost;
 
               // Debug logging for math verification
-              if (usage.qty >= 40 && unitCost > 0) {
+              if (usage.quantity >= 40 && unitCost > 0) {
                 console.log('=== MATH VERIFICATION ===');
                 console.log('Product:', (usage.products as any)?.name);
-                console.log('Quantity:', usage.qty, (usage.products as any)?.primary_pack_unit);
+                console.log('Quantity:', usage.quantity, (usage.products as any)?.primary_pack_unit);
                 console.log('Batch purchase price:', usage.batches.purchase_price);
-                console.log('Batch received qty:', usage.batches.received_qty);
+                console.log('Batch received qty:', usage.batches.qty_received);
                 console.log('Unit cost:', unitCost.toFixed(6));
-                console.log('Calculation:', usage.qty, '×', unitCost.toFixed(6), '=', itemCost.toFixed(6));
+                console.log('Calculation:', usage.quantity, '×', unitCost.toFixed(6), '=', itemCost.toFixed(6));
                 console.log('Expected for 40×0.03:', (40 * 0.03).toFixed(2));
                 console.log('Actual result:', itemCost.toFixed(2));
                 console.log('========================');
@@ -566,7 +579,7 @@ export function TreatmentCostAnalysis() {
 
               allProducts.push({
                 name: (usage.products as any)?.name || 'Nežinomas produktas',
-                quantity: usage.qty,
+                quantity: usage.quantity,
                 unit: (usage.products as any)?.primary_pack_unit || 'vnt',
                 unit_cost: unitCost,
                 total_cost: itemCost,
@@ -586,7 +599,7 @@ export function TreatmentCostAnalysis() {
             unit,
             vaccination_date,
             products(name, primary_pack_unit, category),
-            batches(purchase_price, received_qty)
+            batches(purchase_price, qty_received)
           `)
           .eq('animal_id', animalId)
           .eq('vaccination_date', visitDate);
@@ -595,7 +608,7 @@ export function TreatmentCostAnalysis() {
           if (vacc.batches && vacc.dose_amount) {
             const unitCost = calculateSafeUnitCost(
               vacc.batches.purchase_price,
-              vacc.batches.received_qty
+              vacc.batches.qty_received
             );
             const itemCost = vacc.dose_amount * unitCost;
 
@@ -624,21 +637,21 @@ export function TreatmentCostAnalysis() {
 
             const { data: batch } = await supabase
               .from('batches')
-              .select('purchase_price, received_qty')
+              .select('purchase_price, qty_received')
               .eq('id', med.batch_id)
               .maybeSingle();
 
-            if (batch && med.qty) {
+            if (batch && med.quantity) {
               const unitCost = calculateSafeUnitCost(
                 batch.purchase_price,
-                batch.received_qty
+                batch.qty_received
               );
-              const itemCost = med.qty * unitCost;
+              const itemCost = med.quantity * unitCost;
 
               // Check if this product is already in allProducts (avoid duplicates)
               const alreadyExists = allProducts.some(p =>
                 p.name === (product?.name || 'Nežinomas produktas') &&
-                p.quantity === med.qty
+                p.quantity === med.quantity
               );
 
               if (!alreadyExists) {
@@ -651,7 +664,7 @@ export function TreatmentCostAnalysis() {
 
                 allProducts.push({
                   name: product?.name || 'Nežinomas produktas',
-                  quantity: med.qty,
+                  quantity: med.quantity,
                   unit: med.unit || product?.primary_pack_unit || 'vnt',
                   unit_cost: unitCost,
                   total_cost: itemCost,
@@ -700,7 +713,7 @@ export function TreatmentCostAnalysis() {
           unit,
           vaccination_date,
           products(name, primary_pack_unit, category),
-          batches(purchase_price, received_qty)
+          batches(purchase_price, qty_received)
         `)
         .eq('animal_id', animalId)
         .order('vaccination_date', { ascending: false });
@@ -734,7 +747,7 @@ export function TreatmentCostAnalysis() {
           if (vacc.batches && vacc.dose_amount) {
             const unitCost = calculateSafeUnitCost(
               vacc.batches.purchase_price,
-              vacc.batches.received_qty
+              vacc.batches.qty_received
             );
             const itemCost = vacc.dose_amount * unitCost;
 
@@ -1073,9 +1086,9 @@ export function TreatmentCostAnalysis() {
               </span>
             </div>
             <div>
-              <span className="text-gray-600">Vizitų bazinė kaina:</span>
-              <span className="ml-2 font-bold text-gray-700">
-                {formatCost(TREATMENT_COST_CONFIG.VISIT_BASE_COST)} / vizitas
+              <span className="text-gray-600">Vizitų kainos:</span>
+              <span className="ml-2 font-medium text-blue-600">
+                Pagal paslaugų kainas (Finansai → Kainų valdymas)
               </span>
             </div>
           </div>
@@ -1093,7 +1106,7 @@ export function TreatmentCostAnalysis() {
           >
             <optgroup label="Pagal kainą">
               <option value="total">Bendra kaina</option>
-              <option value="visits">Vizitų kaina</option>
+              <option value="visits">Paslaugos kaina</option>
               <option value="medications">Vaistų kaina</option>
               <option value="vaccinations">Vakcinų kaina</option>
             </optgroup>
@@ -1137,7 +1150,7 @@ export function TreatmentCostAnalysis() {
                     Vizitų
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                    Vizitų kaina
+                    Paslaugos kaina
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-semibold text-gray-700 uppercase tracking-wider">
                     Vaistų kaina
@@ -1223,7 +1236,9 @@ export function TreatmentCostAnalysis() {
                                 ) : (
                                   detailData.visits.map((visit) => {
                                     const isVisitExpanded = expandedVisits.has(visit.id);
-                                    const totalVisitCost = TREATMENT_COST_CONFIG.VISIT_BASE_COST + visit.total_products_cost;
+                                    const procedures = Array.isArray(visit.procedures) ? visit.procedures : [];
+                                    const serviceCost = procedures.reduce((sum, p) => sum + (rawData?.servicePrices?.get(p) || 0), 0);
+                                    const totalVisitCost = serviceCost + visit.total_products_cost;
                                     const hasProducts = visit.all_products.length > 0;
 
                                     return (
@@ -1281,7 +1296,9 @@ export function TreatmentCostAnalysis() {
                                                 {formatCost(totalVisitCost)}
                                               </div>
                                               <div className="text-xs text-gray-600 space-y-0.5">
-                                                <div>Vizitas: {formatCost(TREATMENT_COST_CONFIG.VISIT_BASE_COST)}</div>
+                                                {serviceCost > 0 && (
+                                                  <div>Paslaugos: {formatCost(serviceCost)}</div>
+                                                )}
                                                 {visit.total_products_cost > 0 && (
                                                   <div>Produktai: {formatCost(visit.total_products_cost)}</div>
                                                 )}
@@ -1359,9 +1376,12 @@ export function TreatmentCostAnalysis() {
                                 <div className="mt-6 bg-blue-600 text-white p-4 rounded-lg shadow-lg">
                                   <div className="space-y-2">
                                     <div className="flex items-center justify-between text-sm">
-                                      <span>Vizitai ({detailData.visits.length} × €10):</span>
+                                      <span>Paslaugos ({detailData.visits.length} vizitai):</span>
                                       <span className="font-semibold">
-                                        {formatCost(detailData.visits.length * TREATMENT_COST_CONFIG.VISIT_BASE_COST)}
+                                        {formatCost(detailData.visits.reduce((sum, v) => {
+                                          const procedures = Array.isArray(v.procedures) ? v.procedures : [];
+                                          return sum + procedures.reduce((s, p) => s + (rawData?.servicePrices?.get(p) || 0), 0);
+                                        }, 0))}
                                       </span>
                                     </div>
                                     <div className="flex items-center justify-between text-sm">
@@ -1374,8 +1394,11 @@ export function TreatmentCostAnalysis() {
                                       <span className="font-bold text-lg">VISO:</span>
                                       <span className="font-bold text-2xl">
                                         {formatCost(
-                                          detailData.visits.length * TREATMENT_COST_CONFIG.VISIT_BASE_COST +
-                                          detailData.visits.reduce((sum, v) => sum + v.total_products_cost, 0)
+                                          detailData.visits.reduce((sum, v) => {
+                                            const procedures = Array.isArray(v.procedures) ? v.procedures : [];
+                                            const serviceCost = procedures.reduce((s, p) => s + (rawData?.servicePrices?.get(p) || 0), 0);
+                                            return sum + serviceCost + v.total_products_cost;
+                                          }, 0)
                                         )}
                                       </span>
                                     </div>

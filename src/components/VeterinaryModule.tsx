@@ -6,7 +6,6 @@ import { Products } from './Products';
 import { AnimalsCompact as Animals } from './AnimalsCompact';
 import { VisitsModern as Visits } from './VisitsModern';
 import { Synchronizations } from './Synchronizations';
-import { Seklinimas } from './Seklinimas';
 import { Hoofs } from './Hoofs';
 import { Suppliers } from './Suppliers';
 import { Biocides } from './Biocides';
@@ -49,8 +48,6 @@ export function VeterinaryModule({ onBackToModules }: VeterinaryModuleProps) {
         return <Hoofs />;
       case 'synchronizations':
         return <Synchronizations />;
-      case 'insemination':
-        return <Seklinimas />;
       case 'suppliers':
         return <Suppliers />;
       case 'biocides':

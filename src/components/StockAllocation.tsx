@@ -148,63 +148,8 @@ export function StockAllocation() {
       // Allocate each selected product
       for (const { product, qty } of productsToAllocate) {
         if (!product) continue;
-        
-        // First, check if the product exists for this farm, if not create it
-        const { data: existingFarmProduct } = await supabase
-          .from('products')
-          .select('id')
-          .eq('farm_id', allocationForm.farm_id)
-          .eq('name', product.product_name)
-          .maybeSingle();
-        
-        let farmProductId = product.product_id;
-        
-        if (!existingFarmProduct) {
-          console.log(`📦 Product "${product.product_name}" doesn't exist for farm, creating it...`);
-          
-          // Get the warehouse product details
-          const { data: warehouseProduct } = await supabase
-            .from('products')
-            .select('*')
-            .eq('id', product.product_id)
-            .maybeSingle();
-          
-          if (warehouseProduct) {
-            // Create farm-specific product
-            const { data: newFarmProduct, error: productError } = await supabase
-              .from('products')
-              .insert({
-                client_id: clientId,
-                farm_id: allocationForm.farm_id,
-                name: warehouseProduct.name,
-                category: warehouseProduct.category,
-                primary_pack_unit: warehouseProduct.primary_pack_unit,
-                primary_pack_size: warehouseProduct.primary_pack_size,
-                active_substance: warehouseProduct.active_substance,
-                registration_code: warehouseProduct.registration_code,
-                dosage_notes: warehouseProduct.dosage_notes,
-                withdrawal_days_meat: warehouseProduct.withdrawal_days_meat,
-                withdrawal_days_milk: warehouseProduct.withdrawal_days_milk,
-                subcategory: warehouseProduct.subcategory,
-                subcategory_2: warehouseProduct.subcategory_2,
-                package_weight_g: warehouseProduct.package_weight_g,
-                is_active: true,
-              })
-              .select()
-              .single();
-            
-            if (productError) {
-              console.error('Error creating farm product:', productError);
-              throw new Error(`Nepavyko sukurti produkto ūkyje: ${productError.message}`);
-            }
-            
-            if (newFarmProduct) {
-              farmProductId = newFarmProduct.id;
-              console.log(`✅ Created farm product with ID: ${farmProductId}`);
-            }
-          }
-        }
-        
+
+        // Use the warehouse product directly (no farm-specific duplicates)
         let remainingQty = qty;
         const batchesToAllocateFrom = product.batches || [product];
         
@@ -231,19 +176,35 @@ export function StockAllocation() {
 
           if (allocationError) throw allocationError;
 
-          // 2. Create corresponding batch in the farm (using farm-specific product ID)
-          // IMPORTANT: Copy purchase_price from warehouse batch for cost tracking!
+          // 2. Create corresponding batch in the farm (using warehouse product ID)
+          // IMPORTANT: Calculate proportional purchase_price for cost tracking!
+          // If warehouse has 1000ml @ 137.62 EUR (0.1376 EUR/ml) and we allocate 500ml,
+          // the farm batch should have purchase_price = 500 * 0.1376 = 68.81 EUR
+          const warehouseUnitPrice = (batch.purchase_price && batch.received_qty) 
+            ? batch.purchase_price / batch.received_qty 
+            : 0;
+          const proportionalPurchasePrice = warehouseUnitPrice * qtyFromThisBatch;
+
+          console.log('📦 Allocation pricing:', {
+            warehouse_batch: batch.lot,
+            warehouse_total_qty: batch.received_qty,
+            warehouse_total_price: batch.purchase_price,
+            warehouse_unit_price: warehouseUnitPrice,
+            allocating_qty: qtyFromThisBatch,
+            farm_batch_price: proportionalPurchasePrice
+          });
+
           const { error: batchError } = await supabase
             .from('batches')
             .insert({
               client_id: clientId,
               farm_id: allocationForm.farm_id,
-              product_id: farmProductId,
+              product_id: product.product_id,
               allocation_id: allocation.id,
               lot: batch.lot,
               expiry_date: batch.expiry_date,
               qty_received: qtyFromThisBatch,
-              purchase_price: batch.purchase_price,
+              purchase_price: proportionalPurchasePrice,
               currency: batch.currency || 'EUR',
               doc_title: 'Warehouse Allocation',
               doc_number: `WH-${batch.lot || 'N/A'}`,

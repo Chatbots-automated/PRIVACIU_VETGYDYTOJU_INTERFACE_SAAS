@@ -147,9 +147,9 @@ export function Reports() {
         supabase.from('treatments').select('id, reg_date, outcome, disease_id').eq('farm_id', selectedFarm.id).gte('reg_date', sixMonthsAgo),
         supabase.from('vaccinations').select('id, vaccination_date').eq('farm_id', selectedFarm.id).gte('vaccination_date', sixMonthsAgo),
         supabase.from('products').select('id, name, category, is_active').eq('farm_id', selectedFarm.id),
-        supabase.from('batches').select('id, product_id, expiry_date, received_qty, purchase_price').eq('farm_id', selectedFarm.id),
+        supabase.from('batches').select('id, product_id, expiry_date, qty_received, purchase_price').eq('farm_id', selectedFarm.id),
         supabase.from('diseases').select('id, name').eq('farm_id', selectedFarm.id),
-        supabase.from('usage_items').select('product_id, qty, treatment_id, batch_id').eq('farm_id', selectedFarm.id),
+        supabase.from('usage_items').select('product_id, quantity, treatment_id, batch_id').eq('farm_id', selectedFarm.id),
         supabase.from('treatments').select('withdrawal_until_meat, withdrawal_until_milk').eq('farm_id', selectedFarm.id).or(`withdrawal_until_meat.gte.${today},withdrawal_until_milk.gte.${today}`),
       ]);
 

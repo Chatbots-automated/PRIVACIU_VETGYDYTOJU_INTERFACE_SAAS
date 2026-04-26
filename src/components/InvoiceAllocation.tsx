@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { FileText, Building2, ArrowRight, Calendar, Package, ChevronDown, ChevronUp } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
 import { SearchableSelect } from './SearchableSelect';
+import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 
 interface Invoice {
   id: string;
@@ -38,6 +40,7 @@ interface Farm {
 }
 
 export function InvoiceAllocation() {
+  const { user } = useAuth();
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [farms, setFarms] = useState<Farm[]>([]);
   const [loading, setLoading] = useState(true);
@@ -132,6 +135,8 @@ export function InvoiceAllocation() {
     if (!confirmed) return;
 
     try {
+      const clientId = requireClientId(user);
+      
       // 1. Update invoice to assign to farm
       const { error: invoiceError } = await supabase
         .from('invoices')
@@ -159,16 +164,19 @@ export function InvoiceAllocation() {
       if (warehouseBatches && warehouseBatches.length > 0) {
         // Create farm batches from warehouse batches
         const farmBatches = warehouseBatches.map(batch => ({
+          client_id: clientId,
           farm_id: selectedFarm,
           product_id: batch.product_id,
           lot: batch.lot,
           mfg_date: batch.mfg_date,
           expiry_date: batch.expiry_date,
           qty_received: batch.received_qty,
-          status: batch.status,
+          package_size: batch.package_size,
+          package_count: batch.package_count,
           purchase_price: batch.purchase_price,
           currency: batch.currency,
           supplier_id: batch.supplier_id,
+          doc_title: batch.doc_title,
           doc_number: batch.doc_number,
           doc_date: batch.doc_date,
           invoice_id: selectedInvoice,
@@ -214,13 +222,13 @@ export function InvoiceAllocation() {
 
       if (itemsWithoutBatches.length > 0) {
         const supplierServiceBatches = itemsWithoutBatches.map(item => ({
+          client_id: clientId,
           farm_id: selectedFarm,
           product_id: item.product_id,
           lot: null,
           mfg_date: null,
           expiry_date: null,
           qty_received: item.quantity,
-          status: 'active',
           purchase_price: item.unit_price,
           currency: 'EUR',
           supplier_id: invoice.supplier_id,

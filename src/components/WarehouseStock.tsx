@@ -723,10 +723,22 @@ export function WarehouseStock() {
         
         if (stockEntries.length > 0) {
           const farmBatchEntries = stockEntries.map(entry => ({
-            ...entry,
+            client_id: entry.client_id,
             farm_id: assignToFarmId,
-            qty_left: entry.received_qty,
-            status: 'active',
+            product_id: entry.product_id,
+            invoice_id: entry.invoice_id,
+            supplier_id: entry.supplier_id,
+            lot: entry.lot,
+            mfg_date: entry.mfg_date,
+            expiry_date: entry.expiry_date,
+            doc_title: entry.doc_title,
+            doc_number: entry.doc_number,
+            doc_date: entry.doc_date,
+            purchase_price: entry.purchase_price,
+            currency: entry.currency,
+            qty_received: entry.received_qty,
+            package_size: entry.package_size,
+            package_count: entry.package_count,
           }));
 
           const { data: createdFarmBatches, error: farmBatchesError } = await supabase

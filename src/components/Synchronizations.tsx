@@ -51,8 +51,7 @@ export function Synchronizations() {
         .from('synchronization_steps')
         .select(`
           *,
-          product:medication_product_id(id, name, primary_pack_unit),
-          batch:batch_id(id, lot, expiry_date)
+          product:product_id(id, name, primary_pack_unit)
         `)
         .eq('farm_id', selectedFarm.id)
         .order('scheduled_date', { ascending: true })
@@ -71,9 +70,9 @@ export function Synchronizations() {
       }
 
       if (statusFilter === 'pending') {
-        query = query.eq('completed', false);
+        query = query.eq('status', 'pending');
       } else if (statusFilter === 'completed') {
-        query = query.eq('completed', true);
+        query = query.eq('status', 'completed');
       }
 
       const { data: stepsData, error } = await query;

@@ -201,12 +201,12 @@ export function Dashboard() {
         supabase.from('batches').select(`
           id,
           created_at,
-          received_qty,
+          qty_received,
           lot,
           products!inner(name)
         `).eq('farm_id', selectedFarm.id).gte('created_at', sevenDaysAgo).order('created_at', { ascending: false }).limit(5),
         supabase.from('stock_by_product').select('category, on_hand').eq('farm_id', selectedFarm.id),
-        supabase.from('batches').select('id, purchase_price, received_qty').eq('farm_id', selectedFarm.id),
+        supabase.from('batches').select('id, purchase_price, qty_received').eq('farm_id', selectedFarm.id),
         supabase.from('animals').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id),
         supabase.from('suppliers').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id),
         supabase.from('biocide_usage').select('id', { count: 'exact', head: true }).eq('farm_id', selectedFarm.id).gte('use_date', monthStart),
@@ -267,14 +267,14 @@ export function Dashboard() {
       // Fetch batches with qty_left
       const { data: batchesWithStock } = await supabase
         .from('batches')
-        .select('id, qty_left, received_qty, purchase_price')
+        .select('id, qty_left, qty_received, purchase_price')
         .eq('farm_id', selectedFarm.id);
 
       let totalValue = 0;
       if (batchesWithStock) {
         for (const batch of batchesWithStock) {
           const onHand = batch.qty_left || 0;
-          const unitPrice = batch.received_qty > 0 ? (batch.purchase_price || 0) / batch.received_qty : 0;
+          const unitPrice = batch.qty_received > 0 ? (batch.purchase_price || 0) / batch.qty_received : 0;
           const batchValue = unitPrice * onHand;
           totalValue += batchValue;
         }
@@ -1083,7 +1083,7 @@ export function Dashboard() {
                     </div>
                     <div className="flex-1">
                       <p className="text-sm font-medium text-gray-900">{batch.products?.name}</p>
-                      <p className="text-xs text-gray-600">LOT: {batch.lot || 'N/A'} · {batch.received_qty} vnt.</p>
+                      <p className="text-xs text-gray-600">LOT: {batch.lot || 'N/A'} · {batch.qty_received} vnt.</p>
                       <p className="text-xs text-gray-500 mt-1">{formatDateTimeLT(batch.created_at)}</p>
                     </div>
                   </div>

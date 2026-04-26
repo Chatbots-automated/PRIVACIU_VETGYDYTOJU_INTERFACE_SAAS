@@ -291,6 +291,22 @@ BEGIN
     END IF;
 END $$;
 
+-- Add foreign key constraint for vaccinations.product_id (needed for PostgREST relationship queries)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.table_constraints
+        WHERE constraint_name = 'vaccinations_product_id_fkey'
+        AND table_name = 'vaccinations'
+    ) THEN
+        ALTER TABLE public.vaccinations
+            ADD CONSTRAINT vaccinations_product_id_fkey
+            FOREIGN KEY (product_id)
+            REFERENCES public.products(id)
+            ON DELETE CASCADE;
+    END IF;
+END $$;
+
 -- =====================================================================
 -- PART 4: CREATE WAREHOUSE VIEWS
 -- =====================================================================
@@ -798,6 +814,278 @@ GRANT SELECT ON public.vw_withdrawal_status TO authenticated;
 GRANT SELECT ON public.vw_vet_drug_journal_all_farms TO authenticated;
 GRANT SELECT ON public.vw_treated_animals_all_farms TO authenticated;
 GRANT SELECT ON public.vw_withdrawal_journal_all_farms TO authenticated;
+
+-- =====================================================================
+-- WITHDRAWAL DATE CALCULATION FUNCTION
+-- =====================================================================
+-- Simplified version for SaaS (only uses usage_items, not treatment_courses)
+
+CREATE OR REPLACE FUNCTION public.calculate_withdrawal_dates(p_treatment_id uuid)
+RETURNS void
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_reg_date date;
+    v_milk_until date;
+    v_meat_until date;
+BEGIN
+    SELECT reg_date INTO v_reg_date FROM public.treatments WHERE id = p_treatment_id;
+
+    -- Calculate milk withdrawal using route-specific periods from usage_items only
+    WITH single_milk AS (
+        SELECT v_reg_date + 
+            COALESCE(
+                CASE ui.administration_route
+                    WHEN 'iv' THEN p.withdrawal_iv_milk
+                    WHEN 'im' THEN p.withdrawal_im_milk
+                    WHEN 'sc' THEN p.withdrawal_sc_milk
+                    WHEN 'iu' THEN p.withdrawal_iu_milk
+                    WHEN 'imm' THEN p.withdrawal_imm_milk
+                    WHEN 'pos' THEN p.withdrawal_pos_milk
+                    ELSE p.withdrawal_days_milk
+                END,
+                p.withdrawal_days_milk,
+                0
+            ) + 1 as wd
+        FROM public.usage_items ui
+        JOIN public.products p ON p.id = ui.product_id
+        WHERE ui.treatment_id = p_treatment_id 
+          AND p.category = 'medicines'
+    )
+    SELECT MAX(wd) INTO v_milk_until FROM single_milk;
+
+    -- Calculate meat withdrawal using route-specific periods from usage_items only
+    WITH single_meat AS (
+        SELECT v_reg_date + 
+            COALESCE(
+                CASE ui.administration_route
+                    WHEN 'iv' THEN p.withdrawal_iv_meat
+                    WHEN 'im' THEN p.withdrawal_im_meat
+                    WHEN 'sc' THEN p.withdrawal_sc_meat
+                    WHEN 'iu' THEN p.withdrawal_iu_meat
+                    WHEN 'imm' THEN p.withdrawal_imm_meat
+                    WHEN 'pos' THEN p.withdrawal_pos_meat
+                    ELSE p.withdrawal_days_meat
+                END,
+                p.withdrawal_days_meat,
+                0
+            ) + 1 as wd
+        FROM public.usage_items ui
+        JOIN public.products p ON p.id = ui.product_id
+        WHERE ui.treatment_id = p_treatment_id 
+          AND p.category = 'medicines'
+    )
+    SELECT MAX(wd) INTO v_meat_until FROM single_meat;
+
+    -- Update the treatment record
+    UPDATE public.treatments
+    SET 
+        withdrawal_until_milk = v_milk_until,
+        withdrawal_until_meat = v_meat_until,
+        updated_at = now()
+    WHERE id = p_treatment_id;
+END;
+$$;
+
+COMMENT ON FUNCTION public.calculate_withdrawal_dates IS 'Calculates milk and meat withdrawal dates based on products used in treatment (SaaS version - uses usage_items only)';
+
+-- =====================================================================
+-- ADDITIONAL REPORTING VIEWS FOR REPORTS.TSX
+-- =====================================================================
+
+-- Treated Animals Detailed View (for veterinary reports)
+DROP VIEW IF EXISTS public.vw_treated_animals_detailed CASCADE;
+
+CREATE VIEW public.vw_treated_animals_detailed AS
+SELECT
+    t.client_id,
+    t.farm_id,
+    t.id AS treatment_id,
+    t.animal_id,
+    t.disease_id,
+    COALESCE(ui.administered_date, t.reg_date) AS registration_date,
+    t.created_at,
+    a.tag_no AS animal_tag,
+    a.species,
+    a.sex,
+    a.birth_date,
+    EXTRACT(YEAR FROM AGE(COALESCE(ui.administered_date, t.reg_date)::date, a.birth_date::date)) * 12 +
+    EXTRACT(MONTH FROM AGE(COALESCE(ui.administered_date, t.reg_date)::date, a.birth_date::date)) AS age_months,
+    a.holder_name AS owner_name,
+    a.holder_address AS owner_address,
+    COALESCE(d.name, NULLIF(TRIM(t.clinical_diagnosis), ''), 'Nespecifikuota liga') AS disease_name,
+    d.code AS disease_code,
+    t.clinical_diagnosis,
+    COALESCE(t.animal_condition, 'Patenkinama') AS animal_condition,
+    COALESCE(t.first_symptoms_date, t.reg_date) AS first_symptoms_date,
+    t.tests,
+    t.services,
+    p.name AS medicine_name,
+    p.id AS medicine_id,
+    ui.quantity AS medicine_dose,
+    ui.unit::text AS medicine_unit,
+    ui.administration_route,
+    1 AS medicine_days,
+    t.withdrawal_until_meat,
+    t.withdrawal_until_milk,
+    CASE
+        WHEN t.withdrawal_until_meat IS NOT NULL AND t.withdrawal_until_meat >= CURRENT_DATE
+        THEN (t.withdrawal_until_meat - CURRENT_DATE)
+        ELSE 0
+    END AS withdrawal_days_meat,
+    CASE
+        WHEN t.withdrawal_until_milk IS NOT NULL AND t.withdrawal_until_milk >= CURRENT_DATE
+        THEN (t.withdrawal_until_milk - CURRENT_DATE)
+        ELSE 0
+    END AS withdrawal_days_milk,
+    t.outcome AS treatment_outcome,
+    COALESCE(t.vet_name, 'Nenurodyta') AS veterinarian,
+    t.notes
+FROM public.treatments t
+LEFT JOIN public.animals a ON t.animal_id = a.id
+LEFT JOIN public.diseases d ON t.disease_id = d.id
+LEFT JOIN public.usage_items ui ON ui.treatment_id = t.id
+LEFT JOIN public.products p ON ui.product_id = p.id
+WHERE p.category = 'medicines' OR p.category IS NULL;
+
+COMMENT ON VIEW public.vw_treated_animals_detailed IS 'Detailed view of treated animals for veterinary reports (multi-tenant)';
+
+-- Withdrawal Report View
+DROP VIEW IF EXISTS public.vw_withdrawal_report CASCADE;
+
+CREATE VIEW public.vw_withdrawal_report AS
+SELECT
+    t.client_id,
+    t.farm_id,
+    f.name AS farm_name,
+    f.code AS farm_code,
+    f.is_eco_farm,
+    t.id AS treatment_id,
+    t.animal_id,
+    a.tag_no AS animal_tag,
+    a.species,
+    a.sex,
+    t.reg_date AS treatment_date,
+    -- Original withdrawal dates
+    t.withdrawal_until_meat AS withdrawal_until_meat_original,
+    t.withdrawal_until_milk AS withdrawal_until_milk_original,
+    -- Eco-farm adjusted withdrawal dates
+    CASE
+        WHEN f.is_eco_farm AND t.withdrawal_until_meat IS NOT NULL THEN
+            CASE
+                WHEN t.withdrawal_until_meat >= CURRENT_DATE THEN
+                    CASE
+                        WHEN (t.withdrawal_until_meat - CURRENT_DATE) = 0
+                        THEN (CURRENT_DATE + INTERVAL '2 days')::date
+                        ELSE (t.reg_date + ((t.withdrawal_until_meat - t.reg_date) * 2) * INTERVAL '1 day')::date
+                    END
+                ELSE (CURRENT_DATE + INTERVAL '2 days')::date
+            END
+        ELSE t.withdrawal_until_meat
+    END AS withdrawal_until_meat,
+    CASE
+        WHEN f.is_eco_farm AND t.withdrawal_until_milk IS NOT NULL THEN
+            CASE
+                WHEN t.withdrawal_until_milk >= CURRENT_DATE THEN
+                    CASE
+                        WHEN (t.withdrawal_until_milk - CURRENT_DATE) = 0
+                        THEN (CURRENT_DATE + INTERVAL '2 days')::date
+                        ELSE (t.reg_date + ((t.withdrawal_until_milk - t.reg_date) * 2) * INTERVAL '1 day')::date
+                    END
+                ELSE (CURRENT_DATE + INTERVAL '2 days')::date
+            END
+        ELSE t.withdrawal_until_milk
+    END AS withdrawal_until_milk,
+    -- Withdrawal days remaining
+    CASE
+        WHEN f.is_eco_farm AND t.withdrawal_until_meat IS NOT NULL THEN
+            GREATEST(0, 
+                CASE
+                    WHEN t.withdrawal_until_meat >= CURRENT_DATE THEN
+                        CASE
+                            WHEN (t.withdrawal_until_meat - CURRENT_DATE) = 0
+                            THEN 2
+                            ELSE ((t.withdrawal_until_meat - t.reg_date) * 2) - (CURRENT_DATE - t.reg_date)
+                        END
+                    ELSE 2
+                END
+            )
+        WHEN t.withdrawal_until_meat IS NOT NULL AND t.withdrawal_until_meat >= CURRENT_DATE THEN
+            (t.withdrawal_until_meat - CURRENT_DATE)
+        ELSE 0
+    END AS withdrawal_days_meat,
+    CASE
+        WHEN f.is_eco_farm AND t.withdrawal_until_milk IS NOT NULL THEN
+            GREATEST(0,
+                CASE
+                    WHEN t.withdrawal_until_milk >= CURRENT_DATE THEN
+                        CASE
+                            WHEN (t.withdrawal_until_milk - CURRENT_DATE) = 0
+                            THEN 2
+                            ELSE ((t.withdrawal_until_milk - t.reg_date) * 2) - (CURRENT_DATE - t.reg_date)
+                        END
+                    ELSE 2
+                END
+            )
+        WHEN t.withdrawal_until_milk IS NOT NULL AND t.withdrawal_until_milk >= CURRENT_DATE THEN
+            (t.withdrawal_until_milk - CURRENT_DATE)
+        ELSE 0
+    END AS withdrawal_days_milk,
+    COALESCE(d.name, t.clinical_diagnosis, 'Nenurodyta') AS disease_name,
+    t.vet_name AS veterinarian,
+    t.notes,
+    -- Get medicines used in this treatment
+    (
+        SELECT string_agg(DISTINCT p.name, ', ')
+        FROM public.usage_items ui
+        JOIN public.products p ON ui.product_id = p.id
+        WHERE ui.treatment_id = t.id
+    ) AS medicines_used,
+    t.created_at,
+    t.updated_at
+FROM public.treatments t
+JOIN public.farms f ON t.farm_id = f.id
+LEFT JOIN public.animals a ON t.animal_id = a.id
+LEFT JOIN public.diseases d ON t.disease_id = d.id;
+
+COMMENT ON VIEW public.vw_withdrawal_report IS 'Withdrawal periods report with eco-farm adjustments (multi-tenant)';
+
+-- Veterinary Drug Journal View (farm-specific)
+DROP VIEW IF EXISTS public.vw_vet_drug_journal CASCADE;
+
+CREATE VIEW public.vw_vet_drug_journal AS
+SELECT
+    b.client_id,
+    b.farm_id,
+    b.id AS batch_id,
+    b.product_id,
+    b.created_at AS receipt_date,
+    p.name AS product_name,
+    p.registration_code,
+    p.active_substance,
+    s.name AS supplier_name,
+    b.lot AS batch_number,
+    b.mfg_date AS manufacture_date,
+    b.expiry_date,
+    b.qty_received AS quantity_received,
+    p.primary_pack_unit AS unit,
+    (b.qty_received - b.qty_left) AS quantity_used,
+    b.qty_left AS quantity_remaining,
+    b.doc_number AS invoice_number,
+    b.doc_date AS invoice_date,
+    'Invoice' AS doc_title
+FROM public.batches b
+JOIN public.products p ON b.product_id = p.id
+LEFT JOIN public.suppliers s ON b.supplier_id = s.id
+WHERE p.category IN ('medicines', 'prevention')
+ORDER BY b.created_at DESC;
+
+COMMENT ON VIEW public.vw_vet_drug_journal IS 'Veterinary drug journal with batch tracking (farm-specific, multi-tenant)';
+
+-- Grant permissions
+GRANT SELECT ON public.vw_treated_animals_detailed TO authenticated;
+GRANT SELECT ON public.vw_withdrawal_report TO authenticated;
+GRANT SELECT ON public.vw_vet_drug_journal TO authenticated;
 
 -- =====================================================================
 -- MIGRATION COMPLETE

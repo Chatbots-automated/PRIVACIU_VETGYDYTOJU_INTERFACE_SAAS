@@ -5,6 +5,7 @@ import { StockAllocation } from './StockAllocation';
 import { AllFarmsReports } from './AllFarmsReports';
 import { AllocationAnalytics } from './AllocationAnalytics';
 import { Products } from './Products';
+import { FinancesModule } from './FinancesModule';
 import { 
   Package, 
   ArrowRight, 
@@ -16,7 +17,8 @@ import {
   Warehouse,
   Menu,
   X,
-  Pill
+  Pill,
+  Receipt
 } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
 
@@ -29,6 +31,7 @@ const menuItems = [
   { id: 'receive-stock', label: 'Pajamavimas', icon: Warehouse },
   { id: 'allocate-stock', label: 'Paskirstymas', icon: ArrowRight },
   { id: 'products', label: 'Produktai', icon: Pill },
+  { id: 'finances', label: 'Finansai', icon: Receipt },
   { id: 'reports', label: 'Bendros Ataskaitos', icon: FileText },
   { id: 'analytics', label: 'Analitika', icon: BarChart3 },
 ];
@@ -56,6 +59,8 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
         return <StockAllocation />;
       case 'products':
         return <Products showAllFarms={true} />;
+      case 'finances':
+        return <FinancesModule />;
       case 'reports':
         return <AllFarmsReports />;
       case 'analytics':

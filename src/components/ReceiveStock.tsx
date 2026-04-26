@@ -622,7 +622,7 @@ export function ReceiveStock() {
             currency: invoiceData.invoice.currency || 'EUR',
             package_size: packageSize,
             package_count: packageCount,
-            received_qty: packageSize && packageCount ? packageSize * packageCount : qty,
+            qty_received: packageSize && packageCount ? packageSize * packageCount : qty,
           });
         }
 
@@ -886,9 +886,9 @@ export function ReceiveStock() {
         if (formData.package_size && formData.package_count) {
           batchData.package_size = parseFloat(formData.package_size);
           batchData.package_count = parseFloat(formData.package_count);
-          batchData.received_qty = parseFloat(formData.package_size) * parseFloat(formData.package_count);
+          batchData.qty_received = parseFloat(formData.package_size) * parseFloat(formData.package_count);
         } else if (formData.received_qty) {
-          batchData.received_qty = parseFloat(formData.received_qty);
+          batchData.qty_received = parseFloat(formData.received_qty);
         }
 
         const { error } = await supabase.from('batches').insert(batchData);

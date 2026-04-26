@@ -6,6 +6,7 @@ import { Users, Plus, Trash2, Check, Search, Syringe, Package } from 'lucide-rea
 import { formatDateLT } from '../lib/formatters';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
+import { requireClientId } from '../lib/clientHelpers';
 
 interface SelectedAnimal extends Animal {
   collar_no: string | null;
@@ -297,6 +298,22 @@ export function BulkTreatment() {
     setLoading(true);
 
     try {
+      // Load service prices for visit charges
+      const clientId = requireClientId(user);
+      const { data: servicePricesData, error: pricesError } = await supabase
+        .from('service_prices')
+        .select('procedure_type, base_price')
+        .eq('client_id', clientId);
+
+      if (pricesError) {
+        console.error('Error loading service prices:', pricesError);
+      }
+
+      const servicePrices = new Map<string, number>();
+      (servicePricesData || []).forEach(sp => {
+        servicePrices.set(sp.procedure_type, sp.base_price);
+      });
+
       // Group medications by category
       const treatments = validMedications.filter(m => 
         m.category === 'medicines' || 
@@ -321,6 +338,7 @@ export function BulkTreatment() {
             const { data: treatment, error: treatmentError } = await supabase
               .from('treatments')
               .insert({
+                client_id: clientId,
                 farm_id: selectedFarm.id,
                 reg_date: formData.treatment_date,
                 animal_id: animal.id,
@@ -338,13 +356,13 @@ export function BulkTreatment() {
 
             // Add all medicines to this treatment
             const usageItems = treatments.map(med => ({
+              client_id: clientId,
               farm_id: selectedFarm.id,
               treatment_id: treatment.id,
               product_id: med.product_id,
               batch_id: med.batch_id,
-              qty: parseFloat(med.qty),
+              quantity: parseFloat(med.qty),
               unit: med.unit,
-              purpose: med.purpose,
               administered_date: formData.treatment_date,
             }));
 
@@ -361,6 +379,7 @@ export function BulkTreatment() {
           const { data: vaccineTreatment, error: vacTreatmentError } = await supabase
             .from('treatments')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm.id,
               reg_date: formData.treatment_date,
               animal_id: animal.id,
@@ -384,6 +403,7 @@ export function BulkTreatment() {
             const { error: vacError } = await supabase
               .from('vaccinations')
               .insert({
+                client_id: clientId,
                 farm_id: selectedFarm.id,
                 animal_id: animal.id,
                 product_id: vac.product_id,
@@ -409,6 +429,7 @@ export function BulkTreatment() {
           const { data: preventionData, error: prevError } = await supabase
             .from('preventions')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm.id,
               animal_id: animal.id,
               application_date: formData.treatment_date,
@@ -424,13 +445,13 @@ export function BulkTreatment() {
           const { error: usageError } = await supabase
             .from('usage_items')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm.id,
-              biocide_usage_id: preventionData.id,
+              prevention_id: preventionData.id,
               product_id: prev.product_id,
               batch_id: prev.batch_id,
-              qty: parseFloat(prev.qty),
+              quantity: parseFloat(prev.qty),
               unit: prev.unit,
-              purpose: 'prevention',
             });
 
           if (usageError) throw usageError;
@@ -442,9 +463,10 @@ export function BulkTreatment() {
         if (vaccinations.length > 0) procedures.push('Vakcina');
         if (preventions.length > 0) procedures.push('Profilaktika');
 
-        const { error: visitError } = await supabase
+        const { data: visitData, error: visitError } = await supabase
           .from('animal_visits')
           .insert({
+            client_id: clientId,
             farm_id: selectedFarm.id,
             animal_id: animal.id,
             visit_datetime: new Date(formData.treatment_date).toISOString(),
@@ -452,13 +474,75 @@ export function BulkTreatment() {
             status: 'Baigtas',
             notes: formData.notes || null,
             vet_name: formData.vet_name || null,
-            created_by_user_id: user?.full_name || user?.email || null,
             treatment_required: procedures.includes('Gydymas'),
             related_treatment_id: visitTreatmentId,
-          });
+          })
+          .select()
+          .single();
 
         if (visitError) {
           console.warn(`Failed to create visit for animal ${animal.tag_no}:`, visitError);
+        } else if (visitData) {
+          // Create visit charges for services (procedures)
+          const visitCharges: any[] = [];
+          
+          for (const procedure of procedures) {
+            const price = servicePrices.get(procedure) || 0;
+            if (price > 0) {
+              visitCharges.push({
+                client_id: clientId,
+                farm_id: selectedFarm.id,
+                visit_id: visitData.id,
+                animal_id: animal.id,
+                charge_type: 'paslauga',
+                procedure_type: procedure,
+                quantity: 1,
+                unit_price: price,
+                total_price: price,
+                invoiced: false,
+              });
+            }
+          }
+
+          // Create visit charges for products used
+          for (const med of validMedications) {
+            const product = products.find(p => p.id === med.product_id);
+            const batch = batches.find(b => b.batch_id === med.batch_id);
+            const unitPrice = batch?.avg_price_before_discount || 0;
+            const qty = parseFloat(med.qty) || 0;
+            const totalPrice = unitPrice * qty;
+
+            if (product && qty > 0) {
+              visitCharges.push({
+                client_id: clientId,
+                farm_id: selectedFarm.id,
+                visit_id: visitData.id,
+                animal_id: animal.id,
+                charge_type: 'produktas',
+                product_id: product.id,
+                product_name: product.name,
+                quantity: qty,
+                unit_price: unitPrice,
+                total_price: totalPrice,
+                invoiced: false,
+              });
+            }
+          }
+
+          // Insert all visit charges
+          if (visitCharges.length > 0) {
+            console.log(`Creating ${visitCharges.length} visit charges for animal ${animal.tag_no}:`, visitCharges);
+            const { data: chargesData, error: chargesError } = await supabase
+              .from('visit_charges')
+              .insert(visitCharges)
+              .select();
+
+            if (chargesError) {
+              console.error(`Failed to create visit charges for animal ${animal.tag_no}:`, chargesError);
+            } else {
+              console.log(`Successfully created visit charges:`, chargesData);
+            }
+          }
         }
 
           successCount++;

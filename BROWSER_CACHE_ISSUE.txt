@@ -1,0 +1,75 @@
+==================================================================
+⚠️ BROWSER CACHE ISSUE - PLEASE READ ⚠️
+==================================================================
+Created: 2026-04-25 18:53
+
+PROBLEM:
+========
+Your browser is serving OLD cached JavaScript files that contain the
+wrong column names (received_qty instead of qty_received).
+
+Even though the source code has been fixed, your browser won't load
+the new code until you clear the cache.
+
+SYMPTOMS:
+=========
+- Error: "Could not find the 'received_qty' column of 'batches'"
+- But the source code uses 'qty_received' (correct)
+- The network request URL shows old column names
+
+SOLUTION:
+=========
+You MUST do a hard refresh to clear the cached JavaScript:
+
+**Windows/Linux:**
+Press: Ctrl + F5
+OR: Ctrl + Shift + R
+
+**Mac:**
+Press: Cmd + Shift + R
+
+**Alternative:**
+1. Open DevTools (F12)
+2. Right-click the refresh button
+3. Select "Empty Cache and Hard Reload"
+
+**Nuclear Option (if above doesn't work):**
+1. Close all browser tabs for localhost:5173
+2. Clear browser cache completely
+3. Restart Vite dev server: Ctrl+C, then npm run dev
+4. Open fresh browser tab
+
+FILES THAT WERE FIXED:
+======================
+✅ InvoiceAllocation.tsx - Complete batches schema fix:
+   - Line 173: qty_received (not received_qty)
+   - Line 232: qty_received (not received_qty)  
+   - Added client_id to both batch creation locations
+   - Added package_size, package_count, doc_title
+   - Removed status field (batches table doesn't have it)
+
+✅ WarehouseStock.tsx - Complete batches schema fix:
+   - Line 725-730: Replaced spread operator with explicit mapping
+   - received_qty → qty_received
+   - Removed qty_left (GENERATED column)
+   - Removed status field (batches table doesn't have it)
+   - Line 963-965: Manual entry also fixed
+
+✅ ReceiveStock.tsx - Line 625, 889-891: qty_received (not received_qty)
+
+✅ AnimalDetailSidebar.tsx - All 21 inserts fixed
+✅ Inventory.tsx - Fixed batches SELECT queries
+✅ StockAllocation.tsx - Fixed batches inserts
+✅ AnimalsCompact.tsx - Fixed animals & species inserts
+
+AFTER HARD REFRESH:
+===================
+✅ "Masinis priėmimas" (bulk receiving) should work
+✅ "Paskirstymas" (invoice allocation to farm) should work
+✅ All animal treatments should work
+✅ All reports should load
+
+If you STILL see the error after hard refresh, then:
+- Check if Vite dev server needs restart
+- Check browser DevTools → Network tab → look for "AnimalDetailSidebar.tsx" 
+  or "InvoiceAllocation.tsx" and verify it's loading from server (not from cache)

@@ -18,6 +18,7 @@ WHAT THIS FIXES:
 ✅ Adds foreign key constraints:
     - invoice_items.product_id → products
     - invoice_items.batch_id → batches
+    - vaccinations.product_id → products
 ✅ Makes farm_id nullable in invoices, invoice_items, and batches (for shared warehouse)
 ✅ Creates warehouse_batches table (based on old schema + client_id for multi-tenancy)
 ✅ Creates farm_stock_allocations table (with client_id for multi-tenancy)
@@ -31,9 +32,13 @@ WHAT THIS FIXES:
 ✅ Creates veterinary reporting views:
     - animal_visit_summary (animal visit details)
     - vw_withdrawal_status (current withdrawal status per animal)
+    - vw_treated_animals_detailed (detailed treatment records for reports)
+    - vw_withdrawal_report (withdrawal periods with eco-farm adjustments)
+    - vw_vet_drug_journal (drug receipts per farm)
     - vw_vet_drug_journal_all_farms (drug receipts across all farms)
     - vw_treated_animals_all_farms (treated animals register)
     - vw_withdrawal_journal_all_farms (withdrawal periods)
+✅ Creates calculate_withdrawal_dates() function (simplified for SaaS - uses usage_items only)
 ✅ Updates client limits to new pricing tiers (Trial gets 3 farms, not 1)
 ✅ Adds warehouse triggers for automatic quantity tracking and field initialization
 ✅ Adds trigger_set_timestamp function for updated_at fields
@@ -49,6 +54,7 @@ ERRORS THIS RESOLVES:
 ❌ "Could not find the 'warehouse_batch_id' column of 'invoice_items'"
 ❌ "Could not find a relationship between 'invoice_items' and 'products'"
 ❌ "Could not find a relationship between 'invoice_items' and 'batches'"
+❌ "Could not find the 'created_by_user_id' column of 'animal_visits'"
 ❌ "Could not find the table 'vw_warehouse_stock_available'" (404)
 ❌ "Could not find the table 'vw_withdrawal_status'" (404)
 ❌ "Could not find the table 'vw_vet_drug_journal_all_farms'" (404)
@@ -57,9 +63,25 @@ ERRORS THIS RESOLVES:
 ❌ "Could not find the table 'animal_visit_summary'" (404)
 ❌ "invalid input value for enum product_category: 'supplier_services'"
 ❌ "null value in column 'client_id' of relation 'animals' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'animal_visits' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'treatments' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'treatment_courses' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'usage_items' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'vaccinations' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'biocide_usage' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'hoof_records' violates not-null constraint"
+❌ "null value in column 'client_id' of relation 'teat_status' violates not-null constraint"
 ❌ "null value in column 'client_id' of relation 'diseases' violates not-null constraint"
 ❌ "null value in column 'client_id' of relation 'species' violates not-null constraint"
 ❌ "null value in column 'client_id' of relation 'farm_stock_allocations' violates not-null constraint"
+❌ "Could not find the 'qty' column of 'usage_items'" (should be quantity)
+❌ "Could not find the function public.calculate_withdrawal_dates" (404)
+❌ "Could not find the table 'public.vw_treated_animals_detailed'" (404)
+❌ "Could not find the table 'public.vw_withdrawal_report'" (404)
+❌ "Could not find the table 'public.vw_vet_drug_journal'" (404)
+❌ Schema mismatch errors for treatment_courses, biocide_usage, hoof_records
+❌ Vaccinations SELECT query failing (400) - needs foreign key constraint from migration
+❌ ReferenceError: coursesResult is not defined (UI bug from incomplete refactor)
 ❌ "Could not find the 'received_qty' column of 'batches'" (batches uses qty_received)
 ❌ "column wb.received_date does not exist" (removed from view - doesn't exist in warehouse_batches)
 ❌ "relation idx_warehouse_batches_client_id already exists" (uses IF NOT EXISTS now)
@@ -84,13 +106,21 @@ supabase db push
 
 VERIFICATION:
 =============
-After running, test in your app:
+⚠️ IMPORTANT: After updating code, you MUST hard refresh your browser! ⚠️
+Press Ctrl+F5 (Windows) or Cmd+Shift+R (Mac) to clear cached JavaScript.
+Otherwise you'll see old errors even though the code is fixed!
+
+After running migration + hard refresh, test in your app:
 1. Go to "pajamavimas" tab
 2. Upload an invoice
 3. Select a product
 4. Choose "bendras sandelis" (shared warehouse)
 5. Click "Priimti" 
-6. Should work without any "Could not find column" errors!
+6. Go to "paskirstymas" tab
+7. Assign invoice to a farm
+8. Should work without any "Could not find column" errors!
+
+See BROWSER_CACHE_ISSUE.txt if you're still seeing errors after hard refresh.
 
 WHAT ABOUT THE OLD MIGRATION FILES?
 ====================================
@@ -116,16 +146,48 @@ But keep:
 UI COMPONENT FIXES:
 ===================
 The following UI components have been updated to work with the new schema:
-✅ ReceiveStock.tsx - added client_id to all inserts
-✅ WarehouseStock.tsx - fixed column names (received_qty, not qty_received)
-✅ InvoiceAllocation.tsx - fixed batches insert (qty_received, not received_qty)
+✅ ReceiveStock.tsx - added client_id to all inserts + fixed batches column names:
+   - Changed received_qty to qty_received for batches inserts (2 locations)
+   - Already had client_id properly added from earlier fixes
+✅ WarehouseStock.tsx - comprehensive fix for warehouse → farm allocation:
+   - Fixed "Masinis priėmimas" to farm: removed spread operator (line 726)
+   - Explicitly mapped all fields: received_qty → qty_received
+   - Removed qty_left from insert (it's a GENERATED column)
+   - Removed status from insert (batches table doesn't have this column)
+   - Added all necessary fields: package_size, package_count, doc_title, etc.
+   - Manual warehouse entry already fixed (lines 963-965)
+✅ InvoiceAllocation.tsx - comprehensive fix for invoice allocation to farms:
+   - Added client_id to farmBatches creation (from warehouse_batches)
+   - Added client_id to supplierServiceBatches creation
+   - Fixed column name: qty_received (not received_qty) in both locations
+   - Added package_size, package_count, doc_title fields
+   - Removed status from batches inserts (batches table doesn't have this column)
+   - Imported useAuth and requireClientId
 ✅ StockAllocation.tsx - added client_id to products and farm_stock_allocations
 ✅ Inventory.tsx - fixed batches SELECT query (qty_received)
 ✅ AnimalsCompact.tsx - added client_id to species and animals inserts
-✅ AnimalDetailSidebar.tsx - fixed all batches queries and batch references:
-   - Changed SELECT queries from received_qty to qty_received
-   - Changed all batch.received_qty references to batch.qty_received
-   - Added client_id to diseases inserts
+✅ AnimalDetailSidebar.tsx - COMPREHENSIVE FIX for all multi-tenant schema requirements:
+   - Fixed all batches queries: changed received_qty to qty_received
+   - Fixed all batch.received_qty references to batch.qty_received
+   - Added client_id to ALL inserts that require it (21 total inserts fixed):
+     * diseases (1 location)
+     * animal_visits (7 locations - all instances fixed)
+     * treatments (2 locations)
+     * treatment_courses (1 location - also fixed schema mismatch)
+     * usage_items (3 locations - also changed qty to quantity)
+     * vaccinations (1 location)
+     * biocide_usage (3 locations - also changed field names to match schema)
+     * hoof_records (1 location - also changed schema to match SaaS baseline)
+     * teat_status (1 upsert location)
+   - Removed non-existent created_by_user_id column from animal_visits
+   - Fixed treatment_courses to use SaaS schema (course_name, animal_id, initial_treatment_id)
+   - Fixed treatment_courses SELECT queries (removed old schema references)
+   - Fixed usage_items column name: qty → quantity
+   - Fixed biocide_usage column names: use_date → usage_date, qty → quantity_used, etc.
+
+⚠️ WARNING: OTHER COMPONENTS STILL NEED client_id FIXES
+See ADDITIONAL_CLIENT_ID_FIXES_NEEDED.txt for a complete list of components
+that still need to be updated (Seklinimas, InseminationModal, ReceiveStock, etc.)
 
 NOTE: If you already ran migrations 20260425000006-20260425000010,
 running 20260425000011 is safe because it uses "IF NOT EXISTS" and

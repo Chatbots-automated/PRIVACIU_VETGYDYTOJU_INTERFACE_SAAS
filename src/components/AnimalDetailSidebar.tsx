@@ -6,7 +6,7 @@ import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
 import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
-import { requireClientId } from '../lib/helpers';
+import { requireClientId } from '../lib/clientHelpers';
 import { AnimalAnalytics } from './AnimalAnalytics';
 import { TeatStatusCard } from './TeatStatusCard';
 import { TeatDisplay, TeatSelector } from './TeatSelector';
@@ -15,6 +15,7 @@ import { SearchableSelect } from './SearchableSelect';
 import { showNotification } from './NotificationToast';
 import { HoofSelector } from './HoofSelector';
 import { CourseMedicationScheduler } from './CourseMedicationScheduler';
+import { PricingModal } from './PricingModal';
 
 interface Vaccination {
   id: string;
@@ -141,11 +142,20 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
   const [treatments, setTreatments] = useState<TreatmentWithDetails[]>([]);
   const [vaccinations, setVaccinations] = useState<VaccinationWithProduct[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
+  const [batches, setBatches] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [showVisitModal, setShowVisitModal] = useState(false);
   const [selectedVisit, setSelectedVisit] = useState<AnimalVisit | null>(null);
   const [showVisitDetailModal, setShowVisitDetailModal] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  // Pricing modal state (at parent level so it persists after visit modal closes)
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [pricingModalData, setPricingModalData] = useState<{
+    visitData: any;
+    animalName: string;
+    productsUsed: any[];
+  } | null>(null);
 
   const [treatmentDateFrom, setTreatmentDateFrom] = useState('');
   const [treatmentDateTo, setTreatmentDateTo] = useState('');
@@ -179,7 +189,8 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
       loadVisits(),
       loadTreatments(),
       loadVaccinations(),
-      loadProducts()
+      loadProducts(),
+      loadBatches()
     ]);
     setLoading(false);
   };
@@ -209,29 +220,23 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
       const treatmentsWithItems = await Promise.all(
         treatmentsData.map(async (treatment: any) => {
           // Load both usage_items (single doses) and treatment_courses (multi-day courses)
-          const [usageResult, coursesResult] = await Promise.all([
+          const [usageResult] = await Promise.all([
             supabase
               .from('usage_items')
               .select('*, product:products(*)')
-              .eq('treatment_id', treatment.id),
-            supabase
-              .from('treatment_courses')
-              .select('*, product:products(*), batch:batches(*)')
               .eq('treatment_id', treatment.id)
           ]);
 
           console.log(`📦 Treatment ${treatment.id.slice(0, 8)}:`, {
             withdrawal_milk: treatment.withdrawal_until_milk,
             withdrawal_meat: treatment.withdrawal_until_meat,
-            usage_items: usageResult.data?.length || 0,
-            courses: coursesResult.data?.length || 0
+            usage_items: usageResult.data?.length || 0
           });
 
           return {
             ...treatment,
             disease_name: treatment.disease?.name,
-            usage_items: usageResult.data || [],
-            treatment_courses: coursesResult.data || []
+            usage_items: usageResult.data || []
           };
         })
       );
@@ -297,11 +302,28 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
     setProducts(sortedData);
   };
 
+  const loadBatches = async () => {
+    if (!selectedFarm) return;
+
+    const { data, error } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('farm_id', selectedFarm.id)
+      .order('expiry_date');
+
+    if (!error && data) {
+      console.log('📦 Loaded batches:', data.length);
+      setBatches(data);
+    } else if (error) {
+      console.error('Error loading batches:', error);
+    }
+  };
+
   // Helper function to return stock to farm batches when deleting usage_items
   const returnStockToFarmBatches = async (treatmentId: string): Promise<number> => {
     const { data: usageItems, error: usageError } = await supabase
       .from('usage_items')
-      .select('id, batch_id, qty')
+      .select('id, batch_id, quantity')
       .eq('treatment_id', treatmentId);
 
     if (usageError) throw usageError;
@@ -320,7 +342,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
           continue;
         }
 
-        const newQtyLeft = (batch.qty_left || 0) + item.qty;
+        const newQtyLeft = (batch.qty_left || 0) + item.quantity;
         const newStatus = batch.status === 'depleted' && newQtyLeft > 0 ? 'active' : batch.status;
 
         await supabase
@@ -1736,10 +1758,15 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
       {showVisitModal && (
         <VisitCreateModal
           animalId={animal.id}
+          animalName={animal.tag_no}
           onClose={() => setShowVisitModal(false)}
           onSuccess={() => {
             loadAllData();
             setShowVisitModal(false);
+          }}
+          onPricingModalDataReady={(data) => {
+            setPricingModalData(data);
+            setShowPricingModal(true);
           }}
         />
       )}
@@ -1748,6 +1775,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
         <VisitDetailModal
           visit={selectedVisit}
           animalId={animal.id}
+          animalName={animal.tag_no}
           onClose={() => {
             setShowVisitDetailModal(false);
             setSelectedVisit(null);
@@ -1757,6 +1785,24 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
             setShowVisitDetailModal(false);
             setSelectedVisit(null);
           }}
+          onPricingModalDataReady={(data) => {
+            setPricingModalData(data);
+            setShowPricingModal(true);
+          }}
+        />
+      )}
+
+      {/* Pricing Modal - at parent level so it persists after visit modal closes */}
+      {showPricingModal && pricingModalData && (
+        <PricingModal
+          isOpen={showPricingModal}
+          onClose={() => {
+            setShowPricingModal(false);
+            setPricingModalData(null);
+          }}
+          visitData={pricingModalData.visitData}
+          animalName={pricingModalData.animalName}
+          productsUsed={pricingModalData.productsUsed}
         />
       )}
     </div>
@@ -1823,7 +1869,7 @@ function VisitCard({ visit, getStatusColor, getStatusIcon, onClick }: { visit: A
   );
 }
 
-function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { animalId: string; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit }) {
+function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdit, onPricingModalDataReady }: { animalId: string; animalName?: string; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit; onPricingModalDataReady?: (data: any) => void }) {
   const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const modalContentRef = useRef<HTMLDivElement>(null);
@@ -1973,7 +2019,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
   const returnStockToFarmBatches = async (treatmentId: string): Promise<number> => {
     const { data: usageItems, error: usageError } = await supabase
       .from('usage_items')
-      .select('id, batch_id, qty')
+      .select('id, batch_id, quantity')
       .eq('treatment_id', treatmentId);
 
     if (usageError) throw usageError;
@@ -1992,7 +2038,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           continue;
         }
 
-        const newQtyLeft = (batch.qty_left || 0) + item.qty;
+        const newQtyLeft = (batch.qty_left || 0) + item.quantity;
         const newStatus = batch.status === 'depleted' && newQtyLeft > 0 ? 'active' : batch.status;
 
         await supabase
@@ -2008,45 +2054,11 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
       }
     }
 
-    // Also return stock from treatment_courses
-    const { data: courses, error: coursesError } = await supabase
-      .from('treatment_courses')
-      .select('id, batch_id, total_qty')
-      .eq('treatment_id', treatmentId);
-
-    if (coursesError) throw coursesError;
-
-    if (courses && courses.length > 0) {
-      for (const course of courses) {
-        if (!course.batch_id) continue;
-
-        const { data: batch, error: batchError } = await supabase
-          .from('batches')
-          .select('qty_left, status')
-          .eq('id', course.batch_id)
-          .single();
-
-        if (batchError) {
-          console.error('Error fetching batch:', batchError);
-          continue;
-        }
-
-        const newQtyLeft = (batch.qty_left || 0) + (course.total_qty || 0);
-        const newStatus = batch.status === 'depleted' && newQtyLeft > 0 ? 'active' : batch.status;
-
-        await supabase
-          .from('batches')
-          .update({ 
-            qty_left: newQtyLeft,
-            status: newStatus,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', course.batch_id);
-
-        returnedCount++;
-      }
-    }
-
+    // Note: treatment_courses in SaaS schema doesn't track batch inventory
+    // Stock is only tracked via usage_items
+    
+    // Legacy code for treatment_courses stock return removed (not applicable in SaaS schema)
+    
     return returnedCount;
   };
 
@@ -2568,6 +2580,8 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
     }
     setLoading(true);
 
+    const clientId = requireClientId(user);
+
     console.log('🚀 handleSubmit called:', {
       isEditMode,
       visitId: visitToEdit?.id,
@@ -2710,6 +2724,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data, error: visitError } = await supabase
             .from('animal_visits')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_datetime: formData.visit_datetime,
@@ -2719,7 +2734,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               status: formData.status,
               notes: formData.notes ? formData.notes : null,
               vet_name: formData.vet_name ? formData.vet_name : null,
-              created_by_user_id: user?.full_name || user?.email || null,
               next_visit_required: formData.next_visit_required,
               next_visit_date: formData.next_visit_required ? formData.next_visit_date : null,
               treatment_required: formData.procedures.includes('Gydymas'),
@@ -2804,6 +2818,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { data, error: treatmentError } = await supabase
               .from('treatments')
               .insert({
+                client_id: clientId,
                 farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_id: visitData.id,
@@ -2833,6 +2848,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data, error: treatmentError } = await supabase
             .from('treatments')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_id: visitData.id,
@@ -2906,17 +2922,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { error: courseError } = await supabase
               .from('treatment_courses')
               .insert({
+                client_id: clientId,
                 farm_id: selectedFarm!.id,
-                treatment_id: treatmentRecord.id,
-                product_id: med.product_id,
-                batch_id: med.batch_id || null,
-                total_dose: null,
-                days: days,
-                daily_dose: null,
-                unit: med.unit,
+                animal_id: animalId,
+                initial_treatment_id: treatmentRecord.id,
+                course_name: `Gydymas - ${products.find(p => p.id === med.product_id)?.name || 'Produktas'}`,
                 start_date: formData.visit_datetime.split('T')[0],
-                teat: med.teat || null,
-                administration_route: med.administration_route || null,
+                status: 'active',
               });
 
             if (courseError) throw courseError;
@@ -2937,16 +2949,15 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               const { error: usageError } = await supabase
                 .from('usage_items')
                 .insert({
+                  client_id: clientId,
                   farm_id: selectedFarm!.id,
                   treatment_id: treatmentRecord.id,
                   product_id: med.product_id,
                   batch_id: med.batch_id,
-                  qty: parseFloat(med.qty),
+                  quantity: parseFloat(med.qty),
                   unit: med.unit,
-                  purpose: med.purpose ? med.purpose : null,
-                  teat: med.teat || null,
-                  administration_route: med.administration_route || null,
                   administered_date: formData.visit_datetime.split('T')[0],
+                  administration_route: med.administration_route || null,
                 });
 
               if (usageError) {
@@ -3020,15 +3031,9 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           let futureVisits: any[] = [];
           const todayDate = formData.visit_datetime.split('T')[0];
           
-          // Check if all medications have quantities (new behavior for bulk entry)
-          const allHaveQuantities = treatmentData.courseMedicationSchedule?.every((daySchedule: any) => 
-            daySchedule.medications.every((med: any) => med.qty && med.batch_id)
-          ) || false;
-
-          // If we have a full course schedule (from CourseMedicationScheduler)
+          // If we have a course schedule (from CourseMedicationScheduler)
           if (treatmentData.courseMedicationSchedule && treatmentData.courseMedicationSchedule.length > 0) {
-            console.log('✅ Using detailed course schedule with all quantities filled');
-            console.log('All medications have quantities?', allHaveQuantities);
+            console.log('✅ Using course schedule for multi-day treatment');
 
             // Filter out today's date to avoid creating a duplicate visit
             futureVisits = treatmentData.courseMedicationSchedule
@@ -3041,30 +3046,28 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
                 const dailyMedications = daySchedule.medications.map((med: any) => ({
                   product_id: med.product_id,
-                  batch_id: med.batch_id || null,
-                  qty: med.qty || null,
+                  batch_id: null, // Will be selected when completing the visit
+                  qty: null, // Will be entered when completing the visit
                   unit: med.unit,
                   purpose: med.purpose || 'Gydymas',
                   teat: med.teat || null,
                 }));
 
                 return {
+                  client_id: clientId,
                   farm_id: selectedFarm!.id,
                   animal_id: animalId,
                   visit_datetime: `${daySchedule.date}T10:00:00`,
                   procedures: ['Gydymas'],
-                  status: allHaveQuantities ? 'Baigtas' : 'Planuojamas',
-                  notes: allHaveQuantities 
-                    ? `Gydymo kursas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}`
-                    : `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
+                  status: 'Planuojamas', // Always planned for future dates
+                  notes: `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
                   vet_name: formData.vet_name || null,
-                  created_by_user_id: user?.full_name || user?.email || null,
                   next_visit_required: false,
                   treatment_required: true,
                   related_treatment_id: treatmentRecord.id,
                   related_visit_id: visitData.id,
                   planned_medications: dailyMedications,
-                  medications_processed: allHaveQuantities,
+                  medications_processed: false, // Not yet processed
                 };
               });
 
@@ -3076,8 +3079,8 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             if (todaySchedule) {
               console.log('✅ Found today\'s medications in course schedule, processing for today');
 
-              // If all medications have quantities OR visit is being completed, deduct stock
-              if (allHaveQuantities || autoComplete) {
+              // If visit is being completed AND today's medications have quantities, deduct stock
+              if (autoComplete && todaySchedule.medications.some((med: any) => med.batch_id && med.qty)) {
                 console.log('✅ Visit being completed - creating usage_items for today\'s medications');
 
                 for (const med of todaySchedule.medications) {
@@ -3085,14 +3088,13 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                     const { error: usageError } = await supabase
                       .from('usage_items')
                       .insert({
+                        client_id: clientId,
                         farm_id: selectedFarm!.id,
                         treatment_id: treatmentRecord.id,
                         product_id: med.product_id,
                         batch_id: med.batch_id,
-                        qty: parseFloat(med.qty),
+                        quantity: parseFloat(med.qty),
                         unit: med.unit,
-                        purpose: med.purpose || 'Gydymas',
-                        teat: med.teat || null,
                         administered_date: todayDate,
                       });
 
@@ -3106,7 +3108,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                 // Mark medications as processed
                 await supabase
                   .from('animal_visits')
-                  .update({ 
+                  .update({
                     medications_processed: true,
                     status: 'Baigtas'
                   })
@@ -3114,11 +3116,11 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
 
                 console.log('✅ Today\'s medications processed and stock deducted');
               } else {
-                // Visit not being completed - store as planned medications
+                // Visit not being completed OR no quantities yet - store as planned medications
                 const todayMedications = todaySchedule.medications.map((med: any) => ({
                   product_id: med.product_id,
                   batch_id: med.batch_id || null,
-                  qty: null,
+                  qty: med.qty || null,
                   unit: med.unit,
                   purpose: med.purpose || 'Gydymas',
                   teat: med.teat || null,
@@ -3158,6 +3160,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             futureVisits = treatmentData.recurring_days
               .filter(dateStr => dateStr !== todayDate)
               .map(dateStr => ({
+                client_id: clientId,
                 farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_datetime: `${dateStr}T10:00:00`,
@@ -3165,7 +3168,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
                 status: 'Planuojamas',
                 notes: `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
                 vet_name: formData.vet_name || null,
-                created_by_user_id: user?.full_name || user?.email || null,
                 next_visit_required: false,
                 treatment_required: true,
                 related_treatment_id: treatmentRecord.id,
@@ -3228,43 +3230,9 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               showNotification('Įspėjimas: Naujų vizitų sukūrimas nepavyko. Klaida: ' + createError.message, 'warning');
             } else {
               createdCount = visitsToCreate.length;
-              
-              // If visits were created as completed (with quantities), deduct stock immediately
-              if (allHaveQuantities && createdVisits) {
-                console.log('✅ Auto-completing course visits and deducting stock for all days');
-                
-                for (const visit of createdVisits) {
-                  const visitDate = visit.visit_datetime.split('T')[0];
-                  const daySchedule = treatmentData.courseMedicationSchedule.find(
-                    (ds: any) => ds.date === visitDate
-                  );
-                  
-                  if (daySchedule && daySchedule.medications) {
-                    // Create usage_items for this visit
-                    const usageItems = daySchedule.medications.map((med: any) => ({
-                      farm_id: selectedFarm!.id,
-                      treatment_id: treatmentRecord.id,
-                      product_id: med.product_id,
-                      batch_id: med.batch_id,
-                      qty: parseFloat(med.qty),
-                      unit: med.unit,
-                      purpose: med.purpose || 'Gydymas',
-                      teat: med.teat || null,
-                      administration_route: med.administration_route || null,
-                    }));
-                    
-                    const { error: usageError } = await supabase
-                      .from('usage_items')
-                      .insert(usageItems);
-                    
-                    if (usageError) {
-                      console.error(`❌ Error creating usage_items for ${visitDate}:`, usageError);
-                    } else {
-                      console.log(`✅ Stock deducted for visit on ${visitDate}`);
-                    }
-                  }
-                }
-              }
+              // Note: Future visits are always created as "Planuojamas" (Planned)
+              // Stock will be deducted when each visit is actually completed by the user
+              console.log(`✅ Successfully created ${createdCount} future planned visits`);
             }
           }
 
@@ -3317,6 +3285,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data: teatData, error: teatError } = await supabase
             .from('teat_status')
             .upsert({
+              client_id: clientId,
               farm_id: selectedFarm!.id,
               animal_id: animalId,
               teat_position: teatPosition.toLowerCase(),
@@ -3350,6 +3319,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data: vaccinationRecord, error: vaccinationError } = await supabase
             .from('vaccinations')
             .insert({
+              client_id: clientId,
               farm_id: selectedFarm!.id,
               animal_id: animalId,
               product_id: vaccine.product_id,
@@ -3389,15 +3359,15 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               const { data: preventionRecord, error: preventionError } = await supabase
                 .from('biocide_usage')
                 .insert({
+                  client_id: clientId,
                   farm_id: selectedFarm!.id,
                   product_id: product.product_id,
                   batch_id: product.batch_id,
-                  use_date: formData.visit_datetime.split('T')[0],
-                  purpose: product.purpose ? product.purpose : 'Profilaktika',
-                  work_scope: `Gyvūnas: ${animalId}`,
-                  qty: dailyDose,
+                  usage_date: formData.visit_datetime.split('T')[0],
+                  area_treated: `Gyvūnas: ${animalId}`,
+                  quantity_used: dailyDose,
                   unit: product.dose_unit,
-                  used_by_name: formData.vet_name ? formData.vet_name : null,
+                  applied_by: formData.vet_name ? formData.vet_name : null,
                 })
                 .select()
                 .single();
@@ -3411,14 +3381,15 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               const { data: preventionRecord, error: preventionError } = await supabase
                 .from('biocide_usage')
                 .insert({
+                  client_id: clientId,
+                  farm_id: selectedFarm!.id,
                   product_id: product.product_id,
                   batch_id: product.batch_id,
-                  use_date: formData.visit_datetime.split('T')[0],
-                  purpose: product.purpose ? product.purpose : 'Profilaktika',
-                  work_scope: `Gyvūnas: ${animalId}`,
-                  qty: parseFloat(product.dose_qty),
+                  usage_date: formData.visit_datetime.split('T')[0],
+                  area_treated: `Gyvūnas: ${animalId}`,
+                  quantity_used: parseFloat(product.dose_qty),
                   unit: product.dose_unit,
-                  used_by_name: formData.vet_name ? formData.vet_name : null,
+                  applied_by: formData.vet_name ? formData.vet_name : null,
                 })
                 .select()
                 .single();
@@ -3496,6 +3467,7 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const dateStr = nextDate.toISOString().split('T')[0];
 
             futureVisits.push({
+              client_id: clientId,
               farm_id: selectedFarm!.id,
               animal_id: animalId,
               visit_datetime: `${dateStr}T10:00:00`,
@@ -3503,7 +3475,6 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
               status: 'Planuojamas',
               notes: `Pakartotinė profilaktika (${courseDays} dienų kursas)\nProduktai: ${productNames}`,
               vet_name: formData.vet_name || null,
-              created_by_user_id: user?.full_name || user?.email || null,
               next_visit_required: false,
               treatment_required: false,
               related_visit_id: visitData.id,
@@ -3537,16 +3508,12 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
           const { data: hoofRecord, error: hoofError } = await supabase
             .from('hoof_records')
             .insert({
+              client_id: clientId,
+              farm_id: selectedFarm!.id,
               animal_id: animalId,
               examination_date: hoofData.examination_date,
-              leg: exam.leg,
-              claw: exam.claw,
-              condition_code: exam.condition_code,
-              severity: exam.severity,
-              was_trimmed: exam.was_trimmed,
-              was_treated: exam.was_treated,
-              treatment_product_id: exam.treatment_product_id || null,
-              treatment_batch_id: exam.treatment_batch_id || null,
+              notes: `${exam.leg} ${exam.claw === 'inner' ? 'Vidinis' : 'Išorinis'} - ${exam.condition_code} (${exam.severity || 'Normalus'})${exam.was_trimmed ? ', Apkirpti nagai' : ''}${exam.was_treated ? ', Gydytas' : ''}`,
+              examined_by: hoofData.technician_name || formData.vet_name || null,
               treatment_quantity: exam.treatment_quantity ? parseFloat(exam.treatment_quantity) : null,
               treatment_unit: exam.treatment_unit || null,
               treatment_notes: exam.treatment_notes || null,
@@ -3570,14 +3537,15 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             await supabase
               .from('biocide_usage')
               .insert({
+                client_id: clientId,
+                farm_id: selectedFarm!.id,
                 product_id: exam.treatment_product_id,
                 batch_id: exam.treatment_batch_id,
-                use_date: hoofData.examination_date,
-                purpose: `Nagų gydymas - ${exam.leg} ${exam.claw === 'inner' ? 'Vidinis' : 'Išorinis'}`,
-                work_scope: `Gyvūnas: ${animalId}, Būklė: ${exam.condition_code}`,
-                qty: parseFloat(exam.treatment_quantity),
+                usage_date: hoofData.examination_date,
+                area_treated: `Nagų gydymas - ${exam.leg} ${exam.claw === 'inner' ? 'Vidinis' : 'Išorinis'}, Gyvūnas: ${animalId}, Būklė: ${exam.condition_code}`,
+                quantity_used: parseFloat(exam.treatment_quantity),
                 unit: exam.treatment_unit!,
-                used_by_name: hoofData.technician_name || formData.vet_name || null,
+                applied_by: hoofData.technician_name || formData.vet_name || null,
               });
           }
 
@@ -3586,6 +3554,8 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
             const { error: followupVisitError } = await supabase
               .from('animal_visits')
               .insert({
+                client_id: clientId,
+                farm_id: selectedFarm!.id,
                 animal_id: animalId,
                 visit_datetime: `${exam.followup_date}T10:00:00`,
                 procedures: ['Nagai'],
@@ -3619,6 +3589,8 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
         const { data: nextVisitData, error: nextVisitError } = await supabase
           .from('animal_visits')
           .insert({
+            client_id: clientId,
+            farm_id: selectedFarm!.id,
             animal_id: animalId,
             visit_datetime: formData.next_visit_date,
             procedures: formData.procedures,
@@ -3683,6 +3655,178 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
         }
 
         showNotification(message, 'success');
+      }
+
+      // Show pricing modal if visit is completed (both create and edit modes)
+      // This runs AFTER all the visit completion logic above
+      console.log('💰 Pricing modal check:', {
+        status: formData.status,
+        autoComplete,
+        isEditMode,
+        hasVisitData: !!visitData,
+        previousStatus: visitToEdit?.status
+      });
+
+      // Show pricing modal if:
+      // 1. Creating new visit and completing it (autoComplete or status = 'Baigtas')
+      // 2. Editing visit and changing status TO 'Baigtas' (wasn't 'Baigtas' before)
+      const shouldShowPricing = visitData && (
+        (!isEditMode && (formData.status === 'Baigtas' || autoComplete)) || // New visit
+        (isEditMode && formData.status === 'Baigtas' && visitToEdit?.status !== 'Baigtas') // Edit: changing TO completed
+      );
+
+      if (shouldShowPricing) {
+        console.log('💰 Preparing pricing modal...');
+        
+        // Collect products used
+        const productsUsed: any[] = [];
+
+        // Add treatment medications
+        treatmentData.medications.forEach(med => {
+          const product = products.find(p => p.id === med.product_id);
+          const batch = batches.find(b => b.id === med.batch_id);
+          
+          console.log('💰 Processing treatment med:', {
+            product_id: med.product_id,
+            batch_id: med.batch_id,
+            found_product: !!product,
+            found_batch: !!batch,
+            batch: batch,
+            all_batches_count: batches.length
+          });
+          
+          if (product) {
+            // Calculate unit cost from batch
+            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
+              ? batch.purchase_price / batch.qty_received 
+              : 0;
+            
+            console.log('💰 Unit cost calculation:', {
+              purchase_price: batch?.purchase_price,
+              qty_received: batch?.qty_received,
+              calculated_unit_cost: batchUnitCost
+            });
+            
+            productsUsed.push({
+              product_id: med.product_id,
+              product_name: product.name,
+              quantity: parseFloat(med.qty) || 0,
+              cost_price: batchUnitCost
+            });
+          }
+        });
+
+        // Add medications from TODAY's course schedule (if using course scheduler)
+        if (treatmentData.courseMedicationSchedule && treatmentData.courseMedicationSchedule.length > 0) {
+          const todayDate = formData.visit_datetime.split('T')[0];
+          const todaySchedule = treatmentData.courseMedicationSchedule.find(
+            (daySchedule: any) => daySchedule.date === todayDate
+          );
+
+          if (todaySchedule && todaySchedule.medications) {
+            console.log('💰 Processing course medications for today:', todaySchedule.medications);
+            
+            todaySchedule.medications.forEach((med: any) => {
+              const product = products.find(p => p.id === med.product_id);
+              const batch = batches.find(b => b.id === med.batch_id);
+
+              if (product && med.batch_id && med.qty) {
+                const batchUnitCost = batch && batch.purchase_price && batch.qty_received
+                  ? batch.purchase_price / batch.qty_received
+                  : 0;
+
+                productsUsed.push({
+                  product_id: med.product_id,
+                  product_name: product.name,
+                  quantity: parseFloat(med.qty) || 0,
+                  cost_price: batchUnitCost
+                });
+
+                console.log('💰 Added course med to pricing:', {
+                  product: product.name,
+                  qty: med.qty,
+                  cost: batchUnitCost
+                });
+              }
+            });
+          }
+        }
+
+        // Add vaccinations
+        vaccinationData.vaccines.forEach(vac => {
+          const product = products.find(p => p.id === vac.product_id);
+          const batch = batches.find(b => b.id === vac.batch_id);
+          
+          console.log('💰 Processing vaccination:', {
+            product_id: vac.product_id,
+            batch_id: vac.batch_id,
+            found_batch: !!batch,
+            batch: batch
+          });
+          
+          if (product) {
+            // Calculate unit cost from batch
+            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
+              ? batch.purchase_price / batch.qty_received 
+              : 0;
+            
+            productsUsed.push({
+              product_id: vac.product_id,
+              product_name: product.name,
+              quantity: parseFloat(vac.dose_amount) || 0,
+              cost_price: batchUnitCost
+            });
+          }
+        });
+
+        // Add prevention products
+        preventionData.products.forEach(prev => {
+          const product = products.find(p => p.id === prev.product_id);
+          const batch = batches.find(b => b.id === prev.batch_id);
+          if (product) {
+            // Calculate unit cost from batch
+            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
+              ? batch.purchase_price / batch.qty_received 
+              : 0;
+            
+            productsUsed.push({
+              product_id: prev.product_id,
+              product_name: product.name,
+              quantity: parseFloat(prev.dose_qty) || 0,
+              cost_price: batchUnitCost
+            });
+          }
+        });
+
+        console.log('💰 Products collected:', productsUsed);
+        console.log('💰 Animal name:', animalName);
+
+        // Store pricing modal data and trigger it via callback
+        const pricingData = {
+          visitData: {
+            id: visitData.id,
+            animal_id: animalId,
+            farm_id: selectedFarm?.id || '',
+            procedures: formData.procedures,
+            visit_datetime: visitData.visit_datetime
+          },
+          animalName: animalName || '',
+          productsUsed
+        };
+        
+        console.log('💰 Pricing data prepared');
+        
+        // Close this modal first
+        onSuccess();
+        
+        // Then trigger pricing modal via callback (after brief delay to ensure modal closes first)
+        if (onPricingModalDataReady) {
+          setTimeout(() => {
+            onPricingModalDataReady(pricingData);
+            console.log('💰 Pricing modal triggered!');
+          }, 300);
+        }
+        return; // Exit early to prevent calling onSuccess twice
       }
 
       onSuccess();
@@ -4984,8 +5128,8 @@ function VisitCreateModal({ animalId, onClose, onSuccess, visitToEdit }: { anima
   );
 }
 
-function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: AnimalVisit; animalId: string; onClose: () => void; onSuccess: () => void }) {
-  const { logAction } = useAuth();
+function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onPricingModalDataReady }: { visit: AnimalVisit; animalId: string; animalName?: string; onClose: () => void; onSuccess: () => void; onPricingModalDataReady?: (data: any) => void }) {
+  const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const [loading, setLoading] = useState(false);
   const [notes, setNotes] = useState(visit.notes || '');
@@ -5002,8 +5146,10 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
   const [batches, setBatches] = useState<any[]>([]);
 
   useEffect(() => {
-    loadProductsAndBatches();
-  }, [selectedFarm]);
+    if (selectedFarm && user) {
+      loadProductsAndBatches();
+    }
+  }, [selectedFarm, user]);
 
   useEffect(() => {
     if (batches.length > 0) {
@@ -5014,13 +5160,44 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
   const loadProductsAndBatches = async () => {
     if (!selectedFarm) return;
 
-    const [productsRes, batchesRes] = await Promise.all([
-      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).order('name'),
-      supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date')
-    ]);
+    const clientId = requireClientId(user);
 
-    if (productsRes.data) setProducts(productsRes.data);
-    if (batchesRes.data) setBatches(batchesRes.data);
+    // Load batches first
+    const { data: batchesData, error: batchError } = await supabase
+      .from('batches')
+      .select('*')
+      .eq('farm_id', selectedFarm.id)
+      .order('expiry_date');
+
+    if (batchError) {
+      console.error('Error loading batches:', batchError);
+      return;
+    }
+
+    if (batchesData) setBatches(batchesData);
+
+    // Get unique product IDs from batches
+    const productIds = [...new Set((batchesData || []).map((b: any) => b.product_id))];
+
+    if (productIds.length === 0) {
+      setProducts([]);
+      return;
+    }
+
+    // Load products by IDs (products are client-scoped, not farm-scoped)
+    const { data: productsData, error: productsError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('client_id', clientId)
+      .in('id', productIds);
+
+    if (productsError) {
+      console.error('Error loading products:', productsError);
+      return;
+    }
+
+    console.log('📦 VisitDetailModal loaded products:', productsData?.length || 0);
+    if (productsData) setProducts(productsData);
   };
 
   const checkMedicationEntry = () => {
@@ -5060,12 +5237,14 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
     return (
       <VisitCreateModal
         animalId={animalId}
+        animalName={animalName}
         visitToEdit={visit}
         onClose={() => setShowEditMode(false)}
         onSuccess={() => {
           setShowEditMode(false);
           onSuccess();
         }}
+        onPricingModalDataReady={onPricingModalDataReady}
       />
     );
   }
@@ -5163,20 +5342,108 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
 
     setLoading(true);
     try {
-      // CRITICAL FIX: Update both planned_medications AND status in a SINGLE atomic update
-      // This prevents race conditions where the trigger fires before medications are updated
+      const clientId = requireClientId(user);
+      
+      // 1. Create usage_items for medications (if they have quantities)
+      if (updatedMeds && updatedMeds.length > 0) {
+        const usageItems = updatedMeds
+          .filter((med: any) => med.qty && med.batch_id && parseFloat(med.qty) > 0)
+          .map((med: any) => ({
+            client_id: clientId,
+            farm_id: selectedFarm!.id,
+            treatment_id: visit.related_treatment_id,
+            product_id: med.product_id,
+            batch_id: med.batch_id,
+            quantity: parseFloat(med.qty),
+            unit: med.unit,
+            administered_date: visit.visit_datetime.split('T')[0],
+            administration_route: med.administration_route || null,
+          }));
+
+        if (usageItems.length > 0) {
+          const { error: usageError } = await supabase
+            .from('usage_items')
+            .insert(usageItems);
+
+          if (usageError) {
+            console.error('Error creating usage_items:', usageError);
+            throw new Error('Nepavyko nurašyti atsargų: ' + usageError.message);
+          }
+          console.log(`✅ Created ${usageItems.length} usage_items for visit completion`);
+        }
+      }
+
+      // 2. Update visit status and mark medications as processed
       const { error } = await supabase
         .from('animal_visits')
         .update({
           status: 'Baigtas',
           notes: notes,
-          planned_medications: updatedMeds
+          planned_medications: updatedMeds,
+          medications_processed: true
         })
         .eq('id', visit.id);
 
       if (error) throw error;
 
+      // 3. Prepare pricing modal data
+      const productsUsed: any[] = [];
+      if (updatedMeds) {
+        for (const med of updatedMeds) {
+          if (med.qty && med.batch_id && parseFloat(med.qty) > 0) {
+            const product = products.find(p => p.id === med.product_id);
+            const batch = batches.find(b => b.id === med.batch_id);
+            
+            if (product) {
+              const batchUnitCost = batch && batch.purchase_price && batch.qty_received
+                ? batch.purchase_price / batch.qty_received
+                : 0;
+
+              productsUsed.push({
+                product_id: med.product_id,
+                product_name: product.name,
+                quantity: parseFloat(med.qty),
+                cost_price: batchUnitCost
+              });
+            }
+          }
+        }
+      }
+
       await logAction('complete_visit', 'animal_visits', visit.id);
+      
+      // 4. Trigger pricing modal if we have products
+      console.log('🔍 Debug pricing modal trigger:', {
+        productsUsedLength: productsUsed.length,
+        productsUsed,
+        hasCallback: !!onPricingModalDataReady,
+        updatedMeds,
+        productsCount: products.length,
+        batchesCount: batches.length
+      });
+      
+      if (productsUsed.length > 0 && onPricingModalDataReady) {
+        const pricingData = {
+          visitData: visit,
+          animalName: animalName || '',
+          productsUsed
+        };
+        
+        console.log('💰 Pricing data prepared for future visit:', pricingData);
+        
+        // Close this modal first
+        onSuccess();
+        
+        // Then trigger pricing modal
+        setTimeout(() => {
+          onPricingModalDataReady(pricingData);
+          console.log('💰 Pricing modal triggered for future visit!');
+        }, 300);
+        
+        showNotification('Vizitas sėkmingai užbaigtas! Vaistai nurašyti iš atsargų.', 'success');
+        return; // Exit early to prevent calling onSuccess twice
+      }
+      
       onSuccess();
       showNotification('Vizitas sėkmingai užbaigtas! Vaistai nurašyti iš atsargų.', 'success');
     } catch (error: any) {
@@ -5228,9 +5495,13 @@ function VisitDetailModal({ visit, animalId, onClose, onSuccess }: { visit: Anim
 
     setLoading(true);
     try {
+      const clientId = requireClientId(user);
+      
       const { error } = await supabase
         .from('animal_visits')
         .insert({
+          client_id: clientId,
+          farm_id: selectedFarm!.id,
           animal_id: animalId,
           visit_datetime: futureVisitDate,
           procedures: visit.procedures,

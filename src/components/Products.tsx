@@ -53,14 +53,20 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
 
   useEffect(() => {
     loadProducts();
-  }, [selectedFarm]);
+  }, [selectedFarm, user]);
 
   useRealtimeSubscription({
     table: 'products',
     filter: selectedFarm ? `farm_id=eq.${selectedFarm.id}` : null,
     enabled: true,
     onInsert: useCallback((payload) => {
-      setProducts(prev => sortByLithuanian([...prev, payload.new], 'name'));
+      setProducts(prev => {
+        // Check if product already exists
+        if (prev.some(p => p.id === payload.new.id)) {
+          return prev;
+        }
+        return sortByLithuanian([...prev, payload.new], 'name');
+      });
     }, []),
     onUpdate: useCallback((payload) => {
       setProducts(prev => prev.map(p => p.id === payload.new.id ? payload.new : p));
@@ -117,6 +123,15 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         } else {
           finalData = farmProducts || [];
         }
+        
+        // Deduplicate by product id for farm view
+        const uniqueProducts = new Map<string, any>();
+        finalData.forEach(product => {
+          if (!uniqueProducts.has(product.id)) {
+            uniqueProducts.set(product.id, product);
+          }
+        });
+        finalData = Array.from(uniqueProducts.values());
       } else {
         // Load all products
         const clientId = requireClientId(user);
@@ -716,6 +731,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
                     {product.category === 'technical' && 'Techniniai'}
                     {product.category === 'treatment_materials' && 'Gydymo medž.'}
                     {product.category === 'reproduction' && 'Reprodukcija'}
+                    {product.category === 'supplier_services' && 'Tiekėjo paslaugos'}
                   </td>
                   <td className="px-3 py-2 text-gray-600">
                     {product.primary_pack_size} {product.primary_pack_unit}
