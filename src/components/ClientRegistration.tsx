@@ -30,9 +30,12 @@ export function ClientRegistration() {
   // Client info form (editable during registration)
   const [clientFormData, setClientFormData] = useState({
     name: '',
+    company_code: '',
+    vat_code: '',
     address: '',
     city: '',
     postal_code: '',
+    contact_email: '',
     contact_phone: '',
     contact_person: '',
   });
@@ -58,7 +61,7 @@ export function ClientRegistration() {
       if (error) throw error;
 
       if (!data || data.length === 0) {
-        setError('Invalid or expired registration code. Please contact support.');
+        setError('Neteisingas arba pasibaigęs registracijos kodas. Kreipkitės į pagalbos tarnybą.');
         return;
       }
 
@@ -67,15 +70,18 @@ export function ClientRegistration() {
       // Pre-fill client form with existing data
       setClientFormData({
         name: data[0].client_name || '',
+        company_code: '',
+        vat_code: '',
         address: '',
         city: '',
         postal_code: '',
+        contact_email: data[0].client_email || '',
         contact_phone: '',
         contact_person: '',
       });
     } catch (err: any) {
       console.error('Validation error:', err);
-      setError('Failed to validate registration code. Please try again.');
+      setError('Nepavyko patikrinti registracijos kodo. Bandykite dar kartą.');
     } finally {
       setValidating(false);
     }
@@ -88,40 +94,50 @@ export function ClientRegistration() {
 
     // Validation
     if (!formData.fullName || !formData.email || !formData.password) {
-      setError('Please fill in all fields');
+      setError('Prašome užpildyti visus privalomas laukus');
+      setLoading(false);
+      return;
+    }
+
+    if (!clientFormData.name || !clientFormData.contact_email) {
+      setError('Prašome užpildyti organizacijos pavadinimą ir el. paštą');
       setLoading(false);
       return;
     }
 
     if (formData.password !== formData.confirmPassword) {
-      setError('Passwords do not match');
+      setError('Slaptažodžiai nesutampa');
       setLoading(false);
       return;
     }
 
     if (formData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setError('Slaptažodis turi būti ne trumpesnis nei 8 simboliai');
       setLoading(false);
       return;
     }
 
     try {
-      // Update client info if any fields were edited
-      if (clientFormData.address || clientFormData.city || clientFormData.postal_code || 
-          clientFormData.contact_phone || clientFormData.contact_person) {
-        const { error: updateError } = await supabase
-          .from('clients')
-          .update({
-            address: clientFormData.address || null,
-            city: clientFormData.city || null,
-            postal_code: clientFormData.postal_code || null,
-            contact_phone: clientFormData.contact_phone || null,
-            contact_person: clientFormData.contact_person || null,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', clientInfo!.client_id);
+      // Update client info with all provided fields
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({
+          name: clientFormData.name,
+          company_code: clientFormData.company_code || null,
+          vat_code: clientFormData.vat_code || null,
+          contact_email: clientFormData.contact_email,
+          address: clientFormData.address || null,
+          city: clientFormData.city || null,
+          postal_code: clientFormData.postal_code || null,
+          contact_phone: clientFormData.contact_phone || null,
+          contact_person: clientFormData.contact_person || null,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', clientInfo!.client_id);
 
-        if (updateError) console.warn('Failed to update client info:', updateError);
+      if (updateError) {
+        console.error('Failed to update client info:', updateError);
+        throw new Error('Nepavyko atnaujinti organizacijos informacijos');
       }
 
       // Create user using the create_user function
@@ -147,11 +163,13 @@ export function ClientRegistration() {
     } catch (err: any) {
       console.error('Registration error:', err);
       if (err.message.includes('duplicate key')) {
-        setError('This email is already registered. Please use a different email or contact support.');
+        setError('Šis el. paštas jau užregistruotas. Naudokite kitą el. paštą arba kreipkitės į pagalbos tarnybą.');
       } else if (err.message.includes('maximum user limit')) {
-        setError('Client has reached maximum user limit. Please contact support.');
+        setError('Klientas pasiekė maksimalų vartotojų skaičių. Kreipkitės į pagalbos tarnybą.');
+      } else if (err.message.includes('organizacijos informacijos')) {
+        setError(err.message);
       } else {
-        setError(`Registration failed: ${err.message}`);
+        setError(`Registracija nepavyko: ${err.message}`);
       }
     } finally {
       setLoading(false);
@@ -164,7 +182,7 @@ export function ClientRegistration() {
       <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
         <div className="text-center">
           <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Validating registration code...</p>
+          <p className="text-gray-600 font-medium">Tikrinamas registracijos kodas...</p>
         </div>
       </div>
     );
@@ -180,16 +198,16 @@ export function ClientRegistration() {
               <AlertTriangle className="w-8 h-8 text-red-500" />
             </div>
             <div>
-              <h2 className="text-xl font-bold text-gray-900">Invalid Registration Code</h2>
+              <h2 className="text-xl font-bold text-gray-900">Neteisingas registracijos kodas</h2>
             </div>
           </div>
           <p className="text-gray-600 mb-6">
-            {error || 'The registration code is invalid or has expired. Please contact your administrator for a new code.'}
+            {error || 'Registracijos kodas yra neteisingas arba pasibaigęs. Kreipkitės į administratorių dėl naujo kodo.'}
           </p>
           <div className="space-y-3">
             <input
               type="text"
-              placeholder="Enter registration code (XXXX-XXXX-XXXX)"
+              placeholder="Įveskite registracijos kodą (XXXX-XXXX-XXXX)"
               value={registrationCode}
               onChange={(e) => setRegistrationCode(e.target.value.toUpperCase())}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
@@ -198,7 +216,7 @@ export function ClientRegistration() {
               onClick={() => validateCode(registrationCode)}
               className="w-full px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium"
             >
-              Validate Code
+              Patikrinti kodą
             </button>
           </div>
         </div>
@@ -214,13 +232,13 @@ export function ClientRegistration() {
           <div className="w-16 h-16 bg-green-50 rounded-full flex items-center justify-center mx-auto mb-4">
             <Check className="w-10 h-10 text-green-600" />
           </div>
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Registration Complete!</h2>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">Registracija sėkminga!</h2>
           <p className="text-gray-600 mb-4">
-            Your account has been created successfully.
+            Jūsų paskyra sukurta sėkmingai.
           </p>
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
             <p className="text-sm text-blue-800">
-              Redirecting you to login...
+              Nukreipiame į prisijungimo puslapį...
             </p>
           </div>
         </div>
@@ -239,8 +257,8 @@ export function ClientRegistration() {
               <Building2 className="w-8 h-8 text-blue-600" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Welcome to Veterinary Management</h1>
-              <p className="text-blue-100 text-sm">Create your account to get started</p>
+              <h1 className="text-2xl font-bold text-white mb-1">Sveiki prisijungę</h1>
+              <p className="text-blue-100 text-sm">Sukurkite paskyrą, kad pradėtumėte naudotis sistema</p>
             </div>
           </div>
         </div>
@@ -278,20 +296,70 @@ export function ClientRegistration() {
           <div className="space-y-6">
             {/* Organization Information Section */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-              <h3 className="text-sm font-semibold text-gray-700 mb-4">Organizacijos informacija</h3>
+              <h3 className="text-sm font-semibold text-gray-700 mb-4">Pagrindinė informacija</h3>
               <div className="grid grid-cols-2 gap-4">
+                {/* Organization Name */}
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Kontaktinis asmuo
+                    Organizacijos pavadinimas *
                   </label>
                   <input
                     type="text"
-                    value={clientFormData.contact_person}
-                    onChange={(e) => setClientFormData({ ...clientFormData, contact_person: e.target.value })}
+                    required
+                    value={clientFormData.name}
+                    onChange={(e) => setClientFormData({ ...clientFormData, name: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="Vardas Pavardė"
+                    placeholder="UAB Veterinarijos klinika"
                   />
                 </div>
+
+                {/* Company Code */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Įmonės kodas
+                  </label>
+                  <input
+                    type="text"
+                    value={clientFormData.company_code}
+                    onChange={(e) => setClientFormData({ ...clientFormData, company_code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="123456789"
+                  />
+                </div>
+
+                {/* VAT Code */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    PVM kodas
+                  </label>
+                  <input
+                    type="text"
+                    value={clientFormData.vat_code}
+                    onChange={(e) => setClientFormData({ ...clientFormData, vat_code: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="LT123456789"
+                  />
+                </div>
+              </div>
+
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 mt-6">Kontaktinė informacija</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Contact Email */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    El. paštas *
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    value={clientFormData.contact_email}
+                    onChange={(e) => setClientFormData({ ...clientFormData, contact_email: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="info@veterinarija.lt"
+                  />
+                </div>
+
+                {/* Contact Phone */}
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     Telefonas
@@ -304,18 +372,39 @@ export function ClientRegistration() {
                     placeholder="+370 600 12345"
                   />
                 </div>
+
+                {/* Contact Person */}
                 <div className="col-span-2">
                   <label className="block text-xs font-medium text-gray-600 mb-1">
-                    Adresas
+                    Kontaktinis asmuo
+                  </label>
+                  <input
+                    type="text"
+                    value={clientFormData.contact_person}
+                    onChange={(e) => setClientFormData({ ...clientFormData, contact_person: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Vardas Pavardė"
+                  />
+                </div>
+              </div>
+
+              <h3 className="text-sm font-semibold text-gray-700 mb-4 mt-6">Adresas</h3>
+              <div className="grid grid-cols-2 gap-4">
+                {/* Address */}
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-gray-600 mb-1">
+                    Gatvė
                   </label>
                   <input
                     type="text"
                     value={clientFormData.address}
                     onChange={(e) => setClientFormData({ ...clientFormData, address: e.target.value })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
-                    placeholder="Gatvė 123"
+                    placeholder="Gatvės pavadinimas 123"
                   />
                 </div>
+
+                {/* City */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     Miestas
@@ -328,6 +417,8 @@ export function ClientRegistration() {
                     placeholder="Vilnius"
                   />
                 </div>
+
+                {/* Postal Code */}
                 <div>
                   <label className="block text-xs font-medium text-gray-600 mb-1">
                     Pašto kodas
@@ -435,7 +526,7 @@ export function ClientRegistration() {
               {loading ? (
                 <>
                   <Loader className="w-5 h-5 animate-spin" />
-                  Creating Account...
+                  Kuriama paskyra...
                 </>
                 ) : (
                   <>
