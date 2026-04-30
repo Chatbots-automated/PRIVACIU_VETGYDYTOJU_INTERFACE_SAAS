@@ -664,9 +664,14 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
               </div>
             </div>
 
-            <WithdrawalStatusCard animalId={animal.id} />
+            {/* Only show withdrawal and teat status for production animals */}
+            {(!animal.animal_type || animal.animal_type === 'produkcinis') && (
+              <>
+                <WithdrawalStatusCard animalId={animal.id} />
 
-            <TeatStatusCard key={`teat-${animal.id}-${treatments.length}`} animalId={animal.id} />
+                <TeatStatusCard key={`teat-${animal.id}-${treatments.length}`} animalId={animal.id} />
+              </>
+            )}
 
             {/* GEA Daily Card removed - no longer tracking milk production data */}
 
@@ -4188,8 +4193,8 @@ function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdi
                           </button>
                         </div>
 
-                        {/* Administration Route Buttons - Only show if product has withdrawal periods */}
-                        {selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
+                        {/* Administration Route Buttons - Only show if product has withdrawal periods and animal is production type */}
+                        {(!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
                           <div className="space-y-2">
                             <label className="block text-xs font-medium text-gray-700">Būdas *</label>
                             <div className="flex flex-wrap gap-1.5">
@@ -4222,7 +4227,7 @@ function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdi
                           </div>
                         )}
 
-                        {selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat || med.administration_route) && (
+                        {(!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat || med.administration_route) && (
                           <div className="text-xs bg-amber-50 border-2 border-amber-300 rounded px-3 py-2">
                             <div className="flex items-center gap-1 mb-1">
                               <AlertCircle className="w-4 h-4 text-amber-600" />
@@ -4345,21 +4350,23 @@ function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdi
                 )}
               </div>
 
-              {/* TEAT SELECTOR */}
-              <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                <h5 className="text-sm font-semibold text-gray-900 mb-2">Spenų būsena</h5>
-                <TeatSelector
-                  selectedSickTeats={sickTeats}
-                  selectedDisabledTeats={disabledTeats}
-                  onSickTeatsChange={setSickTeats}
-                  onDisabledTeatsChange={setDisabledTeats}
-                />
-              </div>
+              {/* TEAT SELECTOR - Only for production animals */}
+              {(!animal.animal_type || animal.animal_type === 'produkcinis') && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
+                  <h5 className="text-sm font-semibold text-gray-900 mb-2">Spenų būsena</h5>
+                  <TeatSelector
+                    selectedSickTeats={sickTeats}
+                    selectedDisabledTeats={disabledTeats}
+                    onSickTeatsChange={setSickTeats}
+                    onDisabledTeatsChange={setDisabledTeats}
+                  />
+                </div>
+              )}
 
               <div>
                 <div className="space-y-3">
-                  {/* WITHDRAWAL CALCULATION PREVIEW */}
-                  {((treatmentData.medications.length > 0 && treatmentData.medications.some(m => m.product_id)) || treatmentData.courseMedicationSchedule) && (
+                  {/* WITHDRAWAL CALCULATION PREVIEW - Only for production animals */}
+                  {(!animal.animal_type || animal.animal_type === 'produkcinis') && ((treatmentData.medications.length > 0 && treatmentData.medications.some(m => m.product_id)) || treatmentData.courseMedicationSchedule) && (
                     <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 space-y-3">
                       <h5 className="font-bold text-amber-900 flex items-center gap-2">
                         <AlertCircle className="w-5 h-5" />

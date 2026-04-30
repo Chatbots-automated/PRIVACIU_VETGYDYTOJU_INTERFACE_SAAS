@@ -42,6 +42,7 @@ export function Animals() {
     age_months: '',
     holder_name: '',
     holder_address: '',
+    animal_type: 'produkcinis',
   };
 
   const [formData, setFormData] = useState(emptyAnimal);
@@ -251,6 +252,7 @@ export function Animals() {
         age_months: formData.age_months ? parseInt(formData.age_months) : null,
         holder_name: formData.holder_name || null,
         holder_address: formData.holder_address || null,
+        animal_type: formData.animal_type || 'produkcinis',
       };
 
       if (editing) {
@@ -310,6 +312,7 @@ export function Animals() {
       age_months: animal.age_months?.toString() || '',
       holder_name: animal.holder_name || '',
       holder_address: animal.holder_address || '',
+      animal_type: (animal as any).animal_type || 'produkcinis',
     });
   };
 
@@ -1137,6 +1140,15 @@ export function Animals() {
               <option value="female">Patelė</option>
             </select>
 
+            <select
+              value={formData.animal_type}
+              onChange={(e) => setFormData({ ...formData, animal_type: e.target.value })}
+              className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+            >
+              <option value="produkcinis">Produkcinis gyvūnas</option>
+              <option value="augintinis">Augintinis</option>
+            </select>
+
             <input
               type="text"
               placeholder="Veislė"
@@ -1258,6 +1270,14 @@ export function Animals() {
                             <option value="">Pasirinkite lytį...</option>
                             <option value="male">Patinas</option>
                             <option value="female">Patelė</option>
+                          </select>
+                          <select
+                            value={formData.animal_type}
+                            onChange={(e) => setFormData({ ...formData, animal_type: e.target.value })}
+                            className="px-4 py-2 border border-gray-300 rounded-lg"
+                          >
+                            <option value="produkcinis">Produkcinis gyvūnas</option>
+                            <option value="augintinis">Augintinis</option>
                           </select>
                           <input
                             type="text"

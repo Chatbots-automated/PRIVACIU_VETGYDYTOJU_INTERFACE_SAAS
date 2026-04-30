@@ -35,6 +35,7 @@ export function AnimalsCompact() {
     age_months: '',
     holder_name: '',
     holder_address: '',
+    animal_type: 'produkcinis',
   });
 
   // Calculate age in months from birth date
@@ -242,6 +243,7 @@ export function AnimalsCompact() {
           age_months: formData.age_months ? parseInt(formData.age_months) : null,
           holder_name: formData.holder_name || null,
           holder_address: formData.holder_address || null,
+          animal_type: formData.animal_type || 'produkcinis',
         })
         .select()
         .single();
@@ -259,6 +261,7 @@ export function AnimalsCompact() {
         age_months: '',
         holder_name: selectedFarm.name,
         holder_address: selectedFarm.address || '',
+        animal_type: 'produkcinis',
       });
       loadData();
     } catch (error: any) {
@@ -282,6 +285,7 @@ export function AnimalsCompact() {
           age_months: animal.age_months,
           holder_name: animal.holder_name || null,
           holder_address: animal.holder_address || null,
+          animal_type: (animal as any).animal_type || 'produkcinis',
         })
         .eq('id', id);
 
@@ -298,6 +302,7 @@ export function AnimalsCompact() {
         age_months: '',
         holder_name: selectedFarm?.name || '',
         holder_address: selectedFarm?.address || '',
+        animal_type: 'produkcinis',
       });
       loadData();
     } catch (error: any) {
@@ -644,6 +649,17 @@ export function AnimalsCompact() {
                 />
               </div>
               <div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">Gyvūno tipas</label>
+                <select
+                  value={formData.animal_type}
+                  onChange={(e) => setFormData({ ...formData, animal_type: e.target.value })}
+                  className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                >
+                  <option value="produkcinis">Produkcinis gyvūnas</option>
+                  <option value="augintinis">Augintinis</option>
+                </select>
+              </div>
+              <div>
                 <label className="block text-sm font-medium text-gray-700 mb-2">Veislė</label>
                 <input
                   type="text"
@@ -707,6 +723,7 @@ export function AnimalsCompact() {
                     age_months: '',
                     holder_name: selectedFarm?.name || '',
                     holder_address: selectedFarm?.address || '',
+                    animal_type: 'produkcinis',
                   });
                 }}
                 className="flex-1 px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors"
