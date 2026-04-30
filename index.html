@@ -39,9 +39,14 @@
     <meta name="apple-mobile-web-app-status-bar-style" content="default" />
     <meta name="apple-mobile-web-app-title" content="Veterinarija" />
     
-    <!-- Preconnect to Supabase -->
+    <!-- Content Security Policy -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; font-src 'self' data:; connect-src 'self' https://vlfjmffbwrmblvlsbsnz.supabase.co https://n8n-up8s.onrender.com wss://vlfjmffbwrmblvlsbsnz.supabase.co; frame-src 'none'; object-src 'none';" />
+    
+    <!-- Preconnect to Supabase and N8N -->
     <link rel="preconnect" href="https://vlfjmffbwrmblvlsbsnz.supabase.co" />
     <link rel="dns-prefetch" href="https://vlfjmffbwrmblvlsbsnz.supabase.co" />
+    <link rel="preconnect" href="https://n8n-up8s.onrender.com" />
+    <link rel="dns-prefetch" href="https://n8n-up8s.onrender.com" />
     
     <!-- Canonical URL -->
     <link rel="canonical" href="https://rvac-veterinarija.netlify.app/" />

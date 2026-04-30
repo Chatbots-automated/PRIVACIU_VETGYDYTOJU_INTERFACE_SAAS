@@ -1,9 +1,10 @@
 import { useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatDateLT } from '../lib/formatters';
-import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle, Trash2, RefreshCw, Download } from 'lucide-react';
+import { FileText, X, ExternalLink, ChevronDown, ChevronUp, Edit2, Check, XCircle, Trash2, RefreshCw, Download, Send, Copy, Link as LinkIcon } from 'lucide-react';
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
+import { generateSignatureUrl, copySignatureUrlToClipboard } from '../lib/signatureUtils';
 
 // Helper to convert Lithuanian characters to ASCII for PDF
 function toAscii(text: string | null | undefined): string {
@@ -34,6 +35,26 @@ interface TreatedAnimalsReportProps {
 }
 
 export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
+  const [copiedUrl, setCopiedUrl] = useState<string | null>(null);
+  const [showSignatureUrl, setShowSignatureUrl] = useState<string | null>(null);
+
+  // Handle copying signature URL to clipboard
+  const handleCopySignatureUrl = async (treatmentId: string) => {
+    const success = await copySignatureUrlToClipboard(treatmentId);
+    if (success) {
+      setCopiedUrl(treatmentId);
+      setTimeout(() => setCopiedUrl(null), 2000);
+    }
+  };
+
+  // Handle showing signature URL
+  const handleShowSignatureUrl = async (treatmentId: string) => {
+    const url = await generateSignatureUrl(treatmentId);
+    if (url) {
+      setShowSignatureUrl(url);
+    }
+  };
+
   // Helper function to calculate animal age
   const calculateAge = (ageMonths: number | null, birthDate: string | null): string => {
     if (ageMonths) {
@@ -137,6 +158,21 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
         ? `${row.treatment_outcome}\n${formatDateLT(row.outcome_date)}`
         : (row.treatment_outcome || '-'));
       
+      // Column 14: Owner signature
+      let ownerSignature = '-';
+      if (row.owner_signature_status === 'verified') {
+        ownerSignature = row.owner_signed_at 
+          ? `Pasirasyta ${formatDateLT(row.owner_signed_at)}`
+          : 'Pasirasyta';
+      } else if (row.owner_signature_status === 'pending') {
+        ownerSignature = 'Laukiama paraso';
+      } else if (row.owner_signature_status === 'declined') {
+        ownerSignature = 'Atsisakyta';
+      }
+      
+      // Column 15: Vet signature
+      const vetSignature = 'Pasirasyta';
+      
       return [
         row.eil_nr?.toString() || '',
         toAscii(row.registration_date ? formatDateLT(row.registration_date) : '-'),
@@ -151,7 +187,8 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
         treatment || '-',
         withdrawal,
         outcome,
-        toAscii(row.veterinarian) || '-'
+        toAscii(ownerSignature),
+        toAscii(vetSignature)
       ];
     });
 
@@ -171,7 +208,8 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
         toAscii('11.\nGydymas'),
         toAscii('12.\nIslauka'),
         toAscii('13.\nLigos\nbaigtis'),
-        toAscii('14.\nVeterinarijos\ngydytojas')
+        toAscii('14.\nGyvuno\nsavininko\nparasas'),
+        toAscii('15.\nVeterinarijos\ngydytojo\nparasas')
       ]],
       body: tableData,
       styles: { 
@@ -193,19 +231,20 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
       },
       columnStyles: {
         0: { cellWidth: 10, halign: 'center' },
-        1: { cellWidth: 18 },
-        2: { cellWidth: 25 },
-        3: { cellWidth: 15 },
-        4: { cellWidth: 12 },
-        5: { cellWidth: 20 },
-        6: { cellWidth: 18 },
-        7: { cellWidth: 18 },
-        8: { cellWidth: 18 },
-        9: { cellWidth: 20 },
-        10: { cellWidth: 23 },
-        11: { cellWidth: 18 },
-        12: { cellWidth: 20 },
-        13: { cellWidth: 18 }
+        1: { cellWidth: 17 },
+        2: { cellWidth: 23 },
+        3: { cellWidth: 14 },
+        4: { cellWidth: 11 },
+        5: { cellWidth: 18 },
+        6: { cellWidth: 16 },
+        7: { cellWidth: 16 },
+        8: { cellWidth: 16 },
+        9: { cellWidth: 18 },
+        10: { cellWidth: 20 },
+        11: { cellWidth: 16 },
+        12: { cellWidth: 18 },
+        13: { cellWidth: 17 },
+        14: { cellWidth: 17 }
       },
       margin: { left: 5, right: 5 },
       theme: 'grid',
@@ -277,7 +316,10 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
                 13.<br/>Ligos baigtis
               </th>
               <th className="border-2 border-gray-300 px-2 py-3 text-[11px] font-bold text-gray-700 align-top" style={{minWidth: '100px'}}>
-                14.<br/>Veterinarijos<br/>gydytojas
+                14.<br/>Gyvūno<br/>savininko<br/>parašas
+              </th>
+              <th className="border-2 border-gray-300 px-2 py-3 text-[11px] font-bold text-gray-700 align-top" style={{minWidth: '100px'}}>
+                15.<br/>Veterinarijos<br/>gydytojo<br/>parašas
               </th>
             </tr>
           </thead>
@@ -383,9 +425,75 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
                     : row.treatment_outcome || '-'}
                 </td>
                 
-                {/* Column 14: Veterinarian name */}
-                <td className="border-2 border-gray-300 px-2 py-2 text-[11px] font-medium text-gray-900">
-                  {row.veterinarian || '-'}
+                {/* Column 14: Owner signature */}
+                <td className="border-2 border-gray-300 px-2 py-2 text-[11px]">
+                  {row.owner_signature_status === 'verified' ? (
+                    <div className="text-green-700">
+                      <div className="font-semibold">✓ Pasirašyta</div>
+                      {row.owner_signed_at && (
+                        <div className="text-[9px] text-gray-600 mt-0.5">
+                          {formatDateLT(row.owner_signed_at)}
+                        </div>
+                      )}
+                    </div>
+                  ) : row.owner_signature_status === 'pending' ? (
+                    <div>
+                      <div className="text-amber-600 text-[10px] mb-1">
+                        ⏳ Laukiama parašo
+                      </div>
+                      <button
+                        onClick={() => handleCopySignatureUrl(row.treatment_id)}
+                        className="no-print text-[9px] px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 transition-colors flex items-center gap-1"
+                        title="Kopijuoti nuorodą parašui"
+                      >
+                        {copiedUrl === row.treatment_id ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            Nukopijuota
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="w-3 h-3" />
+                            Kopijuoti nuorodą
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  ) : row.owner_signature_status === 'declined' ? (
+                    <div className="text-red-600 text-[10px]">
+                      ✗ Atsisakyta
+                    </div>
+                  ) : (
+                    <div className="no-print">
+                      <button
+                        onClick={() => handleCopySignatureUrl(row.treatment_id)}
+                        className="text-[9px] px-2 py-1 bg-green-100 text-green-700 rounded hover:bg-green-200 transition-colors flex items-center gap-1"
+                        title="Gauti nuorodą savininkui pasirašyti"
+                      >
+                        {copiedUrl === row.treatment_id ? (
+                          <>
+                            <Check className="w-3 h-3" />
+                            Nukopijuota
+                          </>
+                        ) : (
+                          <>
+                            <LinkIcon className="w-3 h-3" />
+                            Prašyti parašo
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
+                </td>
+                
+                {/* Column 15: Veterinarian signature */}
+                <td className="border-2 border-gray-300 px-2 py-2 text-[11px]">
+                  <div className="text-gray-900">
+                    <div className="font-semibold">Pasirašyta</div>
+                    <div className="text-[9px] text-gray-600 mt-0.5">
+                      {row.veterinarian || 'Veterinarijos gydytojas'}
+                    </div>
+                  </div>
                 </td>
               </tr>
             ))}
@@ -402,6 +510,41 @@ export function TreatedAnimalsReport({ data }: TreatedAnimalsReportProps) {
       {data.length > 0 && (
         <div className="mt-4 text-sm text-gray-600 no-print">
           <p>Viso įrašų: <span className="font-semibold text-gray-900">{data.length}</span></p>
+        </div>
+      )}
+
+      {/* Signature URL Modal */}
+      {showSignatureUrl && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 no-print">
+          <div className="bg-white rounded-lg shadow-xl p-6 max-w-lg w-full mx-4">
+            <h3 className="text-lg font-semibold text-gray-900 mb-4">Parašo užklausos nuoroda</h3>
+            <p className="text-sm text-gray-600 mb-4">
+              Nusiųskite šią nuorodą gyvūno savininkui el. paštu arba SMS žinute. 
+              Savininkas galės patvirtinti gydymo informaciją ir pasirašyti dokumentą.
+            </p>
+            <div className="bg-gray-50 p-3 rounded border border-gray-200 mb-4 break-all">
+              <code className="text-sm text-gray-800">{showSignatureUrl}</code>
+            </div>
+            <div className="flex gap-3">
+              <button
+                onClick={async () => {
+                  await navigator.clipboard.writeText(showSignatureUrl);
+                  setCopiedUrl('modal');
+                  setTimeout(() => setCopiedUrl(null), 2000);
+                }}
+                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+              >
+                <Copy className="w-4 h-4" />
+                {copiedUrl === 'modal' ? 'Nukopijuota!' : 'Kopijuoti nuorodą'}
+              </button>
+              <button
+                onClick={() => setShowSignatureUrl(null)}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition-colors"
+              >
+                Uždaryti
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>
@@ -1319,14 +1462,24 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
     doc.text(toAscii(`Sugeneruota: ${formatDateLT(new Date().toISOString())}`), doc.internal.pageSize.getWidth() / 2, 28, { align: 'center' });
 
     const tableData = data.map((row, idx) => {
-      const meatWithdrawal = toAscii(row.withdrawal_until_meat 
-        ? `${row.withdrawal_days_meat > 0 ? row.withdrawal_days_meat + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_meat)}`
-        : 'Nera');
+      const meatDays = row.days_until_meat_ok || 0;
+      const milkDays = row.days_until_milk_ok || 0;
       
+      const meatWithdrawal = toAscii(row.withdrawal_until_meat
+        ? `${meatDays > 0 ? meatDays + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_meat)}`
+        : 'Nera');
+
       const milkWithdrawal = toAscii(row.withdrawal_until_milk
-        ? `${row.withdrawal_days_milk > 0 ? row.withdrawal_days_milk + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_milk)}`
+        ? `${milkDays > 0 ? milkDays + ' d.' : 'Pasibaige'}\niki ${formatDateLT(row.withdrawal_until_milk)}`
         : 'Nera');
-      
+
+      // Owner signature
+      const ownerSig = row.owner_signature_status === 'verified' 
+        ? toAscii(`Pasirasyta ${row.owner_signed_at ? formatDateLT(row.owner_signed_at) : ''}`)
+        : row.owner_signature_status === 'pending'
+        ? toAscii('Laukiama paraso')
+        : '-';
+
       return [
         (idx + 1).toString(),
         toAscii((row.farm_name || '-') + (row.is_eco_farm ? ' (ECO)' : '')),
@@ -1334,10 +1487,13 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
         toAscii(row.species) || '-',
         toAscii(row.treatment_date ? formatDateLT(row.treatment_date) : '-'),
         toAscii(row.disease_name) || '-',
-        toAscii(row.medicines_used) || '-',
+        toAscii(row.medicine_name) || '-',
+        `${row.dose || '-'} ${toAscii(row.unit || '')}`,
         meatWithdrawal,
         milkWithdrawal,
-        toAscii(row.veterinarian) || '-'
+        ownerSig,
+        'Pasirasyta',
+        toAscii(row.vet_name) || '-'
       ];
     });
 
@@ -1351,14 +1507,17 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
         toAscii('Gydymo\ndata'),
         'Liga',
         toAscii('Panaudoti\nvaistai'),
+        toAscii('Panaudotas\nkiekis'),
         toAscii('Karencija\n(mesa)'),
         toAscii('Karencija\n(pienas)'),
+        toAscii('Savininko\nparasas'),
+        toAscii('Veterinaro\nparasas'),
         'Veterinaras'
       ]],
       body: tableData,
       styles: {
-        fontSize: 7.5,
-        cellPadding: 2,
+        fontSize: 6.5,
+        cellPadding: 1.5,
         lineColor: [100, 100, 100],
         lineWidth: 0.1,
         overflow: 'linebreak',
@@ -1369,21 +1528,24 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
         textColor: [0, 0, 0],
         fontStyle: 'bold',
         halign: 'center',
-        fontSize: 7.5
+        fontSize: 6.5
       },
       columnStyles: {
-        0: { cellWidth: 12, halign: 'center' },
-        1: { cellWidth: 32 },
-        2: { cellWidth: 25, halign: 'center' },
-        3: { cellWidth: 22 },
-        4: { cellWidth: 22 },
-        5: { cellWidth: 28 },
-        6: { cellWidth: 38 },
-        7: { cellWidth: 27, halign: 'center' },
-        8: { cellWidth: 27, halign: 'center' },
-        9: { cellWidth: 32 }
+        0: { cellWidth: 8, halign: 'center' },
+        1: { cellWidth: 22 },
+        2: { cellWidth: 18, halign: 'center' },
+        3: { cellWidth: 16 },
+        4: { cellWidth: 16 },
+        5: { cellWidth: 20 },
+        6: { cellWidth: 28 },
+        7: { cellWidth: 16, halign: 'center' },
+        8: { cellWidth: 20, halign: 'center' },
+        9: { cellWidth: 20, halign: 'center' },
+        10: { cellWidth: 18, halign: 'center' },
+        11: { cellWidth: 16, halign: 'center' },
+        12: { cellWidth: 22 }
       },
-      margin: { left: 10, right: 10 },
+      margin: { left: 5, right: 5 },
       theme: 'grid'
     });
 
@@ -1425,8 +1587,11 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Gydymo data</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Liga</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Panaudoti vaistai</th>
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Panaudotas kiekis</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Karencija (mėsa)</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Karencija (pienas)</th>
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Savininko parašas</th>
+                <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Veterinaro parašas</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Veterinaras</th>
                 <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700 no-print">Veiksmai</th>
               </tr>
@@ -1464,7 +1629,10 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                       {row.disease_name || '-'}
                     </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                      {row.medicines_used || '-'}
+                      {row.medicine_name || '-'}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-semibold text-gray-900">
+                      {row.dose ? `${row.dose} ${row.unit || ''}` : '-'}
                     </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
                       {isEditing ? (
@@ -1476,8 +1644,8 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                         />
                       ) : row.withdrawal_until_meat ? (
                         <div className="space-y-1">
-                          <div className={`font-bold ${row.withdrawal_days_meat > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                            {row.withdrawal_days_meat > 0 ? `${row.withdrawal_days_meat} d.` : 'Pasibaigė'}
+                          <div className={`font-bold ${(row.days_until_meat_ok || 0) > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {(row.days_until_meat_ok || 0) > 0 ? `${row.days_until_meat_ok} d.` : 'Pasibaigė'}
                           </div>
                           <div className="text-[10px] text-gray-600">
                             iki {formatDateLT(row.withdrawal_until_meat)}
@@ -1497,8 +1665,8 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                         />
                       ) : row.withdrawal_until_milk ? (
                         <div className="space-y-1">
-                          <div className={`font-bold ${row.withdrawal_days_milk > 0 ? 'text-red-700' : 'text-green-700'}`}>
-                            {row.withdrawal_days_milk > 0 ? `${row.withdrawal_days_milk} d.` : 'Pasibaigė'}
+                          <div className={`font-bold ${(row.days_until_milk_ok || 0) > 0 ? 'text-red-700' : 'text-green-700'}`}>
+                            {(row.days_until_milk_ok || 0) > 0 ? `${row.days_until_milk_ok} d.` : 'Pasibaigė'}
                           </div>
                           <div className="text-[10px] text-gray-600">
                             iki {formatDateLT(row.withdrawal_until_milk)}
@@ -1508,8 +1676,33 @@ export function WithdrawalReport({ data, onDataChange }: WithdrawalReportProps) 
                         <span className="text-gray-500">Nėra</span>
                       )}
                     </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
+                      {row.owner_signature_status === 'verified' ? (
+                        <div className="text-green-700">
+                          <div className="font-semibold">✓ Pasirašyta</div>
+                          {row.owner_signed_at && (
+                            <div className="text-[9px] text-gray-600 mt-0.5">
+                              {formatDateLT(row.owner_signed_at)}
+                            </div>
+                          )}
+                        </div>
+                      ) : row.owner_signature_status === 'pending' ? (
+                        <div className="text-amber-600 text-[10px]">
+                          ⏳ Laukiama
+                        </div>
+                      ) : row.owner_signature_status === 'declined' ? (
+                        <div className="text-red-600 text-[10px]">
+                          ✗ Atsisakyta
+                        </div>
+                      ) : (
+                        <span className="text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center">
+                      <div className="text-gray-900 font-semibold">Pasirašyta</div>
+                    </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">
-                      {row.veterinarian || '-'}
+                      {row.vet_name || '-'}
                     </td>
                     <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center no-print">
                       {isEditing ? (

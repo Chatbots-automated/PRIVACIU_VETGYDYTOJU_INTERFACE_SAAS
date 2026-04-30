@@ -10,6 +10,7 @@ import { VeterinaryModule } from './components/VeterinaryModule';
 import { VetpraktikaModule } from './components/VetpraktikaModule';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ClientRegistration } from './components/ClientRegistration';
+import { SignatureVerification } from './components/SignatureVerification';
 import { Building2 } from 'lucide-react';
 
 type Module = 'veterinarija' | 'klientai' | 'vetpraktika' | null;
@@ -155,6 +156,11 @@ function App() {
         </div>
       </div>
     );
+  }
+
+  // Signature verification page - accessible without login
+  if (window.location.pathname.startsWith('/verify-signature/')) {
+    return <SignatureVerification />;
   }
 
   // Registration page - accessible without login
