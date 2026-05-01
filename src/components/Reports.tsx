@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/helpers';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
 import {
   FileText,
   Download,
@@ -29,6 +30,13 @@ import {
   InseminationJournalReport,
   WithdrawalReport
 } from './ReportTemplates';
+import {
+  TreatedAnimalRegistrationReport,
+  ProductionAnimalMedicineUsageReport,
+  MedicineBiocideStockBalanceReport,
+  MedicineBiocideWriteOffActReport,
+  VeterinaryWorkCompletionActReport
+} from './journals/JournalReports';
 import { SearchableSelect } from './SearchableSelect';
 import { InvoiceViewer } from './InvoiceViewer';
 import { exportReportToExcel, getColumnsForReportType, getReportTitle } from '../lib/reportExport';
@@ -50,7 +58,7 @@ interface AnalyticsData {
   inventoryByCategory: Array<{ category: string; value: number }>;
 }
 
-type ReportType = 'analytics' | 'drug_journal' | 'treated_animals' | 'biocide_journal' | 'insemination_journal' | 'medical_waste' | 'invoices' | 'withdrawal';
+type ReportType = 'analytics' | 'drug_journal' | 'treated_animals' | 'biocide_journal' | 'insemination_journal' | 'medical_waste' | 'invoices' | 'withdrawal' | 'treated_animal_registration' | 'production_animal_medicine' | 'stock_balance' | 'write_off_act' | 'work_completion_act';
 
 // Get current month's first and last day
 const getCurrentMonthDates = () => {
@@ -66,6 +74,7 @@ const getCurrentMonthDates = () => {
 
 export function Reports() {
   const { selectedFarm } = useFarm();
+  const { user } = useAuth();
   const currentMonth = getCurrentMonthDates();
 
   const [reportType, setReportType] = useState<ReportType>('analytics');
@@ -454,6 +463,129 @@ export function Reports() {
           break;
         }
 
+        case 'treated_animal_registration': {
+          if (!selectedFarm) return;
+          
+          // Use same data source as treated_animals
+          const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'farm_id', value: selectedFarm.id }
+          ];
+
+          if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
+          if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
+          if (filterAnimal) filters.push({ column: 'animal_id', value: filterAnimal });
+          if (filterDisease) filters.push({ column: 'disease_id', value: filterDisease });
+
+          result = await fetchAllRows('vw_treated_animals_detailed', '*', 'registration_date', filters);
+
+          if (filterProduct) {
+            result = result.filter(r => {
+              const product = products.find(p => p.id === filterProduct);
+              return product && r.medicine_name?.toLowerCase().includes(product.name.toLowerCase());
+            });
+          }
+          if (filterVet) {
+            result = result.filter(r => r.veterinarian?.toLowerCase().includes(filterVet.toLowerCase()));
+          }
+          
+          result.sort((a, b) => {
+            const dateCompare = a.registration_date.localeCompare(b.registration_date);
+            if (dateCompare !== 0) return dateCompare;
+            return a.created_at.localeCompare(b.created_at);
+          });
+          
+          break;
+        }
+
+        case 'production_animal_medicine': {
+          if (!selectedFarm) return;
+          
+          // Use same data source as treated_animal_registration but can be filtered by owner
+          const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'farm_id', value: selectedFarm.id }
+          ];
+
+          if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
+          if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
+
+          result = await fetchAllRows('vw_treated_animals_detailed', '*', 'registration_date', filters);
+          
+          // Don't filter by species - show all animals for production medicine journal
+          // The user can filter manually if needed
+          
+          result.sort((a, b) => a.registration_date.localeCompare(b.registration_date));
+          break;
+        }
+
+        case 'stock_balance': {
+          if (!selectedFarm) return;
+          
+          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
+          if (filterProduct) query = query.eq('product_id', filterProduct);
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          result = data || [];
+
+          if (filterBatch) {
+            result = result.filter(r => r.batch_number?.toLowerCase().includes(filterBatch.toLowerCase()));
+          }
+          break;
+        }
+
+        case 'write_off_act': {
+          if (!selectedFarm) return;
+          
+          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
+          
+          // Don't filter by receipt_date for write-off - we want items that have been used
+          if (filterProduct) query = query.eq('product_id', filterProduct);
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          // Filter to only include items with usage > 0
+          result = (data || []).filter(r => parseFloat(r.quantity_used || '0') > 0);
+
+          if (filterBatch) {
+            result = result.filter(r => r.batch_number?.toLowerCase().includes(filterBatch.toLowerCase()));
+          }
+          
+          console.log('Write-off act results:', result.length, 'items with usage');
+          break;
+        }
+
+        case 'work_completion_act': {
+          if (!selectedFarm) return;
+          
+          // Use visit_charges table for billing data
+          const query = supabase
+            .from('visit_charges')
+            .select('id, created_at, description, total_price')
+            .eq('farm_id', selectedFarm.id);
+          
+          if (dateFrom) query.gte('created_at', dateFrom);
+          if (dateTo) query.lte('created_at', dateTo);
+
+          const { data, error } = await query;
+          if (error) {
+            console.error('Work completion act query error:', error);
+            throw error;
+          }
+
+          // Map the data to expected format
+          result = (data || []).map(row => ({
+            date: row.created_at,
+            work_name: row.description || 'Veterinarinė paslauga',
+            document_no: row.id,
+            income: row.total_price || 0
+          }));
+          
+          console.log('Work completion act data:', result);
+          break;
+        }
+
         default:
           return;
       }
@@ -792,6 +924,44 @@ export function Reports() {
         return <BiocideJournalReport data={data} />;
       case 'insemination_journal':
         return <InseminationJournalReport data={data} />;
+      case 'treated_animal_registration':
+        return <TreatedAnimalRegistrationReport 
+          data={data} 
+          periodStart={dateFrom} 
+          periodEnd={dateTo}
+          veterinaryProviderName={selectedFarm?.name || ''}
+          responsibleVetName={user?.full_name || ''}
+        />;
+      case 'production_animal_medicine':
+        return <ProductionAnimalMedicineUsageReport 
+          data={data}
+          animalOwnerName={selectedFarm?.contact_person || selectedFarm?.name || ''}
+          veterinaryProviderName={selectedFarm?.name || ''}
+        />;
+      case 'stock_balance':
+        return <MedicineBiocideStockBalanceReport 
+          data={data}
+          veterinaryProviderName={selectedFarm?.name || ''}
+          responsibleVetName={user?.full_name || ''}
+        />;
+      case 'write_off_act':
+        return <MedicineBiocideWriteOffActReport 
+          data={data}
+          periodStart={dateFrom}
+          periodEnd={dateTo}
+          place={selectedFarm?.address || ''}
+          veterinaryProviderName={selectedFarm?.name || ''}
+          responsibleVetName={user?.full_name || ''}
+        />;
+      case 'work_completion_act':
+        return <VeterinaryWorkCompletionActReport
+          data={data}
+          farmOwnerName={selectedFarm?.contact_person || selectedFarm?.name || ''}
+          farmOwnerAddress={selectedFarm?.address || ''}
+          documentDate={dateTo || new Date().toISOString().split('T')[0]}
+          veterinaryProviderName={selectedFarm?.name || ''}
+          performedByName={user?.full_name || ''}
+        />;
       default:
         return null;
     }
@@ -806,6 +976,11 @@ export function Reports() {
     biocide_journal: { name: 'Biocidų žurnalas', icon: Package, color: 'purple' },
     insemination_journal: { name: 'Sėklinimo žurnalas', icon: Heart, color: 'rose' },
     medical_waste: { name: 'Medicininių atliekų žurnalas', icon: AlertTriangle, color: 'orange' },
+    treated_animal_registration: { name: 'GYDOMŲ GYVŪNŲ REGISTRACIJOS ŽURNALAS', icon: FileText, color: 'blue' },
+    production_animal_medicine: { name: 'Produkcijos gyvūnų vaistų žurnalas', icon: Syringe, color: 'green' },
+    stock_balance: { name: 'Vaistų, biocidų likutis', icon: Package, color: 'amber' },
+    write_off_act: { name: 'Vaistų nurašymo aktas', icon: FileText, color: 'red' },
+    work_completion_act: { name: 'Veterinarinių darbų atlikimo aktas', icon: FileText, color: 'indigo' },
   };
 
   const currentReport = reportTypeInfo[reportType];

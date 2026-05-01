@@ -17,10 +17,19 @@ import {
   WithdrawalReport,
   InvoicesReport
 } from './ReportTemplates';
+import {
+  TreatedAnimalRegistrationReport,
+  ProductionAnimalMedicineUsageReport,
+  MedicineBiocideStockBalanceReport,
+  MedicineBiocideWriteOffActReport,
+  VeterinaryWorkCompletionActReport
+} from './journals/JournalReports';
 import { SearchableSelect } from './SearchableSelect';
 import { exportReportToExcel, getColumnsForReportType, getReportTitle } from '../lib/reportExport';
 
-type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal' | 'invoices';
+import { useAuth } from '../contexts/AuthContext';
+
+type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal' | 'invoices' | 'treated_animal_registration' | 'production_animal_medicine' | 'stock_balance' | 'write_off_act' | 'work_completion_act';
 
 const getCurrentMonthDates = () => {
   const now = new Date();
@@ -34,6 +43,7 @@ const getCurrentMonthDates = () => {
 };
 
 export function AllFarmsReports() {
+  const { user } = useAuth();
   const currentMonth = getCurrentMonthDates();
 
   const [reportType, setReportType] = useState<ReportType>('drug_journal');
@@ -232,6 +242,120 @@ export function AllFarmsReports() {
           result = invoicesWithItems;
           break;
         }
+
+        case 'treated_animal_registration': {
+          const filters: { column: string; value: any; operator?: string }[] = [];
+
+          if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
+          if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
+          if (filterAnimal) filters.push({ column: 'animal_id', value: filterAnimal });
+          if (filterDisease) filters.push({ column: 'disease_id', value: filterDisease });
+          if (filterFarm) filters.push({ column: 'farm_id', value: filterFarm });
+
+          result = await fetchAllRows('vw_treated_animals_all_farms', '*', 'registration_date', filters);
+
+          if (filterProduct) {
+            result = result.filter(r => {
+              const product = products.find(p => p.id === filterProduct);
+              return product && r.medicine_name?.toLowerCase().includes(product.name.toLowerCase());
+            });
+          }
+          if (filterVet) {
+            result = result.filter(r => r.veterinarian?.toLowerCase().includes(filterVet.toLowerCase()));
+          }
+          
+          result.sort((a, b) => {
+            const dateCompare = a.registration_date.localeCompare(b.registration_date);
+            if (dateCompare !== 0) return dateCompare;
+            return a.created_at.localeCompare(b.created_at);
+          });
+          
+          break;
+        }
+
+        case 'production_animal_medicine': {
+          const filters: { column: string; value: any; operator?: string }[] = [];
+
+          if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
+          if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
+          if (filterFarm) filters.push({ column: 'farm_id', value: filterFarm });
+
+          result = await fetchAllRows('vw_treated_animals_all_farms', '*', 'registration_date', filters);
+          
+          result.sort((a, b) => a.registration_date.localeCompare(b.registration_date));
+          break;
+        }
+
+        case 'stock_balance': {
+          let query = supabase.from('vw_vet_drug_journal_all_farms').select('*');
+          if (filterProduct) query = query.eq('product_id', filterProduct);
+          if (filterFarm) query = query.eq('farm_id', filterFarm);
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          result = data || [];
+
+          if (filterBatch) {
+            result = result.filter(r => r.batch_number?.toLowerCase().includes(filterBatch.toLowerCase()));
+          }
+          break;
+        }
+
+        case 'write_off_act': {
+          let query = supabase.from('vw_vet_drug_journal_all_farms').select('*');
+          
+          // Don't filter by receipt_date for write-off - we want items that have been used
+          // If date filters are provided, they should filter by when it was used, not received
+          
+          if (filterProduct) query = query.eq('product_id', filterProduct);
+          if (filterFarm) query = query.eq('farm_id', filterFarm);
+
+          const { data, error } = await query;
+          if (error) throw error;
+
+          // Only show items that have been used (quantity_used > 0)
+          result = (data || []).filter(r => {
+            const used = parseFloat(r.quantity_used || '0');
+            return used > 0;
+          });
+
+          if (filterBatch) {
+            result = result.filter(r => r.batch_number?.toLowerCase().includes(filterBatch.toLowerCase()));
+          }
+          
+          console.log('Write-off act results:', result.length, 'items with usage');
+          break;
+        }
+
+        case 'work_completion_act': {
+          const query = supabase
+            .from('visit_charges')
+            .select('id, created_at, description, total_price, farm_id, farm:farms(name, address, contact_person)');
+          
+          if (dateFrom) query.gte('created_at', dateFrom);
+          if (dateTo) query.lte('created_at', dateTo);
+          if (filterFarm) query.eq('farm_id', filterFarm);
+
+          const { data, error } = await query;
+          if (error) {
+            console.error('Work completion act query error:', error);
+            throw error;
+          }
+
+          result = (data || []).map(row => ({
+            date: row.created_at,
+            work_name: row.description || 'Veterinarinė paslauga',
+            document_no: row.id,
+            income: row.total_price || 0,
+            farm_id: row.farm_id,
+            farm_name: row.farm?.name || '',
+            farm_address: row.farm?.address || '',
+            farm_contact: row.farm?.contact_person || ''
+          }));
+          
+          break;
+        }
       }
 
       setData(result);
@@ -324,6 +448,63 @@ export function AllFarmsReports() {
           >
             <FileText className="w-4 h-4" />
             Sąskaitos
+          </button>
+          
+          {/* New Journal Buttons */}
+          <button
+            onClick={() => setReportType('treated_animal_registration')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'treated_animal_registration'
+                ? 'bg-blue-600 text-white'
+                : 'bg-blue-50 text-blue-700 hover:bg-blue-100'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            GYDOMŲ GYVŪNŲ REGISTRACIJOS ŽURNALAS
+          </button>
+          <button
+            onClick={() => setReportType('production_animal_medicine')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'production_animal_medicine'
+                ? 'bg-green-600 text-white'
+                : 'bg-green-50 text-green-700 hover:bg-green-100'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Produkcijos gyvūnų vaistų žurnalas
+          </button>
+          <button
+            onClick={() => setReportType('stock_balance')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'stock_balance'
+                ? 'bg-amber-600 text-white'
+                : 'bg-amber-50 text-amber-700 hover:bg-amber-100'
+            }`}
+          >
+            <Package className="w-4 h-4" />
+            Vaistų, biocidų likutis
+          </button>
+          <button
+            onClick={() => setReportType('write_off_act')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'write_off_act'
+                ? 'bg-red-600 text-white'
+                : 'bg-red-50 text-red-700 hover:bg-red-100'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Vaistų nurašymo aktas
+          </button>
+          <button
+            onClick={() => setReportType('work_completion_act')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'work_completion_act'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Darbų atlikimo aktas
           </button>
         </div>
 
@@ -510,6 +691,51 @@ export function AllFarmsReports() {
             {reportType === 'treated_animals' && <TreatedAnimalsReport data={data} />}
             {reportType === 'withdrawal' && <WithdrawalReport data={data} onDataChange={loadReport} />}
             {reportType === 'invoices' && <InvoicesReport data={data} onInvoiceDeleted={loadReport} />}
+            
+            {/* New Journal Templates */}
+            {reportType === 'treated_animal_registration' && (
+              <TreatedAnimalRegistrationReport 
+                data={data}
+                periodStart={dateFrom}
+                periodEnd={dateTo}
+                veterinaryProviderName="Visos įstaigos"
+                responsibleVetName={user?.full_name || ''}
+              />
+            )}
+            {reportType === 'production_animal_medicine' && (
+              <ProductionAnimalMedicineUsageReport 
+                data={data}
+                animalOwnerName="Visi ūkiai"
+                veterinaryProviderName="Visos įstaigos"
+              />
+            )}
+            {reportType === 'stock_balance' && (
+              <MedicineBiocideStockBalanceReport 
+                data={data}
+                veterinaryProviderName="Visos įstaigos"
+                responsibleVetName={user?.full_name || ''}
+              />
+            )}
+            {reportType === 'write_off_act' && (
+              <MedicineBiocideWriteOffActReport 
+                data={data}
+                periodStart={dateFrom}
+                periodEnd={dateTo}
+                place="Visos lokacijos"
+                veterinaryProviderName="Visos įstaigos"
+                responsibleVetName={user?.full_name || ''}
+              />
+            )}
+            {reportType === 'work_completion_act' && (
+              <VeterinaryWorkCompletionActReport 
+                data={data}
+                farmOwnerName="Visi ūkiai"
+                farmOwnerAddress="Įvairios lokacijos"
+                documentDate={dateTo || new Date().toISOString().split('T')[0]}
+                veterinaryProviderName="Visos įstaigos"
+                performedByName={user?.full_name || ''}
+              />
+            )}
           </div>
         )}
       </div>

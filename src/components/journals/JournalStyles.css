@@ -1,0 +1,615 @@
+/* =====================================================================
+   Veterinary Journal Styles - Official Lithuanian Formats
+   ===================================================================== */
+
+/* Container and Layout */
+.journal-container {
+  width: 100%;
+  background: white;
+  font-family: Arial, Helvetica, sans-serif;
+  color: #000;
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.journal-page {
+  padding: 10mm;
+  background: white;
+}
+
+/* Print Settings */
+@media print {
+  .journal-container {
+    width: 100%;
+    height: 100%;
+  }
+  
+  .journal-portrait .journal-page {
+    width: 210mm;
+    min-height: 297mm;
+  }
+  
+  .journal-landscape .journal-page {
+    width: 297mm;
+    min-height: 210mm;
+  }
+  
+  @page {
+    margin: 10mm;
+  }
+  
+  .journal-landscape {
+    page-break-before: always;
+  }
+  
+  @page :first {
+    margin: 10mm;
+  }
+  
+  body.printing-landscape {
+    transform-origin: top left;
+  }
+}
+
+/* Landscape orientation */
+.journal-landscape {
+  max-width: 297mm;
+}
+
+@media print {
+  .journal-landscape {
+    size: A4 landscape;
+  }
+}
+
+/* Portrait orientation */
+.journal-portrait {
+  max-width: 210mm;
+}
+
+@media print {
+  .journal-portrait {
+    size: A4 portrait;
+  }
+}
+
+/* Header Styles */
+.journal-header {
+  position: relative;
+  margin-bottom: 1rem;
+  border-bottom: 1px solid #333;
+  padding-bottom: 0.5rem;
+}
+
+.journal-title-section {
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
+.journal-title {
+  font-size: 14px;
+  font-weight: bold;
+  margin: 0;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.journal-subtitle {
+  font-size: 11px;
+  font-weight: bold;
+  margin: 0;
+  line-height: 1.4;
+}
+
+.journal-main-title {
+  text-align: center;
+  margin: 1rem 0;
+}
+
+.journal-main-title h1 {
+  font-size: 16px;
+  font-weight: bold;
+  margin: 0;
+}
+
+/* Official Form Block (Top-right) */
+.official-form-block {
+  position: absolute;
+  top: -5px;
+  right: 0;
+  text-align: left;
+  font-size: 7px;
+  line-height: 1.4;
+  border: 2px solid #000;
+  padding: 6px 10px;
+  background: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-width: 180px;
+}
+
+.official-form-block p {
+  margin: 1px 0;
+  padding: 0;
+}
+
+.official-form-title {
+  font-weight: bold;
+  font-size: 8px;
+  margin-bottom: 3px !important;
+  text-decoration: underline;
+}
+
+.official-reference-block {
+  position: absolute;
+  top: -5px;
+  right: 0;
+  text-align: left;
+  font-size: 7px;
+  line-height: 1.4;
+  border: 2px solid #000;
+  padding: 6px 10px;
+  background: #f9f9f9;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  max-width: 180px;
+}
+
+.official-reference-block p {
+  margin: 1px 0;
+  padding: 0;
+}
+
+/* Information Section */
+.journal-info-section {
+  margin: 1rem 0;
+  font-size: 10px;
+}
+
+.info-line {
+  margin: 0.3rem 0;
+  display: flex;
+  gap: 0.5rem;
+  align-items: baseline;
+}
+
+.info-line.centered {
+  justify-content: center;
+  text-align: center;
+  display: block;
+}
+
+.info-label {
+  font-weight: bold;
+  min-width: 120px;
+}
+
+.info-value {
+  flex: 1;
+  border-bottom: 1px solid #000;
+  padding: 0 4px;
+}
+
+.info-sublabel {
+  font-size: 7px;
+  color: #666;
+  font-style: italic;
+  text-align: center;
+  display: block;
+}
+
+/* Write-off specific info styles */
+.writeoff-info .info-line.centered {
+  margin: 0.2rem 0;
+}
+
+.work-act-info {
+  border: 1px solid #333;
+  padding: 0.5rem;
+  margin: 1rem 0;
+}
+
+/* Table Styles */
+.journal-table-container {
+  margin: 1rem 0;
+  overflow-x: auto;
+}
+
+.journal-table {
+  width: 100%;
+  border-collapse: collapse;
+  border: 1px solid #000;
+  font-size: 8px;
+}
+
+.journal-table th {
+  background-color: #f0f0f0;
+  border: 1px solid #000;
+  padding: 4px 2px;
+  font-weight: bold;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 8px;
+  line-height: 1.2;
+}
+
+.journal-table td {
+  border: 1px solid #000;
+  padding: 3px 2px;
+  vertical-align: top;
+  font-size: 8px;
+}
+
+.journal-table-row:hover {
+  background-color: #f9f9f9;
+}
+
+/* Column Group Headers */
+.col-group-header {
+  background-color: #e0e0e0 !important;
+  font-weight: bold;
+}
+
+/* Text Alignment */
+.text-center {
+  text-align: center;
+}
+
+.text-left {
+  text-align: left;
+  padding-left: 4px !important;
+}
+
+.text-right {
+  text-align: right;
+  padding-right: 4px !important;
+}
+
+/* Cell Wrapping for Long Text */
+.cell-wrap {
+  white-space: normal;
+  word-wrap: break-word;
+  max-width: 150px;
+  line-height: 1.3;
+}
+
+/* Column Width Classes */
+.col-eil-nr {
+  width: 30px;
+  min-width: 30px;
+}
+
+.col-reg-data {
+  width: 70px;
+  min-width: 70px;
+}
+
+.col-date {
+  width: 70px;
+  min-width: 70px;
+}
+
+.col-holder {
+  width: 120px;
+  min-width: 120px;
+}
+
+.col-animal-id {
+  width: 70px;
+  min-width: 70px;
+}
+
+.col-age {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-species {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-treatment-period {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-condition {
+  width: 70px;
+  min-width: 70px;
+}
+
+.col-lab-tests {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-diagnosis {
+  width: 100px;
+  min-width: 100px;
+}
+
+.col-treatment {
+  width: 120px;
+  min-width: 120px;
+}
+
+.col-medication {
+  width: 120px;
+  min-width: 120px;
+}
+
+.col-dose {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-withdrawal {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-outcome {
+  width: 50px;
+  min-width: 50px;
+}
+
+.col-used-amount {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-owner-sig {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-vet-sig {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-product-name {
+  width: 200px;
+  min-width: 200px;
+}
+
+.col-product-name-wide {
+  width: 250px;
+  min-width: 250px;
+}
+
+.col-expiry {
+  width: 80px;
+  min-width: 80px;
+}
+
+.col-batch {
+  width: 80px;
+  min-width: 80px;
+}
+
+.col-received {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-used {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-remaining {
+  width: 60px;
+  min-width: 60px;
+}
+
+.col-unit {
+  width: 70px;
+  min-width: 70px;
+}
+
+.col-used-qty {
+  width: 80px;
+  min-width: 80px;
+}
+
+.col-work-name {
+  width: 180px;
+  min-width: 180px;
+}
+
+.col-doc-no {
+  width: 80px;
+  min-width: 80px;
+}
+
+.col-income {
+  width: 70px;
+  min-width: 70px;
+}
+
+/* Stock Balance Table Specific Styles */
+.stock-balance-table .product-description-row {
+  background-color: #f8f9fa;
+  border-bottom: 2px solid #000;
+}
+
+.stock-balance-table .product-description-cell {
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.product-info-line {
+  margin: 2px 0;
+  font-size: 8px;
+}
+
+.product-category {
+  font-style: italic;
+  color: #666;
+}
+
+.package-label {
+  font-style: italic;
+  color: #666;
+  margin-right: 4px;
+}
+
+.package-unit {
+  font-weight: bold;
+  color: #000;
+}
+
+.product-name-bold {
+  font-weight: bold;
+  font-size: 9px;
+  color: #000;
+}
+
+.registration-number {
+  font-size: 7px;
+  color: #555;
+}
+
+.stock-balance-table .product-data-row {
+  border-bottom: 1px solid #ccc;
+}
+
+/* Write-off Table Styles */
+.writeoff-table th {
+  font-size: 8px;
+  padding: 5px 3px;
+}
+
+.writeoff-table td {
+  font-size: 8px;
+  padding: 4px 3px;
+}
+
+/* Work Act Table Styles */
+.work-act-table .total-row {
+  background-color: #f0f0f0;
+  font-weight: bold;
+  border-top: 2px solid #000;
+}
+
+.work-act-table .total-label {
+  padding-right: 8px !important;
+  font-size: 10px;
+}
+
+.work-act-table .total-value {
+  font-size: 10px;
+  font-weight: bold;
+}
+
+/* Footer Styles */
+.journal-footer {
+  margin-top: 2rem;
+  padding-top: 1rem;
+  border-top: 1px solid #333;
+}
+
+.signature-section {
+  margin: 1rem 0;
+}
+
+.signature-line {
+  display: flex;
+  align-items: baseline;
+  gap: 1rem;
+  margin: 0.5rem 0;
+  font-size: 9px;
+}
+
+.signature-label {
+  font-weight: bold;
+  white-space: nowrap;
+}
+
+.signature-value {
+  border-bottom: 1px solid #000;
+  padding: 0 8px;
+  min-width: 150px;
+  text-align: center;
+}
+
+.signature-placeholder {
+  border-bottom: 1px solid #000;
+  padding: 0 8px;
+  min-width: 100px;
+  text-align: center;
+  color: #999;
+}
+
+.signature-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+}
+
+.signature-sublabel {
+  font-size: 7px;
+  color: #666;
+  font-style: italic;
+}
+
+.work-act-footer .signature-line {
+  flex-direction: column;
+  align-items: flex-start;
+}
+
+.dual-signature {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.page-number {
+  text-align: right;
+  font-size: 8px;
+  margin-top: 1rem;
+  color: #666;
+}
+
+/* Print-specific adjustments */
+@media print {
+  .journal-container {
+    font-size: 8px;
+  }
+  
+  .journal-table {
+    page-break-inside: avoid;
+  }
+  
+  .journal-table-row {
+    page-break-inside: avoid;
+  }
+  
+  .product-description-row,
+  .product-data-row {
+    page-break-inside: avoid;
+  }
+  
+  .no-print {
+    display: none !important;
+  }
+}
+
+/* Avoid page breaks inside important elements */
+.page-break-inside-avoid {
+  page-break-inside: avoid;
+  break-inside: avoid;
+}
+
+/* Screen-only helpers */
+@media screen {
+  .journal-container {
+    box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+    margin: 20px auto;
+  }
+  
+  .journal-page {
+    background: white;
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  }
+}
