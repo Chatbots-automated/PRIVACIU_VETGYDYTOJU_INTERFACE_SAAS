@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllRows, normalizeNumberInput } from '../lib/helpers';
+import { fetchAllRows, normalizeNumberInput, getRegistrationDateMinYYYYMMDD, validateRegistrationDateNotTooOld } from '../lib/helpers';
 import { Product, Animal, Batch, Unit } from '../lib/types';
 import { Syringe, Check, Search, CheckSquare, Square, Calendar, Filter } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
@@ -172,6 +172,12 @@ export function Vaccinations() {
 
     if (selectedAnimals.size === 0) {
       showNotification('Pasirinkite bent vieną gyvūną', 'error');
+      return;
+    }
+
+    const vaccinationDateErr = validateRegistrationDateNotTooOld(massVaccinationData.vaccination_date);
+    if (vaccinationDateErr) {
+      showNotification(vaccinationDateErr, 'error');
       return;
     }
 
@@ -555,6 +561,7 @@ export function Vaccinations() {
               </label>
               <input
                 type="date"
+                min={getRegistrationDateMinYYYYMMDD()}
                 value={massVaccinationData.vaccination_date}
                 onChange={(e) => setMassVaccinationData({ ...massVaccinationData, vaccination_date: e.target.value })}
                 className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500"

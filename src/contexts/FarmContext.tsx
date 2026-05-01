@@ -11,8 +11,10 @@ interface Farm {
   contact_person?: string;
   contact_phone?: string;
   contact_email?: string;
-  vic_username?: string;
-  vic_password_encrypted?: string;
+  vic_production_username?: string;
+  vic_production_password?: string;
+  vic_pet_username?: string;
+  vic_pet_password?: string;
   is_active: boolean;
   is_eco_farm?: boolean;
 }

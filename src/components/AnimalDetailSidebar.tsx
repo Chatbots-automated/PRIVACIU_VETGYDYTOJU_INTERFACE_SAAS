@@ -3,7 +3,7 @@ import { supabase } from '../lib/supabase';
 import { Animal, AnimalVisit, VisitProcedure, VisitStatus, Treatment, Product, UsageItem, HoofLeg, HoofClaw, HoofConditionCode, Unit } from '../lib/types';
 import { X, Calendar, Thermometer, Pill, Syringe, FileText, Plus, CheckCircle, CheckCircle2, XCircle, Clock, AlertCircle, Package, Check, Filter, Search, ExternalLink, Milk, Activity, Trash2 } from 'lucide-react';
 import { formatDateTimeLT, formatDateLT } from '../lib/formatters';
-import { normalizeNumberInput, sortByLithuanian } from '../lib/helpers';
+import { normalizeNumberInput, sortByLithuanian, getRegistrationDatetimeCutoffLocal } from '../lib/helpers';
 import { useAuth } from '../contexts/AuthContext';
 import { useFarm } from '../contexts/FarmContext';
 import { requireClientId } from '../lib/clientHelpers';
@@ -1764,6 +1764,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
         <VisitCreateModal
           animalId={animal.id}
           animalName={animal.tag_no}
+          animal={animal}
           onClose={() => setShowVisitModal(false)}
           onSuccess={() => {
             loadAllData();
@@ -1874,7 +1875,7 @@ function VisitCard({ visit, getStatusColor, getStatusIcon, onClick }: { visit: A
   );
 }
 
-function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdit, onPricingModalDataReady }: { animalId: string; animalName?: string; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit; onPricingModalDataReady?: (data: any) => void }) {
+function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, visitToEdit, onPricingModalDataReady }: { animalId: string; animalName?: string; animal?: Animal; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit; onPricingModalDataReady?: (data: any) => void }) {
   const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const modalContentRef = useRef<HTMLDivElement>(null);
@@ -3869,6 +3870,8 @@ function VisitCreateModal({ animalId, animalName, onClose, onSuccess, visitToEdi
                   next_visit_date: newDateTime,
                 });
               }}
+              min={getRegistrationDatetimeCutoffLocal()}
+              max={new Date().toISOString().slice(0, 16)}
               className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
               required
             />

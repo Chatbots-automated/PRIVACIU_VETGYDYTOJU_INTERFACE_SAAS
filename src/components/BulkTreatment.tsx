@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { fetchAllRows, sortByLithuanian } from '../lib/helpers';
+import { fetchAllRows, sortByLithuanian, getRegistrationDateMinYYYYMMDD, validateRegistrationDateNotTooOld } from '../lib/helpers';
 import { Product, Animal, StockByBatch, Unit } from '../lib/types';
 import { Users, Plus, Trash2, Check, Search, Syringe, Package } from 'lucide-react';
 import { formatDateLT } from '../lib/formatters';
@@ -267,6 +267,12 @@ export function BulkTreatment() {
 
     if (!selectedFarm) {
       alert('Pasirinkite ūkį');
+      return;
+    }
+
+    const regErr = validateRegistrationDateNotTooOld(formData.treatment_date);
+    if (regErr) {
+      alert(regErr);
       return;
     }
 
@@ -640,6 +646,7 @@ export function BulkTreatment() {
               </label>
               <input
                 type="date"
+                min={getRegistrationDateMinYYYYMMDD()}
                 value={formData.treatment_date}
                 onChange={(e) => setFormData({ ...formData, treatment_date: e.target.value })}
                 className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"

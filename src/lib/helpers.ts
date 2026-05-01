@@ -134,3 +134,77 @@ export function parseNumberInput(value: string): number {
 }
 
 // GEA-related functions removed - no longer needed
+
+const REGISTRATION_LOOKBACK_MONTHS = 2;
+
+function subtractCalendarMonths(date: Date, months: number): Date {
+  const d = new Date(date.getTime());
+  d.setMonth(d.getMonth() - months);
+  return d;
+}
+
+function toLocalYYYYMMDD(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
+/** Local date (YYYY-MM-DD): earliest calendar day allowed for registrations (today minus months). */
+export function getRegistrationDateMinYYYYMMDD(reference = new Date()): string {
+  return toLocalYYYYMMDD(subtractCalendarMonths(reference, REGISTRATION_LOOKBACK_MONTHS));
+}
+
+/** Local datetime-local value (YYYY-MM-DDTHH:mm): cutoff for visit registration timestamps. */
+export function getRegistrationDatetimeCutoffLocal(reference = new Date()): string {
+  const d = subtractCalendarMonths(reference, REGISTRATION_LOOKBACK_MONTHS);
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  const h = String(d.getHours()).padStart(2, '0');
+  const min = String(d.getMinutes()).padStart(2, '0');
+  return `${y}-${m}-${day}T${h}:${min}`;
+}
+
+/**
+ * Earliest selectable datetime-local for a visit: 2‑month cutoff, unless editing an older saved visit (grandfathered).
+ */
+export function getVisitDatetimeInputMin(existingVisitDatetimeIso?: string | null, reference = new Date()): string {
+  const cutoff = getRegistrationDatetimeCutoffLocal(reference);
+  if (!existingVisitDatetimeIso) return cutoff;
+  const slice = existingVisitDatetimeIso.slice(0, 16);
+  return slice < cutoff ? slice : cutoff;
+}
+
+/** Validates registration date-only field (YYYY-MM-DD). Returns Lithuanian error or null if OK. */
+export function validateRegistrationDateNotTooOld(dateOnly: string, reference = new Date()): string | null {
+  if (!dateOnly) return null;
+  const min = getRegistrationDateMinYYYYMMDD(reference);
+  if (dateOnly < min) {
+    return 'Registracijos data negali būti senesnė nei 2 mėnesiai nuo šios dienos.';
+  }
+  return null;
+}
+
+/**
+ * Validates `datetime-local` string for visit registration. Honors grandfathered edits when `existingVisitDatetimeIso` is set.
+ */
+export function validateVisitDatetimeNotTooOld(
+  localDatetime: string,
+  existingVisitDatetimeIso?: string | null,
+  reference = new Date(),
+): string | null {
+  if (!localDatetime) return null;
+  const trimmed = localDatetime.slice(0, 16);
+  const chosen = new Date(trimmed);
+  if (Number.isNaN(chosen.getTime())) {
+    return 'Neteisinga data.';
+  }
+  const floorSlice = getVisitDatetimeInputMin(existingVisitDatetimeIso, reference);
+  const floor = new Date(floorSlice);
+  if (Number.isNaN(floor.getTime())) return null;
+  if (chosen.getTime() < floor.getTime()) {
+    return 'Registracijos data negali būti senesnė nei 2 mėnesiai nuo šios dienos.';
+  }
+  return null;
+}
