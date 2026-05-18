@@ -40,6 +40,18 @@ export function ClientRegistration() {
     contact_person: '',
   });
 
+  // VIC credentials and personal code
+  const [vicData, setVicData] = useState({
+    username: '',
+    password: '',
+    personalCode: '',
+  });
+
+  const [loadingData, setLoadingData] = useState(false);
+  const [dataLoadError, setDataLoadError] = useState('');
+  const [farmId, setFarmId] = useState<string | null>(null);
+  const [vicDataLoaded, setVicDataLoaded] = useState(false);
+
   // Get code from URL on mount
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -84,6 +96,156 @@ export function ClientRegistration() {
       setError('Nepavyko patikrinti registracijos kodo. Bandykite dar kartą.');
     } finally {
       setValidating(false);
+    }
+  };
+
+  const handleLoadData = async () => {
+    setLoadingData(true);
+    setDataLoadError('');
+
+    // Validation
+    if (!vicData.username || !vicData.password || !vicData.personalCode) {
+      setDataLoadError('Prašome užpildyti VIC prisijungimo duomenis ir asmens kodą');
+      setLoadingData(false);
+      return;
+    }
+
+    try {
+      // Create a farm first to get the farm ID
+      if (!farmId) {
+        const { data: farmData, error: farmError } = await supabase
+          .from('farms')
+          .insert({
+            client_id: clientInfo!.client_id,
+            name: clientFormData.name || 'Pagrindinis ūkis',
+            vic_username: vicData.username,
+            vic_password_encrypted: vicData.password, // Note: In production, encrypt this
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (farmError) throw farmError;
+        setFarmId(farmData.id);
+
+        // Send webhook
+        await sendWebhook(farmData.id);
+      } else {
+        // Farm already exists, just send webhook
+        await sendWebhook(farmId);
+      }
+    } catch (err: any) {
+      console.error('Load data error:', err);
+      setDataLoadError(`Nepavyko užkrauti duomenų: ${err.message}`);
+    } finally {
+      setLoadingData(false);
+    }
+  };
+
+  const sendWebhook = async (currentFarmId: string) => {
+    const webhookUrl = 'https://n8n-up8s.onrender.com/webhook/ff95a207-1b7b-4b38-b41c-265ea4471a2f';
+    
+    const payload = {
+      requestId: `reg-${Date.now()}`,
+      workerType: 'holder_lookup',
+      username: vicData.username,
+      password: vicData.password,
+      personalCode: vicData.personalCode,
+      tenantId: clientInfo!.client_id,
+      farmId: currentFarmId,
+      userId: formData.email || 'pending',
+      metadata: {
+        source: 'n8n',
+        reason: 'new_user_onboarding',
+        repo: 'PRIVACIU_VETGYTOJU_INTERFACE_SAAS_VIC-WORKERS',
+      },
+    };
+
+    try {
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+      
+      if (!response.ok) {
+        throw new Error(`Webhook failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // Check if we got data back in the new format
+      if (result && result.vic_raw_payload && result.vic_raw_payload.data) {
+        const vicResponseData = result.vic_raw_payload.data;
+        const vicFullPayload = result.vic_raw_payload;
+        
+        // Auto-populate form fields with VIC data
+        const firstName = vicResponseData.basic?.firstName || '';
+        const lastName = vicResponseData.basic?.lastNameOrCompanyName || '';
+        const fullName = `${firstName} ${lastName}`.trim();
+        
+        // Update user form data
+        setFormData(prev => ({
+          ...prev,
+          fullName: fullName,
+          email: vicResponseData.contact?.email || prev.email,
+        }));
+
+        // Update client form data with address
+        const street = vicResponseData.address?.street || '';
+        const houseNumber = vicResponseData.address?.houseNumber || '';
+        const apartment = vicResponseData.address?.apartmentNumber || '';
+        const fullAddress = `${street} ${houseNumber}${apartment ? `-${apartment}` : ''}`.trim();
+
+        setClientFormData(prev => ({
+          ...prev,
+          address: fullAddress,
+          postal_code: vicResponseData.address?.postalCode || prev.postal_code,
+          city: vicResponseData.address?.locality || vicResponseData.address?.municipality || prev.city,
+          contact_email: vicResponseData.contact?.email || prev.contact_email,
+          contact_phone: vicResponseData.contact?.mobilePhone || vicResponseData.contact?.phone || prev.contact_phone,
+          contact_person: fullName,
+        }));
+
+        // Update farm with comprehensive VIC info
+        const { error: farmUpdateError } = await supabase
+          .from('farms')
+          .update({
+            contact_person: fullName,
+            contact_email: vicResponseData.contact?.email || null,
+            contact_phone: vicResponseData.contact?.mobilePhone || vicResponseData.contact?.phone || null,
+            address: fullAddress || null,
+            // Store complete VIC response in a JSONB column
+            vic_data: vicFullPayload,
+            // Store key VIC identifiers
+            vic_personal_code: vicResponseData.basic?.personalOrCompanyCode || null,
+            vic_vet_license: vicResponseData.additional?.vetLicenseNumber || null,
+            vic_is_vet_doctor: vicResponseData.additional?.isVetDoctor || false,
+            vic_is_marker: vicResponseData.additional?.isMarker || false,
+            // Store holdings count
+            vic_holdings_count: vicResponseData.holdings?.length || 0,
+            // Timestamp of last VIC sync
+            vic_last_synced_at: new Date().toISOString(),
+          })
+          .eq('id', currentFarmId);
+
+        if (farmUpdateError) {
+          console.error('Failed to update farm with VIC data:', farmUpdateError);
+          throw new Error('Nepavyko išsaugoti VIC duomenų');
+        }
+
+        // Mark VIC data as loaded
+        setVicDataLoaded(true);
+        alert('Duomenys sėkmingai užkrauti iš VIC sistemos!');
+      } else {
+        throw new Error('Negautas tinkamas atsakymas iš VIC sistemos');
+      }
+    } catch (error: any) {
+      console.error('Webhook error:', error);
+      throw new Error('Nepavyko išsiųsti duomenų: ' + error.message);
     }
   };
 
@@ -140,6 +302,28 @@ export function ClientRegistration() {
         throw new Error('Nepavyko atnaujinti organizacijos informacijos');
       }
 
+      // Create farm if it doesn't exist yet
+      let currentFarmId = farmId;
+      if (!currentFarmId) {
+        const { data: farmData, error: farmError } = await supabase
+          .from('farms')
+          .insert({
+            client_id: clientInfo!.client_id,
+            name: clientFormData.name || 'Pagrindinis ūkis',
+            vic_username: vicData.username || null,
+            vic_password_encrypted: vicData.password || null,
+            is_active: true,
+          })
+          .select()
+          .single();
+
+        if (farmError) {
+          console.error('Failed to create farm:', farmError);
+          throw new Error('Nepavyko sukurti ūkio');
+        }
+        currentFarmId = farmData.id;
+      }
+
       // Create user using the create_user function
       const { data: userId, error: createError } = await supabase
         .rpc('create_user', {
@@ -148,7 +332,7 @@ export function ClientRegistration() {
           p_role: 'admin', // Default role for first user
           p_client_id: clientInfo!.client_id,
           p_full_name: formData.fullName,
-          p_default_farm_id: null,
+          p_default_farm_id: currentFarmId,
           p_can_access_all_farms: true,
         });
 
@@ -294,6 +478,98 @@ export function ClientRegistration() {
           )}
 
           <div className="space-y-6">
+            {/* VIC Credentials Section - Always visible first */}
+            <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+              <h3 className="text-sm font-semibold text-blue-900 mb-4">VIC prisijungimo duomenys</h3>
+              <p className="text-xs text-blue-700 mb-4">
+                Įveskite savo VIC (Veterinarijos informacijos centro) prisijungimo duomenis ir asmens kodą
+              </p>
+              
+              <div className="space-y-4">
+                {/* VIC Username */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    VIC vartotojo vardas *
+                  </label>
+                  <input
+                    type="text"
+                    value={vicData.username}
+                    onChange={(e) => setVicData({ ...vicData, username: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="pvz. vardas.pavarde"
+                    disabled={vicDataLoaded}
+                  />
+                </div>
+
+                {/* VIC Password */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    VIC slaptažodis *
+                  </label>
+                  <input
+                    type="password"
+                    value={vicData.password}
+                    onChange={(e) => setVicData({ ...vicData, password: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Įveskite VIC slaptažodį"
+                    disabled={vicDataLoaded}
+                  />
+                </div>
+
+                {/* Personal Code */}
+                <div>
+                  <label className="block text-xs font-medium text-gray-700 mb-1">
+                    Asmens kodas *
+                  </label>
+                  <input
+                    type="text"
+                    value={vicData.personalCode}
+                    onChange={(e) => setVicData({ ...vicData, personalCode: e.target.value })}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                    placeholder="Įveskite asmens kodą"
+                    maxLength={11}
+                    disabled={vicDataLoaded}
+                  />
+                </div>
+
+                {/* Load Data Button */}
+                {!vicDataLoaded && (
+                  <button
+                    type="button"
+                    onClick={handleLoadData}
+                    disabled={loadingData || !vicData.username || !vicData.password || !vicData.personalCode}
+                    className="w-full bg-blue-600 text-white py-2 px-4 rounded-lg hover:bg-blue-700 font-medium text-sm disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                  >
+                    {loadingData ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Kraunami duomenys...
+                      </>
+                    ) : (
+                      'Užkrauti duomenis'
+                    )}
+                  </button>
+                )}
+
+                {/* Success message when loaded */}
+                {vicDataLoaded && (
+                  <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                    <p className="text-xs text-green-800 font-medium">✓ Duomenys sėkmingai užkrauti iš VIC sistemos</p>
+                  </div>
+                )}
+
+                {/* Data Load Error */}
+                {dataLoadError && (
+                  <div className="bg-red-50 border border-red-200 rounded-lg p-3">
+                    <p className="text-xs text-red-800">{dataLoadError}</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Show other sections only after VIC data is loaded */}
+            {vicDataLoaded && (
+              <>
             {/* Organization Information Section */}
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <h3 className="text-sm font-semibold text-gray-700 mb-4">Pagrindinė informacija</h3>
@@ -514,9 +790,13 @@ export function ClientRegistration() {
                 </div>
               </div>
             </div>
+            </>
+            )}
           </div>
 
-          {/* Submit Button */}
+          {/* Submit Button - Only show when VIC data is loaded */}
+          {vicDataLoaded && (
+            <>
           <div className="mt-8">
             <button
               type="submit"
@@ -541,6 +821,8 @@ export function ClientRegistration() {
             <p className="text-xs text-gray-500 text-center mt-6">
               Kurdami paskyrą sutinkate su naudojimosi sąlygomis ir privatumo politika
             </p>
+            </>
+          )}
         </form>
       </div>
     </div>

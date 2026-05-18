@@ -11,7 +11,9 @@ import {
   Mail,
   Phone,
   MapPin,
-  Crown
+  Crown,
+  Shield,
+  FileText
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -40,6 +42,18 @@ interface UsageStats {
   animals_count: number;
 }
 
+interface VICData {
+  vic_personal_code: string | null;
+  vic_vet_license: string | null;
+  vic_is_vet_doctor: boolean;
+  vic_is_marker: boolean;
+  vic_holdings_count: number;
+  vic_last_synced_at: string | null;
+  vic_data: any;
+  vic_username: string | null;
+  vic_password_encrypted: string | null;
+}
+
 interface SubscriptionProfileProps {
   isOpen: boolean;
   onClose: () => void;
@@ -49,6 +63,7 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
   const { user } = useAuth();
   const [clientInfo, setClientInfo] = useState<ClientInfo | null>(null);
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
+  const [vicData, setVicData] = useState<VICData | null>(null);
   const [loading, setLoading] = useState(true);
 
   const pricingPlans = {
@@ -131,6 +146,20 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
         users_count: usersCount || 0,
         animals_count: animalsCount || 0,
       });
+
+      // Load VIC data from farms (get first farm with VIC data)
+      const { data: farmWithVic } = await supabase
+        .from('farms')
+        .select('vic_personal_code, vic_vet_license, vic_is_vet_doctor, vic_is_marker, vic_holdings_count, vic_last_synced_at, vic_data, vic_username, vic_password_encrypted')
+        .eq('client_id', user!.client_id)
+        .not('vic_data', 'is', null)
+        .order('vic_last_synced_at', { ascending: false, nullsFirst: false })
+        .limit(1)
+        .single();
+
+      if (farmWithVic) {
+        setVicData(farmWithVic);
+      }
     } catch (error) {
       console.error('Error loading client data:', error);
     } finally {
@@ -246,6 +275,153 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                 )}
               </div>
             </div>
+
+            {/* VIC Information */}
+            {vicData && vicData.vic_data && (
+              <div>
+                <h4 className="text-sm font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                  <Shield className="w-4 h-4 text-blue-600" />
+                  VIC duomenys
+                </h4>
+                <div className="bg-blue-50 rounded-lg p-4 border border-blue-200 space-y-3">
+                  {/* VIC Login Credentials */}
+                  {(vicData.vic_username || vicData.vic_password_encrypted) && (
+                    <div className="bg-blue-100 rounded-lg p-3 border border-blue-300">
+                      <p className="text-xs font-semibold text-blue-900 mb-2">VIC prisijungimo duomenys</p>
+                      <div className="grid grid-cols-2 gap-4">
+                        {vicData.vic_username && (
+                          <div>
+                            <p className="text-xs text-blue-700 mb-1">Vartotojo vardas</p>
+                            <p className="font-medium text-gray-900">{vicData.vic_username}</p>
+                          </div>
+                        )}
+                        {vicData.vic_password_encrypted && (
+                          <div>
+                            <p className="text-xs text-blue-700 mb-1">Slaptažodis</p>
+                            <p className="font-mono text-sm text-gray-900">{'•'.repeat(8)}</p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* VIC Credentials */}
+                  <div className="grid grid-cols-2 gap-4">
+                    {vicData.vic_personal_code && (
+                      <div>
+                        <p className="text-xs text-blue-600 mb-1">Asmens kodas</p>
+                        <p className="font-medium text-gray-900">{vicData.vic_personal_code}</p>
+                      </div>
+                    )}
+                    {vicData.vic_vet_license && (
+                      <div>
+                        <p className="text-xs text-blue-600 mb-1">Veterinarijos licencija</p>
+                        <p className="font-medium text-gray-900">{vicData.vic_vet_license}</p>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* VIC Status Badges */}
+                  <div className="flex flex-wrap gap-2">
+                    {vicData.vic_is_vet_doctor && (
+                      <span className="px-3 py-1 bg-green-100 text-green-700 rounded-full text-xs font-medium">
+                        ✓ Veterinaras
+                      </span>
+                    )}
+                    {vicData.vic_is_marker && (
+                      <span className="px-3 py-1 bg-blue-100 text-blue-700 rounded-full text-xs font-medium">
+                        ✓ Ženklintojas
+                      </span>
+                    )}
+                    {vicData.vic_holdings_count > 0 && (
+                      <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full text-xs font-medium">
+                        {vicData.vic_holdings_count} ūkiai VIC sistemoje
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Contact from VIC */}
+                  {vicData.vic_data?.data?.contact && (
+                    <div className="grid grid-cols-2 gap-4 pt-3 border-t border-blue-200">
+                      {vicData.vic_data.data.contact.email && (
+                        <div className="flex items-center gap-2">
+                          <Mail className="w-4 h-4 text-blue-600" />
+                          <div>
+                            <p className="text-xs text-blue-600">VIC el. paštas</p>
+                            <p className="text-sm text-gray-900">{vicData.vic_data.data.contact.email}</p>
+                          </div>
+                        </div>
+                      )}
+                      {(vicData.vic_data.data.contact.mobilePhone || vicData.vic_data.data.contact.phone) && (
+                        <div className="flex items-center gap-2">
+                          <Phone className="w-4 h-4 text-blue-600" />
+                          <div>
+                            <p className="text-xs text-blue-600">VIC telefonas</p>
+                            <p className="text-sm text-gray-900">
+                              {vicData.vic_data.data.contact.mobilePhone || vicData.vic_data.data.contact.phone}
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Address from VIC */}
+                  {vicData.vic_data?.data?.address && (
+                    <div className="flex items-start gap-2 pt-3 border-t border-blue-200">
+                      <MapPin className="w-4 h-4 text-blue-600 mt-1" />
+                      <div>
+                        <p className="text-xs text-blue-600">VIC adresas</p>
+                        <p className="text-sm text-gray-900">
+                          {vicData.vic_data.data.address.street && `${vicData.vic_data.data.address.street} `}
+                          {vicData.vic_data.data.address.houseNumber}
+                          {vicData.vic_data.data.address.apartmentNumber && `-${vicData.vic_data.data.address.apartmentNumber}`}
+                          {vicData.vic_data.data.address.locality && `, ${vicData.vic_data.data.address.locality}`}
+                          {vicData.vic_data.data.address.postalCode && ` ${vicData.vic_data.data.address.postalCode}`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Veterinary License Details */}
+                  {vicData.vic_data?.data?.additional && (
+                    <div className="pt-3 border-t border-blue-200">
+                      <div className="grid grid-cols-2 gap-4">
+                        {vicData.vic_data.data.additional.vetLicenseIssuedAt && (
+                          <div>
+                            <p className="text-xs text-blue-600 mb-1">Licencija išduota</p>
+                            <p className="text-sm text-gray-900">
+                              {new Date(vicData.vic_data.data.additional.vetLicenseIssuedAt).toLocaleDateString('lt-LT')}
+                            </p>
+                          </div>
+                        )}
+                        {vicData.vic_data.data.additional.markerFrom && (
+                          <div>
+                            <p className="text-xs text-blue-600 mb-1">Ženklintojas nuo</p>
+                            <p className="text-sm text-gray-900">
+                              {new Date(vicData.vic_data.data.additional.markerFrom).toLocaleDateString('lt-LT')}
+                            </p>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Last Sync */}
+                  {vicData.vic_last_synced_at && (
+                    <div className="flex items-center gap-2 pt-3 border-t border-blue-200">
+                      <FileText className="w-4 h-4 text-blue-600" />
+                      <div>
+                        <p className="text-xs text-blue-600">Paskutinis sinchronizavimas</p>
+                        <p className="text-sm text-gray-900">
+                          {new Date(vicData.vic_last_synced_at).toLocaleString('lt-LT')}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* Current Plan */}
             <div>

@@ -1,57 +1,98 @@
-# Database Migration Instructions
+# Apply VIC Data Migration to Supabase
 
-## Quick Fix for Work Descriptions RLS Error
+## Migration File Created
+- **File**: `supabase/migrations_saas/20260518000001_add_vic_data_to_farms.sql`
+- **Purpose**: Add columns to store VIC lookup data in the farms table
 
-The work descriptions feature needs database changes. Follow these steps:
+## What the Migration Does
 
-### Step 1: Apply Database Changes
+Adds the following columns to the `farms` table:
+- `vic_data` (JSONB) - Complete VIC response payload
+- `vic_personal_code` (TEXT) - Personal or company code from VIC
+- `vic_vet_license` (TEXT) - Veterinary license number
+- `vic_is_vet_doctor` (BOOLEAN) - Is registered vet doctor
+- `vic_is_marker` (BOOLEAN) - Is registered marker
+- `vic_holdings_count` (INTEGER) - Number of holdings in VIC
+- `vic_last_synced_at` (TIMESTAMPTZ) - Last sync timestamp
 
-1. Go to your **Supabase Dashboard**: https://supabase.com/dashboard
-2. Select your project
-3. Click on **SQL Editor** in the left sidebar
-4. Click **New Query**
-5. Copy the entire contents of `APPLY_MIGRATIONS.sql` file
-6. Paste it into the SQL editor
-7. Click **Run** (or press Ctrl+Enter)
+## How to Apply the Migration
 
-### Step 2: Verify
+### Option 1: Using Supabase CLI (Recommended for Remote DB)
 
-After running the SQL, you should see:
-- ✅ `work_descriptions` table created
-- ✅ RLS policies applied
-- ✅ Default work descriptions inserted
-- ✅ `users.requires_login` column added
+```bash
+# Navigate to project directory
+cd c:\Projects\PRIVACIU_VETGYDYTOJU_INTERFACE_SAAS
 
-### Step 3: Test
+# Apply the specific migration to remote database
+supabase db push --include-all
+```
 
-1. Refresh your application
-2. Go to **Darbuotojai** → **Surašyti iš lapų**
-3. Click on **Matavimo vienetai** tab
-4. Try adding a new work description - it should work now! ✅
+### Option 2: Using Supabase Dashboard
 
-## What Changed?
+1. Go to your Supabase project dashboard
+2. Navigate to SQL Editor
+3. Copy the contents of `supabase/migrations_saas/20260518000001_add_vic_data_to_farms.sql`
+4. Paste and run the SQL in the editor
 
-### 1. Work Descriptions Table
-- Stores user-created work descriptions for vairuotojas and traktorininkas
-- Includes default descriptions for common tasks
-- Full RLS security enabled
+### Option 3: Using Local Development
 
-### 2. Users Table
-- Added `requires_login` column
-- Allows creating workers who don't need login credentials
-- Perfect for schedule-only workers
+```bash
+# If running local Supabase
+supabase db reset --local
+```
 
-## Troubleshooting
+## Verification
 
-If you still get RLS errors:
-1. Make sure you're logged in as an admin user
-2. Check that the SQL ran without errors
-3. Try logging out and back in
-4. Clear browser cache and reload
+After applying the migration, verify it worked:
 
-## Need Help?
+```sql
+-- Check if columns exist
+SELECT column_name, data_type 
+FROM information_schema.columns 
+WHERE table_name = 'farms' 
+AND column_name LIKE 'vic_%';
 
-The migrations are also in the `supabase/migrations/` folder:
-- `20260304000003_add_work_descriptions.sql`
-- `20260304000004_add_no_login_users.sql`
-- `20260304000005_fix_work_descriptions_rls.sql`
+-- Should return all 7 new columns
+```
+
+## What Data Gets Stored
+
+When a user completes registration and loads VIC data, the system will store:
+
+```json
+{
+  "vic_data": {
+    "ok": true,
+    "jobType": "holder_lookup",
+    "data": {
+      "basic": {
+        "personalOrCompanyCode": "38210260551",
+        "firstName": "ARTŪRAS",
+        "lastNameOrCompanyName": "ABROMAITIS"
+      },
+      "contact": {
+        "email": "veterinaras@inbox.lt",
+        "mobilePhone": "+37067703446"
+      },
+      "address": { ... },
+      "holdings": [ ... ],
+      "additional": {
+        "isVetDoctor": true,
+        "vetLicenseNumber": "vp1369"
+      }
+    }
+  },
+  "vic_personal_code": "38210260551",
+  "vic_vet_license": "vp1369",
+  "vic_is_vet_doctor": true,
+  "vic_is_marker": true,
+  "vic_holdings_count": 0,
+  "vic_last_synced_at": "2026-05-18T19:00:00Z"
+}
+```
+
+This data will be used for:
+1. Auto-populating registration forms
+2. Verifying veterinary credentials
+3. Tracking VIC synchronization status
+4. Future features requiring VIC data

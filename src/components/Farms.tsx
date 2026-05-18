@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
+import React from 'react';
 import { supabase } from '../lib/supabase';
-import { Plus, Edit2, Save, X, Building2, Phone, Mail, MapPin, Hash, CheckCircle, XCircle } from 'lucide-react';
+import { Plus, Edit2, Save, X, Building2, Phone, Mail, MapPin, Hash, CheckCircle, XCircle, Download, Loader } from 'lucide-react';
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
 import { requireClientId } from '../lib/clientHelpers';
@@ -19,6 +20,7 @@ interface Farm {
   vic_pet_password?: string;
   is_active: boolean;
   is_eco_farm?: boolean;
+  client_personal_code?: string;
 }
 
 export function Farms() {
@@ -29,6 +31,10 @@ export function Farms() {
   const [editing, setEditing] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
   const [clientLimits, setClientLimits] = useState<{ max_farms: number; max_users: number } | null>(null);
+  const [loadingAnimals, setLoadingAnimals] = useState(false);
+  const [animalsLoaded, setAnimalsLoaded] = useState(false);
+  const [vicResponse, setVicResponse] = useState<any>(null);
+  const [savingData, setSavingData] = useState(false);
 
   const emptyFarm: Farm = {
     name: '',
@@ -43,6 +49,7 @@ export function Farms() {
     vic_pet_password: '',
     is_active: true,
     is_eco_farm: false,
+    client_personal_code: '',
   };
 
   const [formData, setFormData] = useState<Farm>(emptyFarm);
@@ -68,6 +75,178 @@ export function Farms() {
     }
   };
 
+  const handleLoadAnimals = async () => {
+    if (!formData.client_personal_code) {
+      alert('Įveskite kliento asmens kodą');
+      return;
+    }
+
+    setLoadingAnimals(true);
+    try {
+      const clientId = requireClientId(user);
+      let farmId = formData.id;
+
+      // If farm doesn't exist yet, create it first
+      if (!farmId) {
+        const { data: newFarm, error: farmError } = await supabase
+          .from('farms')
+          .insert([{
+            client_id: clientId,
+            name: 'Temp - ' + formData.client_personal_code,
+            code: formData.client_personal_code || 'TEMP',
+            address: formData.address || null,
+            contact_person: formData.contact_person || null,
+            contact_phone: formData.contact_phone || null,
+            contact_email: formData.contact_email || null,
+            vic_production_username: formData.vic_production_username || null,
+            vic_production_password: formData.vic_production_password || null,
+            vic_pet_username: formData.vic_pet_username || null,
+            vic_pet_password: formData.vic_pet_password || null,
+            is_active: formData.is_active,
+            is_eco_farm: formData.is_eco_farm || false,
+            client_personal_code: formData.client_personal_code || null,
+          }])
+          .select()
+          .single();
+
+        if (farmError) throw farmError;
+        
+        farmId = newFarm.id;
+        setFormData({ ...formData, id: farmId });
+      }
+
+      // Get VIC credentials from organization's farm
+      const { data: orgFarm, error: orgError } = await supabase
+        .from('farms')
+        .select('vic_username, vic_password_encrypted')
+        .eq('client_id', clientId)
+        .not('vic_username', 'is', null)
+        .not('vic_password_encrypted', 'is', null)
+        .limit(1)
+        .single();
+
+      if (orgError || !orgFarm?.vic_username || !orgFarm?.vic_password_encrypted) {
+        throw new Error('VIC prisijungimo duomenys nerasti. Užpildykite juos registracijos metu.');
+      }
+
+      const webhookUrl = 'https://n8n-up8s.onrender.com/webhook/1eef952b-45de-4b61-b608-61960363853e';
+      
+      const payload = {
+        requestId: `farm-${Date.now()}`,
+        workerType: 'live_animals_pdf',
+        vicUsername: orgFarm.vic_username,
+        vicPassword: orgFarm.vic_password_encrypted,
+        clientPersonalCode: formData.client_personal_code,
+        tenantId: clientId,
+        farmId: farmId,
+        clientId: farmId,
+        userId: user!.id,
+        metadata: {
+          source: 'n8n',
+          reason: 'client_animals_fetch',
+          repo: 'PRIVACIU_VETGYDYTOJU_INTERFACE_SAAS_VIC-WORKERS',
+        },
+      };
+
+      const response = await fetch(webhookUrl, {
+        method: 'POST',
+        credentials: 'omit',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      if (!response.ok) {
+        throw new Error(`Webhook failed: ${response.status}`);
+      }
+
+      const result = await response.json();
+      
+      // The response is an array, get the first element
+      const vicPayload = Array.isArray(result) ? result[0] : result;
+      
+      // Store the response for display and later saving
+      setVicResponse(vicPayload);
+      setAnimalsLoaded(true);
+      
+      // Auto-fill farm data from VIC response
+      if (vicPayload?.pageData?.clientCards?.[0]) {
+        const clientCard = vicPayload.pageData.clientCards[0];
+        setFormData(prev => ({
+          ...prev,
+          name: clientCard.holderName || prev.name,
+          code: clientCard.holdingNumber || prev.code,
+          address: clientCard.herdAddress || clientCard.holderAddress || prev.address,
+          contact_person: clientCard.holderName || prev.contact_person,
+        }));
+      }
+
+      alert('Duomenys užkrauti iš VIC! Peržiūrėkite informaciją ir išsaugokite.');
+    } catch (error: any) {
+      console.error('Error loading animals:', error);
+      alert(`Klaida užkraunant duomenis: ${error.message}`);
+    } finally {
+      setLoadingAnimals(false);
+    }
+  };
+
+  const handleSaveClientAndAnimals = async () => {
+    if (!vicResponse || !formData.id) {
+      alert('Nėra duomenų išsaugojimui');
+      return;
+    }
+
+    setSavingData(true);
+    try {
+      const clientId = requireClientId(user);
+      const data = vicResponse?.data;
+      const pageData = vicResponse?.pageData;
+      
+      if (!data?.animals || !Array.isArray(data.animals)) {
+        throw new Error('Nerasta gyvūnų duomenų');
+      }
+
+      // Prepare animals data for insertion
+      const animalsToInsert = data.animals.map((animal: any) => ({
+        client_id: clientId,
+        farm_id: formData.id,
+        tag_no: animal.tagNo || animal.animalNumber,
+        collar_no: null,
+        animal_type: animal.animalType || null,
+        species: animal.species || 'Galvijai',
+        sex: animal.sex === 'female' ? 'Patelė' : animal.sex === 'male' ? 'Patinas' : null,
+        age_months: animal.ageMonths || null,
+        holder_name: pageData?.clientCards?.[0]?.holderName || null,
+        holder_address: pageData?.clientCards?.[0]?.holderAddress || null,
+        active: true,
+      }));
+
+      // Insert animals in batches
+      const { error: animalsError } = await supabase
+        .from('animals')
+        .insert(animalsToInsert);
+
+      if (animalsError) throw animalsError;
+
+      alert(`Sėkmingai išsaugota! ${animalsToInsert.length} gyvūnų įrašai sukurti.`);
+      
+      // Close form and reload
+      setEditing(null);
+      setShowAdd(false);
+      setFormData(emptyFarm);
+      setAnimalsLoaded(false);
+      setVicResponse(null);
+      await loadData();
+      await loadFarms();
+    } catch (error: any) {
+      console.error('Error saving client and animals:', error);
+      alert(`Klaida išsaugant duomenis: ${error.message}`);
+    } finally {
+      setSavingData(false);
+    }
+  };
+
   const loadData = async () => {
     try {
       const clientId = requireClientId(user);
@@ -90,7 +269,14 @@ export function Farms() {
 
   const handleSave = async () => {
     try {
-      if (!formData.name || !formData.code) {
+      // For initial save, only require personal code
+      if (!animalsLoaded && !formData.client_personal_code) {
+        alert('Įveskite kliento asmens kodą');
+        return;
+      }
+
+      // For final save, require name and code
+      if (animalsLoaded && (!formData.name || !formData.code)) {
         alert('Pavadinimas ir kodas yra privalomi');
         return;
       }
@@ -113,18 +299,24 @@ export function Farms() {
             vic_pet_password: formData.vic_pet_password || null,
             is_active: formData.is_active,
             is_eco_farm: formData.is_eco_farm || false,
+            client_personal_code: formData.client_personal_code || null,
           })
           .eq('id', editing);
 
         if (error) throw error;
         alert('Ūkis atnaujintas!');
+        setEditing(null);
+        setShowAdd(false);
+        await loadData();
+        await loadFarms();
       } else {
-        const { error } = await supabase
+        // For new farm, create a placeholder entry for initial save
+        const { data: newFarm, error } = await supabase
           .from('farms')
           .insert([{
             client_id: clientId,
-            name: formData.name,
-            code: formData.code,
+            name: formData.name || 'Temp - ' + formData.client_personal_code,
+            code: formData.code || formData.client_personal_code || 'TEMP',
             address: formData.address || null,
             contact_person: formData.contact_person || null,
             contact_phone: formData.contact_phone || null,
@@ -135,17 +327,28 @@ export function Farms() {
             vic_pet_password: formData.vic_pet_password || null,
             is_active: formData.is_active,
             is_eco_farm: formData.is_eco_farm || false,
-          }]);
+            client_personal_code: formData.client_personal_code || null,
+          }])
+          .select()
+          .single();
 
         if (error) throw error;
-        alert('Ūkis sukurtas!');
+        
+        // Update form data with the new farm ID so we can load animals
+        if (newFarm) {
+          setFormData({ ...formData, id: newFarm.id });
+        }
+        
+        if (!animalsLoaded) {
+          alert('Pradinė informacija išsaugota! Dabar užkraukite gyvūnus iš VIC.');
+        } else {
+          alert('Ūkis sukurtas!');
+          setEditing(null);
+          setShowAdd(false);
+          await loadData();
+          await loadFarms();
+        }
       }
-
-      setEditing(null);
-      setShowAdd(false);
-      setFormData(emptyFarm);
-      await loadData();
-      await loadFarms();
     } catch (error: any) {
       console.error('Error saving farm:', error);
       alert(`Klaida išsaugant ūkį: ${error.message}`);
@@ -156,12 +359,17 @@ export function Farms() {
     setFormData(farm);
     setEditing(farm.id!);
     setShowAdd(false);
+    setAnimalsLoaded(true);
+    setVicResponse(null);
   };
 
   const handleCancel = () => {
     setEditing(null);
     setShowAdd(false);
     setFormData(emptyFarm);
+    setAnimalsLoaded(false);
+    setVicResponse(null);
+    loadData();
   };
 
   const handleToggleActive = async (farm: Farm) => {
@@ -237,6 +445,168 @@ export function Farms() {
           <h3 className="text-lg font-semibold text-gray-900 mb-4">
             {editing ? 'Redaguoti ūkį' : 'Naujas ūkis'}
           </h3>
+          
+          {/* Always show Personal Code field first */}
+          <div className="mb-6">
+            <h4 className="text-sm font-semibold text-gray-900 mb-3">Kliento gyvūnų duomenys</h4>
+            <div className="flex gap-4 items-end">
+              <div className="flex-1">
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Kliento asmens kodas *
+                </label>
+                <input
+                  type="text"
+                  value={formData.client_personal_code || ''}
+                  onChange={(e) => setFormData({ ...formData, client_personal_code: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  placeholder="Įveskite kliento asmens kodą (11 skaitmenų)"
+                  maxLength={11}
+                  disabled={animalsLoaded}
+                />
+                <p className="text-xs text-gray-500 mt-1">
+                  Įveskite asmens kodą ir spauskite "Užkrauti duomenis iš VIC"
+                </p>
+              </div>
+              {!animalsLoaded && (
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleLoadAnimals}
+                    disabled={loadingAnimals || !formData.client_personal_code}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                  >
+                    {loadingAnimals ? (
+                      <>
+                        <Loader className="w-4 h-4 animate-spin" />
+                        Kraunami duomenys...
+                      </>
+                    ) : (
+                      <>
+                        <Download className="w-4 h-4" />
+                        Užkrauti duomenis iš VIC
+                      </>
+                    )}
+                  </button>
+                  <button
+                    onClick={handleCancel}
+                    className="flex items-center gap-2 px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors"
+                  >
+                    <X className="w-4 h-4" />
+                    Atšaukti
+                  </button>
+                </div>
+              )}
+            </div>
+            {animalsLoaded && (
+              <div className="mt-3 bg-green-50 border border-green-200 rounded-lg p-3">
+                <p className="text-xs text-green-800 font-medium">✓ Duomenys sėkmingai užkrauti iš VIC</p>
+              </div>
+            )}
+          </div>
+
+          {/* Display VIC Response Data */}
+          {vicResponse && (
+            <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-semibold text-gray-900 mb-3">Kliento informacija iš VIC</h4>
+              
+              {/* Client Card Data */}
+              {vicResponse.pageData?.clientCards?.[0] && (
+                <div className="bg-white rounded-lg p-4 mb-4 space-y-2">
+                  {(() => {
+                    const client = vicResponse.pageData.clientCards[0];
+                    return (
+                      <>
+                        <div className="grid grid-cols-2 gap-3 text-sm">
+                          <div>
+                            <p className="text-xs text-gray-500">Laikytojas</p>
+                            <p className="font-semibold text-gray-900">{client.holderName}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Asmens kodas</p>
+                            <p className="font-medium text-gray-900">{client.holderCode}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-xs text-gray-500">Laikytojo adresas</p>
+                            <p className="text-gray-900">{client.holderAddress}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Valdos numeris</p>
+                            <p className="font-medium text-gray-900">{client.holdingNumber}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Bandos numeris</p>
+                            <p className="font-medium text-gray-900">{client.herdNumber}</p>
+                          </div>
+                          <div className="col-span-2">
+                            <p className="text-xs text-gray-500">Bandos adresas</p>
+                            <p className="text-gray-900">{client.herdAddress}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Rūšis</p>
+                            <p className="text-gray-900">{client.species}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-gray-500">Įregistruota</p>
+                            <p className="text-gray-900">{new Date(client.registeredAt).toLocaleDateString('lt-LT')}</p>
+                          </div>
+                        </div>
+                      </>
+                    );
+                  })()}
+                </div>
+              )}
+
+              {/* Animal Summary */}
+              {vicResponse.data && (
+                <div className="bg-white rounded-lg p-4">
+                  <h5 className="text-sm font-semibold text-gray-900 mb-3">Gyvūnų suvestinė</h5>
+                  <div className="grid grid-cols-3 gap-4 mb-4">
+                    <div className="text-center">
+                      <p className="text-2xl font-bold text-blue-600">
+                        {vicResponse.data.animalCount || 0}
+                      </p>
+                      <p className="text-xs text-gray-600">Iš viso gyvūnų</p>
+                    </div>
+                    {vicResponse.data.groupedStatistics?.map((stat: any, idx: number) => (
+                      stat.group === 'Galvijai' && (
+                        <React.Fragment key={idx}>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-green-600">{stat.dairy || 0}</p>
+                            <p className="text-xs text-gray-600">Pieno gamybai</p>
+                          </div>
+                          <div className="text-center">
+                            <p className="text-2xl font-bold text-amber-600">{stat.meat || 0}</p>
+                            <p className="text-xs text-gray-600">Mėsos gamybai</p>
+                          </div>
+                        </React.Fragment>
+                      )
+                    ))}
+                  </div>
+
+                  {/* Grouped Statistics */}
+                  {vicResponse.data.groupedStatistics && (
+                    <div className="space-y-2">
+                      <p className="text-xs font-semibold text-gray-700">Pagal tipus:</p>
+                      <div className="grid grid-cols-2 gap-2">
+                        {vicResponse.data.groupedStatistics
+                          .filter((stat: any) => stat.group !== 'Galvijai')
+                          .map((stat: any, idx: number) => (
+                            <div key={idx} className="bg-gray-50 rounded px-3 py-2 flex justify-between items-center">
+                              <span className="text-xs text-gray-700">{stat.group}</span>
+                              <span className="text-sm font-semibold text-gray-900">{stat.total}</span>
+                            </div>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Show other fields only after animals are loaded */}
+          {animalsLoaded && (
+            <>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">
@@ -407,11 +777,28 @@ export function Farms() {
 
           <div className="flex gap-2 mt-6">
             <button
+              onClick={handleSaveClientAndAnimals}
+              disabled={savingData}
+              className="flex items-center gap-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {savingData ? (
+                <>
+                  <Loader className="w-4 h-4 animate-spin" />
+                  Išsaugoma...
+                </>
+              ) : (
+                <>
+                  <Save className="w-4 h-4" />
+                  Išsaugoti klientą ir {vicResponse?.data?.animalCount || 0} gyvūnus
+                </>
+              )}
+            </button>
+            <button
               onClick={handleSave}
               className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
             >
               <Save className="w-4 h-4" />
-              Išsaugoti
+              Išsaugoti kliento info
             </button>
             <button
               onClick={handleCancel}
@@ -421,6 +808,8 @@ export function Farms() {
               Atšaukti
             </button>
           </div>
+          </>
+          )}
         </div>
       )}
 
