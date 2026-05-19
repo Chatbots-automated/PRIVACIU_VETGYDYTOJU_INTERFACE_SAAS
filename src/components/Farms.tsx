@@ -36,15 +36,6 @@ export function Farms() {
   const [vicResponse, setVicResponse] = useState<any>(null);
   const [savingData, setSavingData] = useState(false);
 
-  // Debug: Track state changes
-  useEffect(() => {
-    console.log('[Farms] State changed:', {
-      animalsLoaded,
-      hasVicResponse: !!vicResponse,
-      vicResponseKeys: vicResponse ? Object.keys(vicResponse) : []
-    });
-  }, [animalsLoaded, vicResponse]);
-
   const emptyFarm: Farm = {
     name: '',
     code: '',
@@ -62,6 +53,25 @@ export function Farms() {
   };
 
   const [formData, setFormData] = useState<Farm>(emptyFarm);
+
+  // Debug: Track state changes
+  useEffect(() => {
+    console.log('[Farms] State changed:', {
+      animalsLoaded,
+      hasVicResponse: !!vicResponse,
+      vicResponseKeys: vicResponse ? Object.keys(vicResponse) : []
+    });
+  }, [animalsLoaded, vicResponse]);
+
+  // Debug: Track formData changes
+  useEffect(() => {
+    console.log('[Farms] FormData changed:', {
+      name: formData.name,
+      code: formData.code,
+      address: formData.address,
+      contact_person: formData.contact_person
+    });
+  }, [formData]);
 
   useEffect(() => {
     loadData();
@@ -173,28 +183,73 @@ export function Farms() {
       const result = await response.json();
       console.log('Raw webhook response:', result);
       
-      // The response is an array, get the first element
-      const vicPayload = Array.isArray(result) ? result[0] : result;
+      // Extract the vic_raw_payload - it's NOT an array anymore
+      let vicPayload;
+      if (result.vic_raw_payload) {
+        // Response format: { vic_raw_payload: { data, pageData } }
+        vicPayload = result.vic_raw_payload;
+      } else if (Array.isArray(result) && result[0]?.vic_raw_payload) {
+        // Old array format: [{ vic_raw_payload: { data, pageData } }]
+        vicPayload = result[0].vic_raw_payload;
+      } else if (Array.isArray(result)) {
+        // Fallback: array with direct data
+        vicPayload = result[0];
+      } else {
+        // Fallback: direct data
+        vicPayload = result;
+      }
+      
       console.log('Parsed VIC payload:', vicPayload);
       console.log('Has pageData:', !!vicPayload?.pageData);
       console.log('Has data:', !!vicPayload?.data);
       
-      // Store the response for display and later saving
-      setVicResponse(vicPayload);
+      // Store the full response (with vic_raw_payload wrapper) for display
+      setVicResponse(result);
       setAnimalsLoaded(true);
       console.log('State updated - animalsLoaded: true, vicResponse set');
       
       // Auto-fill farm data from VIC response
       if (vicPayload?.pageData?.clientCards?.[0]) {
         const clientCard = vicPayload.pageData.clientCards[0];
-        setFormData(prev => ({
-          ...prev,
-          name: clientCard.holderName || prev.name,
-          code: clientCard.holdingNumber || prev.code,
-          address: clientCard.herdAddress || clientCard.holderAddress || prev.address,
-          contact_person: clientCard.holderName || prev.contact_person,
-        }));
-        console.log('Form data auto-filled');
+        console.log('Client card data:', clientCard);
+        console.log('Holder name:', clientCard.holderName);
+        console.log('Holding number:', clientCard.holdingNumber);
+        console.log('Herd address:', clientCard.herdAddress);
+        
+        const newFormData = {
+          ...formData,
+          id: farmId,
+          name: clientCard.holderName || '',
+          code: clientCard.holdingNumber || '',
+          address: clientCard.herdAddress || clientCard.holderAddress || '',
+          contact_person: clientCard.holderName || '',
+        };
+        
+        console.log('Setting form data to:', newFormData);
+        setFormData(newFormData);
+        
+        // Update the farm in database with real VIC data
+        if (farmId) {
+          const { error: updateError } = await supabase
+            .from('farms')
+            .update({
+              name: clientCard.holderName || null,
+              code: clientCard.holdingNumber || null,
+              address: clientCard.herdAddress || clientCard.holderAddress || null,
+              contact_person: clientCard.holderName || null,
+            })
+            .eq('id', farmId);
+            
+          if (updateError) {
+            console.error('Error updating farm with VIC data:', updateError);
+          } else {
+            console.log('Farm updated with VIC data');
+          }
+        }
+        
+        console.log('Form data updated');
+      } else {
+        console.log('No client card data found in payload');
       }
 
       alert('Duomenys užkrauti iš VIC! Peržiūrėkite informaciją ir išsaugokite.');
@@ -215,8 +270,8 @@ export function Farms() {
     setSavingData(true);
     try {
       const clientId = requireClientId(user);
-      const data = vicResponse?.data;
-      const pageData = vicResponse?.pageData;
+      const data = vicResponse.vic_raw_payload?.data;
+      const pageData = vicResponse.vic_raw_payload?.pageData;
       
       if (!data?.animals || !Array.isArray(data.animals)) {
         throw new Error('Nerasta gyvūnų duomenų');
@@ -227,13 +282,14 @@ export function Farms() {
         client_id: clientId,
         farm_id: formData.id,
         tag_no: animal.tagNo || animal.animalNumber,
-        collar_no: null,
-        animal_type: animal.animalType || null,
+        animal_type: 'produkcinis', // All cattle from VIC are production animals
         species: animal.species || 'Galvijai',
         sex: animal.sex === 'female' ? 'Patelė' : animal.sex === 'male' ? 'Patinas' : null,
         age_months: animal.ageMonths || null,
         holder_name: pageData?.clientCards?.[0]?.holderName || null,
         holder_address: pageData?.clientCards?.[0]?.holderAddress || null,
+        breed: animal.breed || null,
+        birth_date: animal.birthDate || null,
         active: true,
       }));
 
@@ -520,16 +576,16 @@ export function Farms() {
           </div>
 
           {/* Display VIC Response Data */}
-          {vicResponse && (
+          {vicResponse && vicResponse.vic_raw_payload && (
             <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
               {console.log('[Farms] Rendering VIC Response Data')}
               <h4 className="text-sm font-semibold text-gray-900 mb-3">Kliento informacija iš VIC</h4>
               
               {/* Client Card Data */}
-              {vicResponse.pageData?.clientCards?.[0] && (
+              {vicResponse.vic_raw_payload.pageData?.clientCards?.[0] && (
                 <div className="bg-white rounded-lg p-4 mb-4 space-y-2">
                   {(() => {
-                    const client = vicResponse.pageData.clientCards[0];
+                    const client = vicResponse.vic_raw_payload.pageData.clientCards[0];
                     return (
                       <>
                         <div className="grid grid-cols-2 gap-3 text-sm">
@@ -573,17 +629,17 @@ export function Farms() {
               )}
 
               {/* Animal Summary */}
-              {vicResponse.data && (
+              {vicResponse.vic_raw_payload.data && (
                 <div className="bg-white rounded-lg p-4">
                   <h5 className="text-sm font-semibold text-gray-900 mb-3">Gyvūnų suvestinė</h5>
                   <div className="grid grid-cols-3 gap-4 mb-4">
                     <div className="text-center">
                       <p className="text-2xl font-bold text-blue-600">
-                        {vicResponse.data.animalCount || 0}
+                        {vicResponse.vic_raw_payload.data.animalCount || 0}
                       </p>
                       <p className="text-xs text-gray-600">Iš viso gyvūnų</p>
                     </div>
-                    {vicResponse.data.groupedStatistics?.map((stat: any, idx: number) => (
+                    {vicResponse.vic_raw_payload.data.groupedStatistics?.map((stat: any, idx: number) => (
                       stat.group === 'Galvijai' && (
                         <React.Fragment key={idx}>
                           <div className="text-center">
@@ -600,11 +656,11 @@ export function Farms() {
                   </div>
 
                   {/* Grouped Statistics */}
-                  {vicResponse.data.groupedStatistics && (
+                  {vicResponse.vic_raw_payload.data.groupedStatistics && (
                     <div className="space-y-2">
                       <p className="text-xs font-semibold text-gray-700">Pagal tipus:</p>
                       <div className="grid grid-cols-2 gap-2">
-                        {vicResponse.data.groupedStatistics
+                        {vicResponse.vic_raw_payload.data.groupedStatistics
                           .filter((stat: any) => stat.group !== 'Galvijai')
                           .map((stat: any, idx: number) => (
                             <div key={idx} className="bg-gray-50 rounded px-3 py-2 flex justify-between items-center">
@@ -702,72 +758,6 @@ export function Farms() {
               />
             </div>
 
-            <div className="md:col-span-2 border-t border-gray-200 pt-4 mt-2">
-              <h4 className="text-sm font-semibold text-gray-900 mb-3">VIC Duomenys (Veterinarijos informacijos centras)</h4>
-              
-              {/* Production Animals VIC Login */}
-              <div className="mb-4">
-                <h5 className="text-sm font-semibold text-gray-800 mb-2">VIC produkciniai prisijungimai</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Vartotojo vardas
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.vic_production_username || ''}
-                      onChange={(e) => setFormData({ ...formData, vic_production_username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="VIC vartotojo vardas"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Slaptažodis
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.vic_production_password || ''}
-                      onChange={(e) => setFormData({ ...formData, vic_production_password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="VIC slaptažodis"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Pet Animals VIC Login */}
-              <div>
-                <h5 className="text-sm font-semibold text-gray-800 mb-2">VIC augintiniai prisijungimai</h5>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Vartotojo vardas
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.vic_pet_username || ''}
-                      onChange={(e) => setFormData({ ...formData, vic_pet_username: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="VIC vartotojo vardas"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      Slaptažodis
-                    </label>
-                    <input
-                      type="password"
-                      value={formData.vic_pet_password || ''}
-                      onChange={(e) => setFormData({ ...formData, vic_pet_password: e.target.value })}
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      placeholder="VIC slaptažodis"
-                    />
-                  </div>
-                </div>
-              </div>
-            </div>
-
             <div className="flex flex-col gap-3">
               <label className="flex items-center gap-2 cursor-pointer">
                 <input
@@ -805,7 +795,7 @@ export function Farms() {
               ) : (
                 <>
                   <Save className="w-4 h-4" />
-                  Išsaugoti klientą ir {vicResponse?.data?.animalCount || 0} gyvūnus
+                  Išsaugoti klientą ir {vicResponse?.vic_raw_payload?.data?.animalCount || 0} gyvūnus
                 </>
               )}
             </button>

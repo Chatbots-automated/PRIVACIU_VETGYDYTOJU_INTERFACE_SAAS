@@ -6,92 +6,66 @@ interface MedicineBiocideWriteOffActProps {
 }
 
 export function MedicineBiocideWriteOffAct({ data }: MedicineBiocideWriteOffActProps) {
+  const formatDateLT = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('lt-LT');
+  };
+
   return (
-    <div className="journal-container journal-portrait">
-      <div className="journal-page">
-        {/* Header Section */}
-        <div className="journal-header">
-          <div className="journal-title-section">
-            <h1 className="journal-title">SUNAUDOTŲ VETERINARINIŲ VAISTŲ, BIOCIDŲ NURAŠYMO AKTAS</h1>
-          </div>
-          
-          {/* Top-right official confirmation block */}
-          <div className="official-form-block">
-            <p className="official-form-title">Forma patvirtinta</p>
-            <p>Valstybinės maisto ir veterinarijos</p>
-            <p>tarnybos direktoriaus</p>
-            <p>2005 m. gruodžio 29 d.</p>
-            <p>įsakymu Nr. B1-735</p>
-          </div>
-        </div>
+    <div className="bg-white print-content p-6">
+      {/* Header */}
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">SUNAUDOTŲ VETERINARINIŲ VAISTŲ, BIOCIDŲ NURAŠYMO AKTAS</h1>
+        <p className="text-sm text-gray-500">Vaistų nurašymo registras pagal LR reikalavimus</p>
+        <p className="text-sm text-gray-500 mt-1">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
+      </div>
 
-        {/* Provider and Document Information */}
-        <div className="journal-info-section writeoff-info">
-          <div className="info-line">
-            <span className="info-label">Veterinarinė įstaiga:</span>
-            <span className="info-value">{data.veterinaryProviderName}</span>
-          </div>
-          <div className="info-line centered info-sublabel">
-            (veterinarinio aptarnavimo (paslaugų) įmonės, įstaigos ar valstybinės veterinarinės priežiūros objekto pavadinimas)
-          </div>
-          
-          <div className="info-line centered" style={{ marginTop: '1rem' }}>
-            <span className="info-value">{data.place}</span>
-          </div>
-          <div className="info-line centered info-sublabel">
-            (vieta)
-          </div>
-          
-          <div className="info-line centered" style={{ marginTop: '1rem' }}>
-            <span>mėnesį sunaudoti veterinariniai vaistai ir biocidai:</span>
-          </div>
-          
-          <div className="info-line centered" style={{ marginTop: '0.5rem' }}>
-            <span>Nurašomi šie {data.periodText}</span>
-          </div>
-          
-          <div className="info-line" style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-            <span>{data.documentDateText}</span>
-            <span>Nr {data.documentNumber || '____________________'}</span>
-          </div>
+      {/* Info section */}
+      <div className="mb-6 space-y-2 text-sm">
+        <div><strong>Veterinarinė įstaiga:</strong> {data.veterinaryProviderName}</div>
+        <div className="text-xs text-gray-500 italic">
+          (veterinarinio aptarnavimo (paslaugų) įmonės, įstaigos ar valstybinės veterinarinės priežiūros objekto pavadinimas)
         </div>
+        <div className="mt-4"><strong>Vieta:</strong> {data.place}</div>
+        <div className="mt-4">Nurašomi sunaudoti veterinariniai vaistai ir biocidai</div>
+        <div className="mt-2 flex justify-between items-center">
+          <span>Data: {formatDateLT(new Date().toISOString())}</span>
+          <span><strong>Nr.</strong> {data.documentNumber || '____________________'}</span>
+        </div>
+        <div className="text-xs text-gray-500 mt-2">
+          Forma patvirtinta Valstybinės maisto ir veterinarijos tarnybos direktoriaus 2005 m. gruodžio 29 d. įsakymu Nr. B1-735
+        </div>
+      </div>
 
-        {/* Main Table */}
-        <div className="journal-table-container">
-          <table className="journal-table writeoff-table">
-            <thead>
-              <tr>
-                <th className="col-eil-nr">EilNr</th>
-                <th className="col-product-name-wide">Veterinarinio vaisto,biocido pavadinimas</th>
-                <th className="col-batch">Serija</th>
-                <th className="col-unit">Matavimo vnt.</th>
-                <th className="col-used-qty">Sunaudotas kiekis</th>
+      {/* Table */}
+      <div className="overflow-x-auto rounded-lg border-2 border-gray-300 shadow-sm">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gradient-to-r from-amber-50 to-yellow-50">
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '60px' }}>Eil. Nr.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Veterinarinio vaisto, biocido pavadinimas</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '120px' }}>Serija</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '120px' }}>Matavimo vnt.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '120px' }}>Sunaudotas kiekis</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, index) => (
+              <tr key={index} className="hover:bg-amber-50 transition-colors">
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-bold text-gray-900">{row.rowNo}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">{row.productName || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.batchSeries || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.measurementUnit || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-900">{row.usedQuantity || '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, index) => (
-                <tr key={index} className="journal-table-row">
-                  <td className="text-center">{row.rowNo}</td>
-                  <td className="text-left">{row.productName || '-'}</td>
-                  <td className="text-center">{row.batchSeries || '-'}</td>
-                  <td className="text-center">{row.measurementUnit || '-'}</td>
-                  <td className="text-center">{row.usedQuantity || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
+            ))}
+          </tbody>
+        </table>
+      </div>
 
-        {/* Footer with signature */}
-        <div className="journal-footer">
-          <div className="signature-section">
-            <div className="signature-line">
-              <span className="signature-label">Veterinarijos gydytojas:</span>
-              <span className="signature-value">{data.responsibleVetName}</span>
-              <span className="signature-placeholder">_________________</span>
-            </div>
-          </div>
-        </div>
+      {/* Footer */}
+      <div className="mt-6 text-sm text-gray-700">
+        <strong>Veterinarijos gydytojas:</strong> {data.responsibleVetName}
       </div>
     </div>
   );

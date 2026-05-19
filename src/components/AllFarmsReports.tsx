@@ -694,11 +694,11 @@ export function AllFarmsReports() {
             
             {/* New Journal Templates */}
             {reportType === 'treated_animal_registration' && (
-              <TreatedAnimalRegistrationReport 
+              <TreatedAnimalRegistrationReport
                 data={data}
                 periodStart={dateFrom}
                 periodEnd={dateTo}
-                veterinaryProviderName="Visos įstaigos"
+                veterinaryProviderName={user?.full_name || ''}
                 responsibleVetName={user?.full_name || ''}
               />
             )}
@@ -706,13 +706,13 @@ export function AllFarmsReports() {
               <ProductionAnimalMedicineUsageReport 
                 data={data}
                 animalOwnerName="Visi ūkiai"
-                veterinaryProviderName="Visos įstaigos"
+                veterinaryProviderName={user?.full_name || ''}
               />
             )}
             {reportType === 'stock_balance' && (
               <MedicineBiocideStockBalanceReport 
                 data={data}
-                veterinaryProviderName="Visos įstaigos"
+                veterinaryProviderName={user?.full_name || ''}
                 responsibleVetName={user?.full_name || ''}
               />
             )}
@@ -722,7 +722,7 @@ export function AllFarmsReports() {
                 periodStart={dateFrom}
                 periodEnd={dateTo}
                 place="Visos lokacijos"
-                veterinaryProviderName="Visos įstaigos"
+                veterinaryProviderName={user?.full_name || ''}
                 responsibleVetName={user?.full_name || ''}
               />
             )}
@@ -732,7 +732,7 @@ export function AllFarmsReports() {
                 farmOwnerName="Visi ūkiai"
                 farmOwnerAddress="Įvairios lokacijos"
                 documentDate={dateTo || new Date().toISOString().split('T')[0]}
-                veterinaryProviderName="Visos įstaigos"
+                veterinaryProviderName={user?.full_name || ''}
                 performedByName={user?.full_name || ''}
               />
             )}

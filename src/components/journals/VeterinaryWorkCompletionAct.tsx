@@ -6,92 +6,77 @@ interface VeterinaryWorkCompletionActProps {
 }
 
 export function VeterinaryWorkCompletionAct({ data }: VeterinaryWorkCompletionActProps) {
+  const formatDateLT = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('lt-LT');
+  };
+
   return (
-    <div className="journal-container journal-portrait">
-      <div className="journal-page">
-        {/* Header Section */}
-        <div className="journal-header">
-          <div className="journal-title-section">
-            <h1 className="journal-title">Veterinarinių darbų atlikimo aktas</h1>
-          </div>
-        </div>
+    <div className="bg-white print-content p-6">
+      {/* Header */}
+      <div className="text-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">VETERINARINIŲ DARBŲ ATLIKIMO AKTAS</h1>
+        <p className="text-sm text-gray-500">Veterinarinių darbų registras pagal LR reikalavimus</p>
+        <p className="text-sm text-gray-500 mt-1">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
+      </div>
 
-        {/* Provider and Farm Information */}
-        <div className="journal-info-section work-act-info">
-          <div className="info-line">
-            <span className="info-label">Veterinarinė įstaiga:</span>
-            <span className="info-value">{data.veterinaryProviderName}</span>
-          </div>
-          
-          <div className="info-line" style={{ marginTop: '1rem' }}>
-            <span className="info-label">Ūkio savininkas:</span>
-            <span className="info-value">{data.farmOwnerName}</span>
-          </div>
-          
-          <div className="info-line">
-            <span className="info-label">Adresas:</span>
-            <span className="info-value">{data.farmOwnerAddress}</span>
-          </div>
-          
-          <div className="info-line" style={{ marginTop: '1rem', display: 'flex', justifyContent: 'space-between' }}>
-            <span>Data: {data.documentDate}</span>
-            <span>Nr: {data.documentNumber || '____________________'}</span>
-          </div>
+      {/* Info section */}
+      <div className="mb-6 space-y-2 text-sm">
+        <div><strong>Veterinarinė įstaiga:</strong> {data.veterinaryProviderName}</div>
+        <div className="mt-4"><strong>Ūkio savininkas:</strong> {data.farmOwnerName}</div>
+        <div><strong>Adresas:</strong> {data.farmOwnerAddress}</div>
+        <div className="mt-4 flex justify-between items-center">
+          <span><strong>Data:</strong> {data.documentDate}</span>
+          <span><strong>Nr:</strong> {data.documentNumber || '____________________'}</span>
         </div>
+        <div className="text-xs text-gray-500 mt-2">
+          Forma patvirtinta Valstybinės maisto ir veterinarijos tarnybos direktoriaus 2005 m. gruodžio 29 d. įsakymu Nr. B1-735
+        </div>
+      </div>
 
-        {/* Main Table */}
-        <div className="journal-table-container">
-          <table className="journal-table work-act-table">
-            <thead>
-              <tr>
-                <th className="col-eil-nr">Eil.</th>
-                <th className="col-date">Data</th>
-                <th className="col-work-name">Darbo pavadinimas</th>
-                <th className="col-doc-no">Dokumento Nr</th>
-                <th className="col-income">Įplaukos</th>
+      {/* Table */}
+      <div className="overflow-x-auto rounded-lg border-2 border-gray-300 shadow-sm">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gradient-to-r from-cyan-50 to-blue-50">
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '60px' }}>Eil. Nr.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '100px' }}>Data</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Darbo pavadinimas</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '140px' }}>Dokumento Nr.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700" style={{ width: '120px' }}>Įplaukos (EUR)</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, index) => (
+              <tr key={index} className="hover:bg-cyan-50 transition-colors">
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-bold text-gray-900">{row.rowNo}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.date}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">{row.workName || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.documentNo || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-mono text-gray-900">{row.income || '-'}</td>
               </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, index) => (
-                <tr key={index} className="journal-table-row">
-                  <td className="text-center">{row.rowNo}</td>
-                  <td className="text-center">{row.date}</td>
-                  <td className="text-left">{row.workName || '-'}</td>
-                  <td className="text-center">{row.documentNo || '-'}</td>
-                  <td className="text-right">{row.income || '-'}</td>
-                </tr>
-              ))}
-              
-              {/* Total row */}
-              <tr className="total-row">
-                <td colSpan={4} className="text-right total-label">Suma:</td>
-                <td className="text-right total-value">{data.totalIncome}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
+            ))}
+            {/* Total row */}
+            <tr className="bg-gray-100">
+              <td colSpan={4} className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-bold text-gray-900">Suma:</td>
+              <td className="border-2 border-gray-300 px-3 py-3 text-xs text-right font-mono font-bold text-gray-900">{data.totalIncome}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
 
-        {/* Footer with signatures */}
-        <div className="journal-footer work-act-footer">
-          <div className="signature-section dual-signature">
-            <div className="signature-line">
-              <span className="signature-label">Darbus priėmė:</span>
-              <div className="signature-block">
-                <span className="signature-sublabel">Vardas,Pavardė,Parašas</span>
-                <span className="signature-value">{data.acceptedByName}</span>
-                <span className="signature-placeholder">_________________</span>
-              </div>
-            </div>
-            
-            <div className="signature-line" style={{ marginTop: '2rem' }}>
-              <span className="signature-label">Darbus atliko:</span>
-              <div className="signature-block">
-                <span className="signature-sublabel">Vardas,Pavardė,Parašas</span>
-                <span className="signature-value">{data.performedByName}</span>
-                <span className="signature-placeholder">_________________</span>
-              </div>
-            </div>
-          </div>
+      {/* Footer */}
+      <div className="mt-6 text-sm text-gray-700 space-y-4">
+        <div>
+          <div className="mb-1"><strong>Darbus priėmė:</strong></div>
+          <div className="text-xs text-gray-500 italic mb-1">Vardas, Pavardė, Parašas</div>
+          <div>{data.acceptedByName}</div>
+        </div>
+        
+        <div>
+          <div className="mb-1"><strong>Darbus atliko:</strong></div>
+          <div className="text-xs text-gray-500 italic mb-1">Vardas, Pavardė, Parašas</div>
+          <div>{data.performedByName}</div>
         </div>
       </div>
     </div>

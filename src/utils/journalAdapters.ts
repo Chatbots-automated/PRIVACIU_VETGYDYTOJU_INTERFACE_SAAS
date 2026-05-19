@@ -85,17 +85,17 @@ export function transformToTreatedAnimalRegistrationJournal(
       ? `${record.medicine_dose} ${record.medicine_unit}`
       : '-';
 
-    // Format withdrawal (Išlauka) as dates
+    // Format withdrawal (Išlauka) with icons
     let withdrawal = '';
     if (record.withdrawal_until_meat || record.withdrawal_until_milk) {
       const dates = [];
       if (record.withdrawal_until_meat) {
-        dates.push(`M: ${record.withdrawal_until_meat}`);
+        dates.push(`🥩 ${record.withdrawal_until_meat}`);
       }
       if (record.withdrawal_until_milk) {
-        dates.push(`P: ${record.withdrawal_until_milk}`);
+        dates.push(`🥛 ${record.withdrawal_until_milk}`);
       }
-      withdrawal = dates.join('\n');
+      withdrawal = dates.join(' | ');
     }
 
     return {
@@ -158,17 +158,17 @@ export function transformToProductionAnimalMedicineUsageJournal(
       ? `${record.medicine_days}` 
       : '1';
 
-    // Format withdrawal as dates
+    // Format withdrawal with icons
     let withdrawal = '';
     if (record.withdrawal_until_meat || record.withdrawal_until_milk) {
       const dates = [];
       if (record.withdrawal_until_meat) {
-        dates.push(`M: ${record.withdrawal_until_meat}`);
+        dates.push(`🥩 ${record.withdrawal_until_meat}`);
       }
       if (record.withdrawal_until_milk) {
-        dates.push(`P: ${record.withdrawal_until_milk}`);
+        dates.push(`🥛 ${record.withdrawal_until_milk}`);
       }
-      withdrawal = dates.join('\n');
+      withdrawal = dates.join(' | ');
     }
 
     return {
@@ -327,10 +327,16 @@ export function transformToVeterinaryWorkCompletionAct(
 // =====================================================================
 
 function formatLithuanianDate(dateString: string): string {
+  if (!dateString) return '-';
+  
   const date = new Date(dateString);
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return '-';
+  
   const year = date.getFullYear();
   const month = date.toLocaleString('lt-LT', { month: 'long' });
   const day = date.getDate();
-  
+
   return `${year} m. ${month} ${day} d.`;
 }

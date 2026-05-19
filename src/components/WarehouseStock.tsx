@@ -227,7 +227,7 @@ export function WarehouseStock() {
     const arrayBuffer = await file.arrayBuffer();
     const sanitizedFilename = sanitizeFilename(file.name);
 
-    const response = await fetch('https://n8n-up8s.onrender.com/webhook/36549f46-a08b-4790-bf56-40cdc919e121as', {
+    const response = await fetch('https://n8n-up8s.onrender.com/webhook/c8f42446-e961-4459-a8ee-ec70fb31a248', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/pdf',

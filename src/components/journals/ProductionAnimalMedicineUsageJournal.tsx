@@ -6,94 +6,81 @@ interface ProductionAnimalMedicineUsageJournalProps {
 }
 
 export function ProductionAnimalMedicineUsageJournal({ data }: ProductionAnimalMedicineUsageJournalProps) {
+  const formatDateLT = (dateStr: string) => {
+    if (!dateStr) return '-';
+    return new Date(dateStr).toLocaleDateString('lt-LT');
+  };
+
   return (
-    <div className="journal-container journal-landscape">
-      <div className="journal-page">
-        {/* Header Section */}
-        <div className="journal-header">
-          <div className="journal-title-section">
-            <h2 className="journal-subtitle">Veterinarinės medicinos produktų ir vaistinių pašarų naudojamų produkcijos</h2>
-            <h2 className="journal-subtitle">gyvūnams apskaitos ir naudojimo kontrolės</h2>
-          </div>
-          
-          {/* Official reference block */}
-          <div className="official-reference-block">
-            <p className="official-form-title">Vadovaujantis</p>
-            <p>Valstybinės maisto ir veterinarijos</p>
-            <p>tarnybos direktoriaus</p>
-            <p>2003 m. balandžio 18 d.</p>
-            <p>įsakymu Nr. B1-390</p>
-          </div>
+    <div className="bg-white print-content p-6">
+      {/* Header */}
+      <div className="text-center mb-6">
+        <div className="text-sm text-gray-600 mb-1">
+          <div>Veterinarinių medicinos produktų ir vaistinių pašarų naudojamų produkcijos</div>
+          <div>gyvūnams apskaitos ir naudojimo kontrolės</div>
         </div>
+        <h1 className="text-3xl font-bold text-gray-900 mb-2">ŽURNALAS</h1>
+        <p className="text-sm text-gray-500">Produkcijos gyvūnų gydymo registras pagal LR reikalavimus</p>
+        <p className="text-sm text-gray-500 mt-1">Sugeneruota: {formatDateLT(new Date().toISOString())}</p>
+      </div>
 
-        <div className="journal-main-title">
-          <h1>ŽURNALAS</h1>
-        </div>
-
-        {/* Provider and Owner Information */}
-        <div className="journal-info-section">
-          <div className="info-line">
-            <span className="info-label">Veterinarinė įstaiga:</span>
-            <span className="info-value">{data.veterinaryProviderName}</span>
-          </div>
-          <div className="info-line">
-            <span className="info-label">Gyvulių savininkas:</span>
-            <span className="info-value">{data.animalOwnerName}</span>
-          </div>
-        </div>
-
-        {/* Main Table */}
-        <div className="journal-table-container">
-          <table className="journal-table">
-            <thead>
-              <tr>
-                <th rowSpan={2} className="col-eil-nr">Eil.<br/>Nr.</th>
-                <th rowSpan={2} className="col-reg-data">Reg.<br/>data</th>
-                <th rowSpan={2} className="col-animal-id">Ženklinimo<br/>Nr</th>
-                <th colSpan={2} className="col-group-header">Gyvūnas</th>
-                <th rowSpan={2} className="col-treatment-period">Gydymo<br/>laikotarpis</th>
-                <th rowSpan={2} className="col-diagnosis">Klinikinė<br/>diagnozė</th>
-                <th rowSpan={2} className="col-medication">Medikamento<br/>pavadinimas</th>
-                <th rowSpan={2} className="col-used-amount">Sunaudota</th>
-                <th rowSpan={2} className="col-withdrawal">Išlauka</th>
-                <th rowSpan={2} className="col-owner-sig">Savininko<br/>parašas</th>
-                <th rowSpan={2} className="col-vet-sig">Vet.gydytojo<br/>parašas</th>
-              </tr>
-              <tr>
-                <th className="col-species">Rūšis</th>
-                <th className="col-age">Amžius</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.rows.map((row, index) => (
-                <tr key={index} className="journal-table-row">
-                  <td className="text-center">{row.rowNo}</td>
-                  <td className="text-center">{row.registrationDate}</td>
-                  <td className="text-center">{row.animalIdentifier || '-'}</td>
-                  <td className="text-center">{row.animalSpecies || '-'}</td>
-                  <td className="text-center">{row.animalAge || '-'}</td>
-                  <td className="text-center">{row.treatmentPeriod || '-'}</td>
-                  <td className="text-left cell-wrap">{row.clinicalDiagnosis || '-'}</td>
-                  <td className="text-left cell-wrap">{row.medicationName || '-'}</td>
-                  <td className="text-center">{row.usedAmount || '-'}</td>
-                  <td className="text-center">{row.withdrawal || '-'}</td>
-                  <td className="text-center">{row.ownerSignature || '-'}</td>
-                  <td className="text-center">{row.vetSignature || '-'}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* Footer with page number */}
-        <div className="journal-footer">
-          {data.pageNumber && data.totalPages && (
-            <div className="page-number">
-              Puslapis {data.pageNumber} iš {data.totalPages}
-            </div>
-          )}
+      {/* Info section */}
+      <div className="mb-6 space-y-2 text-sm">
+        <div><strong>Veterinarinė įstaiga:</strong> {data.veterinaryProviderName}</div>
+        <div><strong>Gyvulių savininkas:</strong> {data.animalOwnerName}</div>
+        <div className="text-xs text-gray-500 mt-2">
+          Vadovaujantis Valstybinės maisto ir veterinarijos tarnybos direktoriaus 2003 m. balandžio 18 d. įsakymu Nr. B1-390
         </div>
       </div>
+
+      {/* Table */}
+      <div className="overflow-x-auto rounded-lg border-2 border-gray-300 shadow-sm">
+        <table className="w-full border-collapse">
+          <thead>
+            <tr className="bg-gradient-to-r from-green-50 to-emerald-50">
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Eil. Nr.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Reg. data</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Ženklinimo Nr.</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Rūšis</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Amžius</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Gydymo laikotarpis</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Klinikinė diagnozė</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Medikamento pavadinimas</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Sunaudota</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Išlauka</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Savininko parašas</th>
+              <th className="border-2 border-gray-300 px-3 py-3 text-xs font-bold text-gray-700">Vet. gydytojo parašas</th>
+            </tr>
+          </thead>
+          <tbody>
+            {data.rows.map((row, index) => (
+              <tr key={index} className="hover:bg-green-50 transition-colors">
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center font-bold text-gray-900">{row.rowNo}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.registrationDate}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.animalIdentifier || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.animalSpecies || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.animalAge || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.treatmentPeriod || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">{row.clinicalDiagnosis || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-gray-700">{row.medicationName || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.usedAmount || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.withdrawal || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.ownerSignature || '-'}</td>
+                <td className="border-2 border-gray-300 px-3 py-3 text-xs text-center text-gray-700">{row.vetSignature || '-'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+
+      {/* Footer */}
+      {data.pageNumber && data.totalPages && (
+        <div className="mt-6 text-sm text-gray-700">
+          <div className="text-right text-xs text-gray-500">
+            Puslapis {data.pageNumber} iš {data.totalPages}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

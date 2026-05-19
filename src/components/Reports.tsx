@@ -926,31 +926,31 @@ export function Reports() {
         return <InseminationJournalReport data={data} />;
       case 'treated_animal_registration':
         return <TreatedAnimalRegistrationReport 
-          data={data} 
+          data={data}
           periodStart={dateFrom} 
           periodEnd={dateTo}
-          veterinaryProviderName={selectedFarm?.name || ''}
+          veterinaryProviderName={user?.full_name || ''}
           responsibleVetName={user?.full_name || ''}
         />;
       case 'production_animal_medicine':
         return <ProductionAnimalMedicineUsageReport 
           data={data}
           animalOwnerName={selectedFarm?.contact_person || selectedFarm?.name || ''}
-          veterinaryProviderName={selectedFarm?.name || ''}
+          veterinaryProviderName={user?.full_name || ''}
         />;
       case 'stock_balance':
         return <MedicineBiocideStockBalanceReport 
           data={data}
-          veterinaryProviderName={selectedFarm?.name || ''}
+          veterinaryProviderName={user?.full_name || ''}
           responsibleVetName={user?.full_name || ''}
         />;
       case 'write_off_act':
-        return <MedicineBiocideWriteOffActReport 
+        return <MedicineBiocideWriteOffActReport
           data={data}
           periodStart={dateFrom}
           periodEnd={dateTo}
           place={selectedFarm?.address || ''}
-          veterinaryProviderName={selectedFarm?.name || ''}
+          veterinaryProviderName={user?.full_name || ''}
           responsibleVetName={user?.full_name || ''}
         />;
       case 'work_completion_act':
@@ -959,7 +959,7 @@ export function Reports() {
           farmOwnerName={selectedFarm?.contact_person || selectedFarm?.name || ''}
           farmOwnerAddress={selectedFarm?.address || ''}
           documentDate={dateTo || new Date().toISOString().split('T')[0]}
-          veterinaryProviderName={selectedFarm?.name || ''}
+          veterinaryProviderName={user?.full_name || ''}
           performedByName={user?.full_name || ''}
         />;
       default:
