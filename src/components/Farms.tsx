@@ -36,6 +36,15 @@ export function Farms() {
   const [vicResponse, setVicResponse] = useState<any>(null);
   const [savingData, setSavingData] = useState(false);
 
+  // Debug: Track state changes
+  useEffect(() => {
+    console.log('[Farms] State changed:', {
+      animalsLoaded,
+      hasVicResponse: !!vicResponse,
+      vicResponseKeys: vicResponse ? Object.keys(vicResponse) : []
+    });
+  }, [animalsLoaded, vicResponse]);
+
   const emptyFarm: Farm = {
     name: '',
     code: '',
@@ -162,13 +171,18 @@ export function Farms() {
       }
 
       const result = await response.json();
+      console.log('Raw webhook response:', result);
       
       // The response is an array, get the first element
       const vicPayload = Array.isArray(result) ? result[0] : result;
+      console.log('Parsed VIC payload:', vicPayload);
+      console.log('Has pageData:', !!vicPayload?.pageData);
+      console.log('Has data:', !!vicPayload?.data);
       
       // Store the response for display and later saving
       setVicResponse(vicPayload);
       setAnimalsLoaded(true);
+      console.log('State updated - animalsLoaded: true, vicResponse set');
       
       // Auto-fill farm data from VIC response
       if (vicPayload?.pageData?.clientCards?.[0]) {
@@ -180,6 +194,7 @@ export function Farms() {
           address: clientCard.herdAddress || clientCard.holderAddress || prev.address,
           contact_person: clientCard.holderName || prev.contact_person,
         }));
+        console.log('Form data auto-filled');
       }
 
       alert('Duomenys užkrauti iš VIC! Peržiūrėkite informaciją ir išsaugokite.');
@@ -507,6 +522,7 @@ export function Farms() {
           {/* Display VIC Response Data */}
           {vicResponse && (
             <div className="mb-6 bg-blue-50 border border-blue-200 rounded-lg p-4">
+              {console.log('[Farms] Rendering VIC Response Data')}
               <h4 className="text-sm font-semibold text-gray-900 mb-3">Kliento informacija iš VIC</h4>
               
               {/* Client Card Data */}
