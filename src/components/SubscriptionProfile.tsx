@@ -13,7 +13,11 @@ import {
   MapPin,
   Crown,
   Shield,
-  FileText
+  FileText,
+  Eye,
+  EyeOff,
+  Edit2,
+  Save
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -65,6 +69,12 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
   const [usageStats, setUsageStats] = useState<UsageStats | null>(null);
   const [vicData, setVicData] = useState<VICData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [showPassword, setShowPassword] = useState(false);
+  const [editingVic, setEditingVic] = useState(false);
+  const [editedVicUsername, setEditedVicUsername] = useState('');
+  const [editedVicPassword, setEditedVicPassword] = useState('');
+  const [savingVic, setSavingVic] = useState(false);
+  const [vicFarmId, setVicFarmId] = useState<string | null>(null);
 
   const pricingPlans = {
     trial: {
@@ -150,7 +160,7 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
       // Load VIC data from farms (get first farm with VIC data)
       const { data: farmWithVic } = await supabase
         .from('farms')
-        .select('vic_personal_code, vic_vet_license, vic_is_vet_doctor, vic_is_marker, vic_holdings_count, vic_last_synced_at, vic_data, vic_username, vic_password_encrypted')
+        .select('id, vic_personal_code, vic_vet_license, vic_is_vet_doctor, vic_is_marker, vic_holdings_count, vic_last_synced_at, vic_data, vic_username, vic_password_encrypted')
         .eq('client_id', user!.client_id)
         .not('vic_data', 'is', null)
         .order('vic_last_synced_at', { ascending: false, nullsFirst: false })
@@ -159,12 +169,62 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
 
       if (farmWithVic) {
         setVicData(farmWithVic);
+        setVicFarmId(farmWithVic.id);
+        setEditedVicUsername(farmWithVic.vic_username || '');
+        setEditedVicPassword(farmWithVic.vic_password_encrypted || '');
       }
     } catch (error) {
       console.error('Error loading client data:', error);
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSaveVicCredentials = async () => {
+    if (!vicFarmId) {
+      alert('Nepavyko rasti ūkio ID');
+      return;
+    }
+
+    if (!editedVicUsername || !editedVicPassword) {
+      alert('Prašome užpildyti abu laukus');
+      return;
+    }
+
+    setSavingVic(true);
+    try {
+      const { error } = await supabase
+        .from('farms')
+        .update({
+          vic_username: editedVicUsername,
+          vic_password_encrypted: editedVicPassword,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', vicFarmId);
+
+      if (error) throw error;
+
+      // Update local state
+      setVicData(prev => prev ? {
+        ...prev,
+        vic_username: editedVicUsername,
+        vic_password_encrypted: editedVicPassword
+      } : null);
+
+      setEditingVic(false);
+      alert('VIC prisijungimo duomenys sėkmingai atnaujinti!');
+    } catch (error) {
+      console.error('Error saving VIC credentials:', error);
+      alert('Klaida išsaugant VIC prisijungimo duomenis');
+    } finally {
+      setSavingVic(false);
+    }
+  };
+
+  const handleCancelEditVic = () => {
+    setEditedVicUsername(vicData?.vic_username || '');
+    setEditedVicPassword(vicData?.vic_password_encrypted || '');
+    setEditingVic(false);
   };
 
   if (!isOpen) return null;
@@ -287,21 +347,94 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                   {/* VIC Login Credentials */}
                   {(vicData.vic_username || vicData.vic_password_encrypted) && (
                     <div className="bg-blue-100 rounded-lg p-3 border border-blue-300">
-                      <p className="text-xs font-semibold text-blue-900 mb-2">VIC prisijungimo duomenys</p>
-                      <div className="grid grid-cols-2 gap-4">
-                        {vicData.vic_username && (
-                          <div>
-                            <p className="text-xs text-blue-700 mb-1">Vartotojo vardas</p>
-                            <p className="font-medium text-gray-900">{vicData.vic_username}</p>
-                          </div>
-                        )}
-                        {vicData.vic_password_encrypted && (
-                          <div>
-                            <p className="text-xs text-blue-700 mb-1">Slaptažodis</p>
-                            <p className="font-mono text-sm text-gray-900">{'•'.repeat(8)}</p>
-                          </div>
+                      <div className="flex items-center justify-between mb-2">
+                        <p className="text-xs font-semibold text-blue-900">VIC prisijungimo duomenys</p>
+                        {!editingVic && (
+                          <button
+                            onClick={() => setEditingVic(true)}
+                            className="flex items-center gap-1 px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors text-xs"
+                          >
+                            <Edit2 className="w-3 h-3" />
+                            Redaguoti
+                          </button>
                         )}
                       </div>
+                      
+                      {editingVic ? (
+                        <div className="space-y-3">
+                          <div>
+                            <label className="text-xs text-blue-700 mb-1 block">Vartotojo vardas</label>
+                            <input
+                              type="text"
+                              value={editedVicUsername}
+                              onChange={(e) => setEditedVicUsername(e.target.value)}
+                              className="w-full px-3 py-2 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                              placeholder="pvz. vardas.pavarde"
+                            />
+                          </div>
+                          <div>
+                            <label className="text-xs text-blue-700 mb-1 block">Slaptažodis</label>
+                            <div className="relative">
+                              <input
+                                type={showPassword ? 'text' : 'password'}
+                                value={editedVicPassword}
+                                onChange={(e) => setEditedVicPassword(e.target.value)}
+                                className="w-full px-3 py-2 pr-10 border border-blue-300 rounded text-sm focus:ring-2 focus:ring-blue-500"
+                                placeholder="Įveskite VIC slaptažodį"
+                              />
+                              <button
+                                type="button"
+                                onClick={() => setShowPassword(!showPassword)}
+                                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                              >
+                                {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                              </button>
+                            </div>
+                          </div>
+                          <div className="flex gap-2">
+                            <button
+                              onClick={handleSaveVicCredentials}
+                              disabled={savingVic}
+                              className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded hover:bg-green-700 transition-colors text-xs disabled:opacity-50"
+                            >
+                              <Save className="w-3 h-3" />
+                              {savingVic ? 'Išsaugoma...' : 'Išsaugoti'}
+                            </button>
+                            <button
+                              onClick={handleCancelEditVic}
+                              disabled={savingVic}
+                              className="px-3 py-1.5 bg-gray-300 text-gray-700 rounded hover:bg-gray-400 transition-colors text-xs disabled:opacity-50"
+                            >
+                              Atšaukti
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="grid grid-cols-2 gap-4">
+                          {vicData.vic_username && (
+                            <div>
+                              <p className="text-xs text-blue-700 mb-1">Vartotojo vardas</p>
+                              <p className="font-medium text-gray-900">{vicData.vic_username}</p>
+                            </div>
+                          )}
+                          {vicData.vic_password_encrypted && (
+                            <div>
+                              <p className="text-xs text-blue-700 mb-1">Slaptažodis</p>
+                              <div className="flex items-center gap-2">
+                                <p className="font-mono text-sm text-gray-900">
+                                  {showPassword ? vicData.vic_password_encrypted : '•'.repeat(8)}
+                                </p>
+                                <button
+                                  onClick={() => setShowPassword(!showPassword)}
+                                  className="text-blue-600 hover:text-blue-700"
+                                >
+                                  {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                                </button>
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      )}
                     </div>
                   )}
 

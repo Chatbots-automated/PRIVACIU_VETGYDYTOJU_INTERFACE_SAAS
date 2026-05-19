@@ -128,7 +128,10 @@ export function Farms() {
           .select()
           .single();
 
-        if (farmError) throw farmError;
+        if (farmError) {
+          console.error('Farm creation error:', farmError);
+          throw new Error(`Nepavyko sukurti ūkio: ${farmError.message}`);
+        }
         
         farmId = newFarm.id;
         setFormData({ ...formData, id: farmId });
@@ -137,7 +140,7 @@ export function Farms() {
       // Get VIC credentials from organization's farm
       const { data: orgFarm, error: orgError } = await supabase
         .from('farms')
-        .select('vic_username, vic_password_encrypted')
+        .select('id, name, vic_username, vic_password_encrypted')
         .eq('client_id', clientId)
         .not('vic_username', 'is', null)
         .not('vic_password_encrypted', 'is', null)
@@ -145,7 +148,12 @@ export function Farms() {
         .single();
 
       if (orgError || !orgFarm?.vic_username || !orgFarm?.vic_password_encrypted) {
-        throw new Error('VIC prisijungimo duomenys nerasti. Užpildykite juos registracijos metu.');
+        throw new Error('VIC prisijungimo duomenys nerasti. Užpildykite juos registracijos metu arba organizacijos nustatymuose.');
+      }
+
+      // Show warning if VIC password looks like it might be wrong
+      if (orgFarm.vic_password_encrypted === 'veterinaras') {
+        throw new Error('VIC slaptažodis yra neteisingas. Prašome atnaujinti VIC prisijungimo duomenis organizacijos nustatymuose (Profilio mygtukas viršutinėje dešinėje).');
       }
 
       const webhookUrl = 'https://n8n-up8s.onrender.com/webhook/1eef952b-45de-4b61-b608-61960363853e';
