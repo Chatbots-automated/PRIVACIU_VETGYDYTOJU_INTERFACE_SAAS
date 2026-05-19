@@ -22,6 +22,7 @@ export function Vaccinations() {
   const [products, setProducts] = useState<Product[]>([]);
   const [animals, setAnimals] = useState<Animal[]>([]);
   const [batches, setBatches] = useState<Batch[]>([]);
+  const [stockFilter, setStockFilter] = useState<'all' | 'farm' | 'warehouse'>('all'); // Filter for stock source
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAnimals, setSelectedAnimals] = useState<Set<string>>(new Set());
@@ -88,17 +89,27 @@ export function Vaccinations() {
 
       const clientId = requireClientId(user);
       
-      const [vacsRes, prodsRes, animalsRes, batchesRes] = await Promise.all([
+      const [vacsRes, prodsRes, animalsRes, farmBatchesRes, warehouseBatchesRes] = await Promise.all([
         supabase.from('vaccinations').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('vaccination_date', { ascending: false }),
         supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true).in('category', ['prevention', 'vakcina']).order('name'),
         supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).eq('active', true).order('tag_no'),
+        // Farm-specific batches
         supabase.from('batches').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('expiry_date', { ascending: false }),
+        // Warehouse batches (client-wide, available to all farms)
+        supabase.from('warehouse_batches').select('*').eq('client_id', clientId).is('farm_id', null).order('expiry_date', { ascending: false }),
       ]);
 
       setVaccinations(vacsRes.data || []);
       setProducts(prodsRes.data || []);
       setAnimals(animalsRes.data || []);
-      setBatches(batchesRes.data || []);
+      
+      // Combine farm batches and warehouse batches
+      // Add a source indicator so we know which table to update when stock is used
+      const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({ ...b, source: 'farm' }));
+      const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({ ...b, source: 'warehouse' }));
+      const allBatches = [...farmBatches, ...warehouseBatches];
+      
+      setBatches(allBatches);
     } catch (error) {
       console.error('Error:', error);
     } finally {
@@ -110,7 +121,10 @@ export function Vaccinations() {
     try {
       if (!selectedFarm) return '';
 
-      const { data, error } = await supabase
+      const clientId = requireClientId(user);
+
+      // Check farm-specific batches first
+      const { data: farmBatches, error: farmError } = await supabase
         .from('batches')
         .select('id, qty_left, expiry_date')
         .eq('farm_id', selectedFarm.id)
@@ -118,17 +132,36 @@ export function Vaccinations() {
         .gt('qty_left', 0)
         .order('expiry_date', { ascending: true });
 
-      if (error) {
-        console.error('Error fetching batch stock:', error);
-        return '';
-      }
+      if (farmError) console.error('Error fetching farm batches:', farmError);
 
-      if (data && data.length > 0) {
+      // Check warehouse batches (client-wide)
+      const { data: warehouseBatches, error: warehouseError } = await supabase
+        .from('warehouse_batches')
+        .select('id, qty_left, expiry_date')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .eq('product_id', productId)
+        .gt('qty_left', 0)
+        .order('expiry_date', { ascending: true });
+
+      if (warehouseError) console.error('Error fetching warehouse batches:', warehouseError);
+
+      // Combine and sort all available batches by expiry date
+      const allBatches = [
+        ...(farmBatches || []).map((b: any) => ({ ...b, source: 'farm' })),
+        ...(warehouseBatches || []).map((b: any) => ({ ...b, source: 'warehouse' })),
+      ].sort((a, b) => {
+        if (!a.expiry_date) return 1;
+        if (!b.expiry_date) return -1;
+        return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+      });
+
+      if (allBatches.length > 0) {
         // Filter out expired batches
         const today = new Date();
         today.setHours(0, 0, 0, 0);
 
-        const validBatch = data.find(batch => {
+        const validBatch = allBatches.find(batch => {
           if (!batch.expiry_date) return true;
           const expiryDate = new Date(batch.expiry_date);
           return expiryDate >= today;
@@ -160,6 +193,33 @@ export function Vaccinations() {
     } else {
       setSelectedAnimals(new Set(filteredAnimals.map(a => a.id)));
     }
+  };
+
+  const getFilteredBatches = (productId: string) => {
+    const productBatches = batches.filter(b => b.product_id === productId);
+    
+    if (stockFilter === 'farm') {
+      return productBatches.filter(b => b.source === 'farm');
+    } else if (stockFilter === 'warehouse') {
+      return productBatches.filter(b => b.source === 'warehouse');
+    }
+    
+    return productBatches; // 'all' - show both
+  };
+
+  const getAvailableProducts = () => {
+    if (stockFilter === 'all') {
+      return products; // Show all products
+    }
+    
+    // Filter products that have stock in the selected source
+    const productIdsWithStock = new Set(
+      batches
+        .filter(b => b.source === stockFilter && b.qty_left > 0)
+        .map(b => b.product_id)
+    );
+    
+    return products.filter(p => productIdsWithStock.has(p.id));
   };
 
   const handleMassVaccinate = async () => {
@@ -194,12 +254,18 @@ export function Vaccinations() {
       const clientId = requireClientId(user);
       
       for (const vaccine of validVaccines) {
+        // Find the batch to determine if it's from warehouse or farm
+        const batch = batches.find(b => b.id === vaccine.batch_id);
+        const isWarehouseBatch = batch?.source === 'warehouse';
+        
         const vaccinationEntries = Array.from(selectedAnimals).map(animalId => ({
           client_id: clientId,
           farm_id: selectedFarm.id,
           animal_id: animalId,
           product_id: vaccine.product_id,
-          batch_id: vaccine.batch_id || null,
+          // Use warehouse_batch_id if from warehouse, otherwise use batch_id
+          batch_id: isWarehouseBatch ? null : (vaccine.batch_id || null),
+          warehouse_batch_id: isWarehouseBatch ? vaccine.batch_id : null,
           vaccination_date: massVaccinationData.vaccination_date,
           next_booster_date: massVaccinationData.next_booster_date || null,
           dose_number: parseInt(massVaccinationData.dose_number),
@@ -431,7 +497,25 @@ export function Vaccinations() {
 
           <div className="mb-6">
             <div className="flex items-center justify-between mb-3">
-              <label className="block text-sm font-bold text-gray-900">Vakcinos / prevencija</label>
+              <div className="flex items-center gap-4">
+                <label className="block text-sm font-bold text-gray-900">Vakcinos / prevencija</label>
+                <div className="flex items-center gap-2">
+                  <label className="text-xs font-medium text-gray-700">Atsargų šaltinis:</label>
+                  <select
+                    value={stockFilter}
+                    onChange={(e) => {
+                      setStockFilter(e.target.value as 'all' | 'farm' | 'warehouse');
+                      // Clear vaccine selections when filter changes
+                      setMassVaccines(massVaccines.map(v => ({ ...v, product_id: '', batch_id: '' })));
+                    }}
+                    className="px-2 py-1 text-xs border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">Visos</option>
+                    <option value="farm">Ūkio</option>
+                    <option value="warehouse">Sandėlio</option>
+                  </select>
+                </div>
+              </div>
               <button
                 type="button"
                 onClick={() => setMassVaccines([...massVaccines, { product_id: '', batch_id: '', dose_amount: '', unit: 'ml' }])}
@@ -468,7 +552,7 @@ export function Vaccinations() {
                         className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                       >
                         <option value="">Pasirinkite vakciną</option>
-                        {products.map(p => (
+                        {getAvailableProducts().map(p => (
                           <option key={p.id} value={p.id}>{p.name}</option>
                         ))}
                       </select>
@@ -489,11 +573,14 @@ export function Vaccinations() {
                           className="w-full px-2 py-1.5 border border-gray-300 rounded text-xs focus:ring-2 focus:ring-blue-500"
                         >
                           <option value="">Pasirinkite partiją</option>
-                          {batches.filter(b => b.product_id === vaccine.product_id).map(b => (
-                            <option key={b.id} value={b.id}>
-                              {b.lot || b.serial_number || b.id.slice(0, 8)} · Exp: {b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('lt') : 'N/A'} · Likutis: {b.qty_left?.toFixed(2) || '0'}
-                            </option>
-                          ))}
+                          {getFilteredBatches(vaccine.product_id).map(b => {
+                            const sourceLabel = b.source === 'warehouse' ? '[Sandėlis] ' : '[Ūkis] ';
+                            return (
+                              <option key={b.id} value={b.id}>
+                                {sourceLabel}{b.lot || b.serial_number || b.id.slice(0, 8)} · Exp: {b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('lt') : 'N/A'} · Likutis: {b.qty_left?.toFixed(2) || '0'}
+                              </option>
+                            );
+                          })}
                         </select>
                       </div>
                     )}

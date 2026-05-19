@@ -1,14 +1,12 @@
 import { useState } from 'react';
 import { WarehouseStock } from './WarehouseStock';
 import { WarehouseInventory } from './WarehouseInventory';
-import { StockAllocation } from './StockAllocation';
 import { AllFarmsReports } from './AllFarmsReports';
 import { AllocationAnalytics } from './AllocationAnalytics';
 import { Products } from './Products';
 import { FinancesModule } from './FinancesModule';
 import { 
   Package, 
-  ArrowRight, 
   FileText, 
   BarChart3, 
   Grid3x3, 
@@ -29,7 +27,6 @@ interface VetpraktikaModuleProps {
 const menuItems = [
   { id: 'warehouse-inventory', label: 'Sandėlio Atsargos', icon: Package },
   { id: 'receive-stock', label: 'Pajamavimas', icon: Warehouse },
-  { id: 'allocate-stock', label: 'Paskirstymas', icon: ArrowRight },
   { id: 'products', label: 'Produktai', icon: Pill },
   { id: 'finances', label: 'Finansai', icon: Receipt },
   { id: 'reports', label: 'Bendros Ataskaitos', icon: FileText },
@@ -55,8 +52,6 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
         return <WarehouseInventory />;
       case 'receive-stock':
         return <WarehouseStock />;
-      case 'allocate-stock':
-        return <StockAllocation />;
       case 'products':
         return <Products showAllFarms={true} />;
       case 'finances':

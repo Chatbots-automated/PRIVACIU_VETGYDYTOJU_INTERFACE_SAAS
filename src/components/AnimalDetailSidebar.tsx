@@ -259,44 +259,56 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
 
   const loadProducts = async () => {
     if (!selectedFarm) return;
-    
-    // Get products that have batches with stock at this farm
-    // Use the product_id from batches (which may be warehouse products)
-    // This ensures dropdown shows products that actually have stock
-    const { data: batchesData, error: batchError } = await supabase
-      .from('batches')
-      .select('product_id')
-      .eq('farm_id', selectedFarm.id)
-      .gt('qty_left', 0);
-    
-    if (batchError) {
-      console.error('Error loading batches:', batchError);
+
+    const clientId = requireClientId(user);
+
+    // Get products from both farm batches and warehouse batches
+    const [farmBatchesData, warehouseBatchesData] = await Promise.all([
+      supabase
+        .from('batches')
+        .select('product_id')
+        .eq('farm_id', selectedFarm.id)
+        .gt('qty_left', 0),
+      supabase
+        .from('warehouse_batches')
+        .select('product_id')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .gt('qty_left', 0)
+    ]);
+
+    if (farmBatchesData.error) {
+      console.error('Error loading farm batches:', farmBatchesData.error);
       return;
     }
-    
-    // Get unique product IDs that have stock
-    const productIds = [...new Set((batchesData || []).map((b: any) => b.product_id))];
-    
+
+    if (warehouseBatchesData.error) {
+      console.error('Error loading warehouse batches:', warehouseBatchesData.error);
+    }
+
+    // Get unique product IDs that have stock from both sources
+    const farmProductIds = (farmBatchesData.data || []).map((b: any) => b.product_id);
+    const warehouseProductIds = (warehouseBatchesData.data || []).map((b: any) => b.product_id);
+    const productIds = [...new Set([...farmProductIds, ...warehouseProductIds])];
+
     if (productIds.length === 0) {
       setProducts([]);
       return;
     }
-    
+
     // Load full product details for these IDs
-    // Don't filter by is_active here since batches might reference inactive products
     const { data: productsData, error: productsError } = await supabase
       .from('products')
       .select('*')
       .in('id', productIds);
-    
+
     if (productsError) {
       console.error('Error loading products:', productsError);
       return;
     }
-    
-    console.log('📦 Products with stock at farm:', productsData?.length || 0, productsData);
-    console.log('📦 Product IDs from batches:', productIds);
-    
+
+    console.log('📦 Products with stock (farm + warehouse):', productsData?.length || 0);
+
     // Sort by Lithuanian alphabet and set as available products
     const sortedData = sortByLithuanian(productsData || [], 'name');
     setProducts(sortedData);
@@ -305,17 +317,51 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
   const loadBatches = async () => {
     if (!selectedFarm) return;
 
-    const { data, error } = await supabase
-      .from('batches')
-      .select('*')
-      .eq('farm_id', selectedFarm.id)
-      .order('expiry_date');
+    const clientId = requireClientId(user);
 
-    if (!error && data) {
-      console.log('📦 Loaded batches:', data.length);
-      setBatches(data);
-    } else if (error) {
-      console.error('Error loading batches:', error);
+    const [farmBatchesRes, warehouseBatchesRes] = await Promise.all([
+      supabase
+        .from('batches')
+        .select('*')
+        .eq('farm_id', selectedFarm.id)
+        .order('expiry_date'),
+      supabase
+        .from('warehouse_batches')
+        .select('*')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .order('expiry_date')
+    ]);
+
+    const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({ ...b, source: 'farm' }));
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({ 
+      ...b, 
+      id: b.id,
+      source: 'warehouse' 
+    }));
+
+    const allBatches = [...farmBatches, ...warehouseBatches];
+    
+    console.log('📦 Loaded batches:', {
+      farm: farmBatches.length,
+      warehouse: warehouseBatches.length,
+      total: allBatches.length
+    });
+    console.log('📦 Warehouse batches detail:', warehouseBatches.map(b => ({
+      id: b.id,
+      product_id: b.product_id,
+      source: b.source,
+      qty_left: b.qty_left,
+      lot: b.lot
+    })));
+    
+    setBatches(allBatches);
+
+    if (farmBatchesRes.error) {
+      console.error('Error loading farm batches:', farmBatchesRes.error);
+    }
+    if (warehouseBatchesRes.error) {
+      console.error('Error loading warehouse batches:', warehouseBatchesRes.error);
     }
   };
 
@@ -1875,7 +1921,23 @@ function VisitCard({ visit, getStatusColor, getStatusIcon, onClick }: { visit: A
   );
 }
 
-function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, visitToEdit, onPricingModalDataReady }: { animalId: string; animalName?: string; animal?: Animal; onClose: () => void; onSuccess: () => void; visitToEdit?: AnimalVisit; onPricingModalDataReady?: (data: any) => void }) {
+function VisitCreateModal({ 
+  animalId, 
+  animalName, 
+  animal, 
+  onClose, 
+  onSuccess, 
+  visitToEdit, 
+  onPricingModalDataReady 
+}: { 
+  animalId: string; 
+  animalName?: string; 
+  animal?: Animal; 
+  onClose: () => void; 
+  onSuccess: () => void; 
+  visitToEdit?: AnimalVisit; 
+  onPricingModalDataReady?: (data: any) => void;
+}) {
   const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const modalContentRef = useRef<HTMLDivElement>(null);
@@ -1940,6 +2002,7 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
       course_days: string;
       teat: string;
       administration_route?: string;
+      stockFilter?: 'all' | 'farm' | 'warehouse'; // Per-medication stock filter
     }>,
     courseMedicationSchedule: null as any,
   });
@@ -2322,31 +2385,58 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
     }
   };
 
+  const calculateBatchUnitCost = (batch: any): number => {
+    if (!batch || !batch.purchase_price) return 0;
+    
+    // Warehouse batches use 'received_qty', farm batches use 'qty_received'
+    const qtyReceived = batch.source === 'warehouse' 
+      ? batch.received_qty 
+      : batch.qty_received;
+    
+    if (!qtyReceived || qtyReceived <= 0) return 0;
+    
+    return batch.purchase_price / qtyReceived;
+  };
+
   const loadResources = async () => {
     if (!selectedFarm) return;
 
-    const [diseasesRes, batchesRes, usersRes, hoofConditionsRes] = await Promise.all([
+    const clientId = requireClientId(user);
+
+    const [diseasesRes, farmBatchesRes, warehouseBatchesRes, usersRes, hoofConditionsRes] = await Promise.all([
       supabase.from('diseases').select('*').eq('farm_id', selectedFarm.id).order('name'),
       supabase.from('batches').select('*').eq('farm_id', selectedFarm.id).order('expiry_date'),
+      supabase.from('warehouse_batches').select('*').eq('client_id', clientId).is('farm_id', null).order('expiry_date'),
       supabase.from('users').select('id, full_name, email').eq('role', 'vet').order('full_name'),
       supabase.from('hoof_condition_codes').select('*').order('code'),
     ]);
 
     if (diseasesRes.data) setDiseases(diseasesRes.data);
-    if (batchesRes.data) setBatches(batchesRes.data);
     if (usersRes.data) setUsers(usersRes.data);
     if (hoofConditionsRes.data) setHoofConditions(hoofConditionsRes.data);
 
-    // Load products that have stock at this farm (from batches)
-    // This ensures we show warehouse products that are allocated to this farm
-    if (batchesRes.data && batchesRes.data.length > 0) {
-      const productIds = [...new Set(batchesRes.data.map((b: any) => b.product_id))];
-      
+    // Combine farm batches and warehouse batches with source labels
+    const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({ ...b, source: 'farm' }));
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({ ...b, source: 'warehouse' }));
+    const allBatches = [...farmBatches, ...warehouseBatches];
+
+    console.log('📦 VisitModal loaded batches:', {
+      farm: farmBatches.length,
+      warehouse: warehouseBatches.length,
+      total: allBatches.length
+    });
+
+    setBatches(allBatches);
+
+    // Load products that have stock at this farm or in warehouse
+    if (allBatches.length > 0) {
+      const productIds = [...new Set(allBatches.map((b: any) => b.product_id))];
+
       const { data: productsData, error: productsError } = await supabase
         .from('products')
         .select('*')
         .in('id', productIds);
-      
+
       if (!productsError && productsData) {
         console.log('📦 VisitModal loaded products:', productsData.length, productsData.map(p => ({ name: p.name, category: p.category })));
         setProducts(productsData);
@@ -2396,134 +2486,121 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
     }
   };
 
-  const fetchStockLevel = async (productId: string) => {
+  const fetchStockLevel = async (productId: string, stockFilter: 'all' | 'farm' | 'warehouse' = 'all') => {
     if (!selectedFarm) return 0;
 
-    const { data: batchesData, error } = await supabase
-      .from('batches')
-      .select('id, qty_received, qty_left, expiry_date')
-      .eq('product_id', productId)
-      .eq('farm_id', selectedFarm.id);
+    const clientId = requireClientId(user);
 
-    if (error) {
-      console.error('Error fetching stock level:', error);
-      return 0;
-    }
-    
-    // If no batches found, try to find by product name (handles product_id mismatch)
-    if (!batchesData || batchesData.length === 0) {
-      const { data: productData } = await supabase
-        .from('products')
-        .select('name')
-        .eq('id', productId)
-        .single();
-      
-      if (productData) {
-        const { data: batchesByName } = await supabase
-          .from('batches')
-          .select('id, qty_received, qty_left, expiry_date, products!inner(name)')
-          .eq('farm_id', selectedFarm.id)
-          .eq('products.name', productData.name);
-        
-        if (batchesByName && batchesByName.length > 0) {
-          console.log(`📊 Found stock by product name "${productData.name}":`, batchesByName);
-          const total = batchesByName
-            .filter(b => !b.expiry_date || new Date(b.expiry_date) >= new Date())
-            .reduce((sum, batch) => sum + (batch.qty_left || 0), 0);
-          return total;
-        }
+    let farmTotal = 0;
+    let warehouseTotal = 0;
+
+    console.log(`📊 Fetching stock level for ${productId} with filter: ${stockFilter}`);
+
+    // Fetch farm batches if needed
+    if (stockFilter === 'all' || stockFilter === 'farm') {
+      const { data: farmBatchesData, error: farmError } = await supabase
+        .from('batches')
+        .select('id, qty_left, expiry_date')
+        .eq('product_id', productId)
+        .eq('farm_id', selectedFarm.id);
+
+      console.log(`📊 Farm batches data:`, farmBatchesData);
+
+      if (!farmError && farmBatchesData) {
+        const today = new Date();
+        farmTotal = farmBatchesData
+          .filter((b: any) => !b.expiry_date || new Date(b.expiry_date) >= today)
+          .reduce((sum: number, b: any) => sum + (b.qty_left || 0), 0);
+      } else if (farmError) {
+        console.error('📊 Farm batches error:', farmError);
       }
-      return 0;
     }
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    // Fetch warehouse batches if needed
+    if (stockFilter === 'all' || stockFilter === 'warehouse') {
+      const { data: warehouseBatchesData, error: warehouseError } = await supabase
+        .from('warehouse_batches')
+        .select('id, qty_left, expiry_date')
+        .eq('product_id', productId)
+        .eq('client_id', clientId)
+        .is('farm_id', null);
 
-    // Filter out expired batches
-    const validBatches = batchesData.filter(batch => {
-      if (!batch.expiry_date) return true;
-      const expiryDate = new Date(batch.expiry_date);
-      return expiryDate >= today;
-    });
+      console.log(`📊 Warehouse batches data:`, warehouseBatchesData);
 
-    // Use qty_left from batches (maintained by database triggers) as the source of truth
-    const total = validBatches.reduce((sum, batch) => sum + (batch.qty_left || 0), 0);
+      if (!warehouseError && warehouseBatchesData) {
+        const today = new Date();
+        warehouseTotal = warehouseBatchesData
+          .filter((b: any) => !b.expiry_date || new Date(b.expiry_date) >= today)
+          .reduce((sum: number, b: any) => sum + (b.qty_left || 0), 0);
+      } else if (warehouseError) {
+        console.error('📊 Warehouse batches error:', warehouseError);
+      }
+    }
+
+    const total = farmTotal + warehouseTotal;
+    console.log(`📊 Stock level for ${productId} (filter: ${stockFilter}):`, { farm: farmTotal, warehouse: warehouseTotal, total });
 
     setStockLevels(prev => ({ ...prev, [productId]: total }));
     return total;
   };
 
-  const getOldestBatchWithStock = async (productId: string): Promise<string> => {
+  const getOldestBatchWithStock = async (productId: string, stockFilter: 'all' | 'farm' | 'warehouse' = 'all'): Promise<string> => {
     try {
       if (!selectedFarm) return '';
-      
-      // First, check if this product exists for this farm
-      const { data: productCheck } = await supabase
-        .from('products')
-        .select('id, name, farm_id')
-        .eq('id', productId)
-        .single();
-      
-      console.log(`🔍 Product check for ${productId}:`, productCheck);
-      
-      const { data: batchesData, error } = await supabase
-        .from('batches')
-        .select('id, qty_left, expiry_date, lot, product_id')
-        .eq('product_id', productId)
-        .eq('farm_id', selectedFarm.id)
-        .order('expiry_date', { ascending: true });
 
-      console.log(`🔍 Batches for product ${productId} at farm ${selectedFarm.id}:`, batchesData?.length || 0, batchesData);
-      
-      // Also check if there are batches with different product_id but same name
-      if (!batchesData || batchesData.length === 0) {
-        const { data: allFarmBatches } = await supabase
+      const clientId = requireClientId(user);
+      const today = new Date();
+      let allBatches: any[] = [];
+
+      // Fetch farm batches if needed
+      if (stockFilter === 'all' || stockFilter === 'farm') {
+        const { data: farmBatchesData } = await supabase
           .from('batches')
-          .select('id, product_id, qty_left, lot, expiry_date, products(name, farm_id)')
+          .select('id, qty_left, expiry_date, lot, product_id')
+          .eq('product_id', productId)
           .eq('farm_id', selectedFarm.id)
-          .gt('qty_left', 0);
-        
-        console.log(`📋 All farm batches with stock:`, allFarmBatches?.length || 0, allFarmBatches);
-        
-        // Try to find a batch with matching product name
-        if (productCheck && allFarmBatches) {
-          const matchingBatch = allFarmBatches.find((b: any) => 
-            b.products?.name?.toLowerCase() === productCheck.name?.toLowerCase()
-          );
-          
-          if (matchingBatch) {
-            console.log(`✅ Found matching batch by name:`, matchingBatch);
-            return matchingBatch.id;
-          }
+          .gt('qty_left', 0)
+          .order('expiry_date', { ascending: true });
+
+        if (farmBatchesData) {
+          allBatches.push(...farmBatchesData.map((b: any) => ({ ...b, source: 'farm' })));
         }
       }
 
-      if (error) {
-        console.error('Error fetching batch stock:', error);
+      // Fetch warehouse batches if needed
+      if (stockFilter === 'all' || stockFilter === 'warehouse') {
+        const { data: warehouseBatchesData } = await supabase
+          .from('warehouse_batches')
+          .select('id, qty_left, expiry_date, lot, product_id')
+          .eq('product_id', productId)
+          .eq('client_id', clientId)
+          .is('farm_id', null)
+          .gt('qty_left', 0)
+          .order('expiry_date', { ascending: true });
+
+        if (warehouseBatchesData) {
+          allBatches.push(...warehouseBatchesData.map((b: any) => ({ ...b, source: 'warehouse' })));
+        }
+      }
+
+      console.log(`🔍 Batches for product ${productId} (filter: ${stockFilter}):`, allBatches.length, allBatches);
+
+      if (allBatches.length === 0) {
         return '';
       }
 
-      if (batchesData && batchesData.length > 0) {
-        // Filter out expired batches
-        const today = new Date();
-        today.setHours(0, 0, 0, 0);
+      // Filter out expired batches and sort by expiry date
+      const validBatches = allBatches
+        .filter(batch => !batch.expiry_date || new Date(batch.expiry_date) >= today)
+        .sort((a, b) => {
+          if (!a.expiry_date) return 1;
+          if (!b.expiry_date) return -1;
+          return new Date(a.expiry_date).getTime() - new Date(b.expiry_date).getTime();
+        });
 
-        // Check each batch for actual stock using qty_left (maintained by triggers)
-        for (const batch of batchesData) {
-          // Skip expired batches
-          if (batch.expiry_date) {
-            const expiryDate = new Date(batch.expiry_date);
-            if (expiryDate < today) continue;
-          }
-
-          // Use qty_left from database as source of truth
-          const availableStock = batch.qty_left || 0;
-
-          // Return first batch with stock > 0
-          if (availableStock > 0) {
-            return batch.id;
-          }
-        }
+      if (validBatches.length > 0) {
+        console.log(`✅ Selected oldest batch with stock:`, validBatches[0]);
+        return validBatches[0].id;
       }
 
       return '';
@@ -2952,19 +3029,33 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                 unit: med.unit
               });
 
+              // Determine if this batch is from warehouse or farm
+              const batch = batches.find(b => b.id === med.batch_id);
+              const isWarehouseBatch = batch?.source === 'warehouse';
+
+              const usageItemData: any = {
+                client_id: clientId,
+                farm_id: selectedFarm!.id,
+                treatment_id: treatmentRecord.id,
+                product_id: med.product_id,
+                quantity: parseFloat(med.qty),
+                unit: med.unit,
+                administered_date: formData.visit_datetime.split('T')[0],
+                administration_route: med.administration_route || null,
+              };
+
+              // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+              if (isWarehouseBatch) {
+                usageItemData.warehouse_batch_id = med.batch_id;
+              } else {
+                usageItemData.batch_id = med.batch_id;
+              }
+
+              console.log('📦 Usage item data:', { ...usageItemData, isWarehouseBatch });
+
               const { error: usageError } = await supabase
                 .from('usage_items')
-                .insert({
-                  client_id: clientId,
-                  farm_id: selectedFarm!.id,
-                  treatment_id: treatmentRecord.id,
-                  product_id: med.product_id,
-                  batch_id: med.batch_id,
-                  quantity: parseFloat(med.qty),
-                  unit: med.unit,
-                  administered_date: formData.visit_datetime.split('T')[0],
-                  administration_route: med.administration_route || null,
-                });
+                .insert(usageItemData);
 
               if (usageError) {
                 console.error('❌ Error creating usage_item:', usageError);
@@ -3091,18 +3182,32 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
 
                 for (const med of todaySchedule.medications) {
                   if (med.batch_id && med.qty) {
+                    // Determine if this batch is from warehouse or farm
+                    const batch = batches.find(b => b.id === med.batch_id);
+                    const isWarehouseBatch = batch?.source === 'warehouse';
+
+                    const usageItemData: any = {
+                      client_id: clientId,
+                      farm_id: selectedFarm!.id,
+                      treatment_id: treatmentRecord.id,
+                      product_id: med.product_id,
+                      quantity: parseFloat(med.qty),
+                      unit: med.unit,
+                      administered_date: todayDate,
+                    };
+
+                    // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+                    if (isWarehouseBatch) {
+                      usageItemData.warehouse_batch_id = med.batch_id;
+                    } else {
+                      usageItemData.batch_id = med.batch_id;
+                    }
+
+                    console.log('📦 Course usage item data:', { ...usageItemData, isWarehouseBatch });
+
                     const { error: usageError } = await supabase
                       .from('usage_items')
-                      .insert({
-                        client_id: clientId,
-                        farm_id: selectedFarm!.id,
-                        treatment_id: treatmentRecord.id,
-                        product_id: med.product_id,
-                        batch_id: med.batch_id,
-                        quantity: parseFloat(med.qty),
-                        unit: med.unit,
-                        administered_date: todayDate,
-                      });
+                      .insert(usageItemData);
 
                     if (usageError) {
                       console.error('❌ Error creating usage_item for today:', usageError);
@@ -3322,22 +3427,34 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
             throw new Error('Visi vakcinacijos laukai privalomi: produktas, serija ir dozė');
           }
 
+          // Determine if this batch is from warehouse or farm
+          const batch = batches.find(b => b.id === vaccine.batch_id);
+          const isWarehouseBatch = batch?.source === 'warehouse';
+
+          const vaccinationInsertData: any = {
+            client_id: clientId,
+            farm_id: selectedFarm!.id,
+            animal_id: animalId,
+            product_id: vaccine.product_id,
+            vaccination_date: formData.visit_datetime.split('T')[0],
+            dose_amount: parseFloat(vaccine.dose_amount),
+            dose_number: parseInt(vaccine.dose_number),
+            unit: vaccine.unit,
+            next_booster_date: vaccine.next_booster_date ? vaccine.next_booster_date : null,
+            administered_by: vaccinationData.administered_by ? vaccinationData.administered_by : formData.vet_name,
+            notes: vaccinationData.notes ? vaccinationData.notes : null,
+          };
+
+          // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+          if (isWarehouseBatch) {
+            vaccinationInsertData.warehouse_batch_id = vaccine.batch_id;
+          } else {
+            vaccinationInsertData.batch_id = vaccine.batch_id;
+          }
+
           const { data: vaccinationRecord, error: vaccinationError } = await supabase
             .from('vaccinations')
-            .insert({
-              client_id: clientId,
-              farm_id: selectedFarm!.id,
-              animal_id: animalId,
-              product_id: vaccine.product_id,
-              batch_id: vaccine.batch_id,
-              vaccination_date: formData.visit_datetime.split('T')[0],
-              dose_amount: parseFloat(vaccine.dose_amount),
-              dose_number: parseInt(vaccine.dose_number),
-              unit: vaccine.unit,
-              next_booster_date: vaccine.next_booster_date ? vaccine.next_booster_date : null,
-              administered_by: vaccinationData.administered_by ? vaccinationData.administered_by : formData.vet_name,
-              notes: vaccinationData.notes ? vaccinationData.notes : null,
-            })
+            .insert(vaccinationInsertData)
             .select()
             .single();
 
@@ -3362,19 +3479,31 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
 
             // For TODAY'S visit: Only create biocide_usage if status is "Baigtas"
             if (formData.status === 'Baigtas' || autoComplete) {
+              // Determine if this batch is from warehouse or farm
+              const batch = batches.find(b => b.id === product.batch_id);
+              const isWarehouseBatch = batch?.source === 'warehouse';
+
+              const preventionInsertData: any = {
+                client_id: clientId,
+                farm_id: selectedFarm!.id,
+                product_id: product.product_id,
+                usage_date: formData.visit_datetime.split('T')[0],
+                area_treated: `Gyvūnas: ${animalId}`,
+                quantity_used: dailyDose,
+                unit: product.dose_unit,
+                applied_by: formData.vet_name ? formData.vet_name : null,
+              };
+
+              // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+              if (isWarehouseBatch) {
+                preventionInsertData.warehouse_batch_id = product.batch_id;
+              } else {
+                preventionInsertData.batch_id = product.batch_id;
+              }
+
               const { data: preventionRecord, error: preventionError } = await supabase
                 .from('biocide_usage')
-                .insert({
-                  client_id: clientId,
-                  farm_id: selectedFarm!.id,
-                  product_id: product.product_id,
-                  batch_id: product.batch_id,
-                  usage_date: formData.visit_datetime.split('T')[0],
-                  area_treated: `Gyvūnas: ${animalId}`,
-                  quantity_used: dailyDose,
-                  unit: product.dose_unit,
-                  applied_by: formData.vet_name ? formData.vet_name : null,
-                })
+                .insert(preventionInsertData)
                 .select()
                 .single();
 
@@ -3384,19 +3513,31 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
           } else {
             // Single dose - only create if visit is completed
             if (formData.status === 'Baigtas' || autoComplete) {
+              // Determine if this batch is from warehouse or farm
+              const batch = batches.find(b => b.id === product.batch_id);
+              const isWarehouseBatch = batch?.source === 'warehouse';
+
+              const preventionInsertData: any = {
+                client_id: clientId,
+                farm_id: selectedFarm!.id,
+                product_id: product.product_id,
+                usage_date: formData.visit_datetime.split('T')[0],
+                area_treated: `Gyvūnas: ${animalId}`,
+                quantity_used: parseFloat(product.dose_qty),
+                unit: product.dose_unit,
+                applied_by: formData.vet_name ? formData.vet_name : null,
+              };
+
+              // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+              if (isWarehouseBatch) {
+                preventionInsertData.warehouse_batch_id = product.batch_id;
+              } else {
+                preventionInsertData.batch_id = product.batch_id;
+              }
+
               const { data: preventionRecord, error: preventionError } = await supabase
                 .from('biocide_usage')
-                .insert({
-                  client_id: clientId,
-                  farm_id: selectedFarm!.id,
-                  product_id: product.product_id,
-                  batch_id: product.batch_id,
-                  usage_date: formData.visit_datetime.split('T')[0],
-                  area_treated: `Gyvūnas: ${animalId}`,
-                  quantity_used: parseFloat(product.dose_qty),
-                  unit: product.dose_unit,
-                  applied_by: formData.vet_name ? formData.vet_name : null,
-                })
+                .insert(preventionInsertData)
                 .select()
                 .single();
 
@@ -3703,13 +3844,12 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
           
           if (product) {
             // Calculate unit cost from batch
-            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
-              ? batch.purchase_price / batch.qty_received 
-              : 0;
+            const batchUnitCost = calculateBatchUnitCost(batch);
             
             console.log('💰 Unit cost calculation:', {
               purchase_price: batch?.purchase_price,
-              qty_received: batch?.qty_received,
+              qty_received: batch?.qty_received || batch?.received_qty,
+              source: batch?.source,
               calculated_unit_cost: batchUnitCost
             });
             
@@ -3737,9 +3877,7 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
               const batch = batches.find(b => b.id === med.batch_id);
 
               if (product && med.batch_id && med.qty) {
-                const batchUnitCost = batch && batch.purchase_price && batch.qty_received
-                  ? batch.purchase_price / batch.qty_received
-                  : 0;
+                const batchUnitCost = calculateBatchUnitCost(batch);
 
                 productsUsed.push({
                   product_id: med.product_id,
@@ -3772,10 +3910,8 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
           
           if (product) {
             // Calculate unit cost from batch
-            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
-              ? batch.purchase_price / batch.qty_received 
-              : 0;
-            
+            const batchUnitCost = calculateBatchUnitCost(batch);
+
             productsUsed.push({
               product_id: vac.product_id,
               product_name: product.name,
@@ -3791,10 +3927,8 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
           const batch = batches.find(b => b.id === prev.batch_id);
           if (product) {
             // Calculate unit cost from batch
-            const batchUnitCost = batch && batch.purchase_price && batch.qty_received 
-              ? batch.purchase_price / batch.qty_received 
-              : 0;
-            
+            const batchUnitCost = calculateBatchUnitCost(batch);
+
             productsUsed.push({
               product_id: prev.product_id,
               product_name: product.name,
@@ -4103,14 +4237,78 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                   {treatmentData.medications.map((med, idx) => {
                     const selectedProduct = products.find(p => p.id === med.product_id);
                     const stockLevel = med.product_id ? stockLevels[med.product_id] : undefined;
-                    const availableBatches = batches.filter(b =>
+                    
+                    // Get the stock filter for this medication
+                    const medStockFilter = med.stockFilter || 'all';
+                    
+                    // Filter products based on stock source
+                    let availableProducts = products.filter(p => 
+                      p.category === 'medicines' || 
+                      p.category === 'treatment_materials' || 
+                      p.category === 'svirkstukai' ||
+                      p.category === 'ovules' ||
+                      p.category === 'bolusas'
+                    );
+                    
+                    if (medStockFilter !== 'all') {
+                      // Only show products that have batches in the selected source
+                      const productIdsWithStock = new Set(
+                        batches
+                          .filter(b => b.source === medStockFilter && (b.qty_left > 0 || b.qty_left === undefined))
+                          .map(b => b.product_id)
+                      );
+                      console.log('📦 Filter applied:', {
+                        filter: medStockFilter,
+                        totalBatches: batches.length,
+                        filteredBatches: batches.filter(b => b.source === medStockFilter).length,
+                        withStock: batches.filter(b => b.source === medStockFilter && (b.qty_left > 0 || b.qty_left === undefined)).length,
+                        productIdsWithStock: Array.from(productIdsWithStock),
+                        availableProductsBefore: availableProducts.length
+                      });
+                      availableProducts = availableProducts.filter(p => productIdsWithStock.has(p.id));
+                      console.log('📦 Available products after filter:', availableProducts.length);
+                    }
+                    
+                    // Filter batches based on product and stock source
+                    let availableBatches = batches.filter(b =>
                       b.product_id === med.product_id &&
                       (!b.expiry_date || new Date(b.expiry_date) >= new Date()) &&
-                      b.qty_left > 0
+                      (b.qty_left > 0 || b.qty_left === undefined)
                     );
+                    
+                    // Apply stock source filter to batches
+                    if (medStockFilter !== 'all') {
+                      availableBatches = availableBatches.filter(b => b.source === medStockFilter);
+                    }
 
                     return (
                       <div key={idx} className="bg-white p-3 rounded-lg border-2 border-gray-300 space-y-2">
+                        {/* Stock Source Filter - FIRST */}
+                        <div className="mb-2">
+                          <label className="block text-xs font-medium text-gray-700 mb-1">Atsargų šaltinis *</label>
+                          <select
+                            value={med.stockFilter || 'all'}
+                            onChange={async (e) => {
+                              const newMeds = [...treatmentData.medications];
+                              const newFilter = e.target.value as 'all' | 'farm' | 'warehouse';
+                              newMeds[idx].stockFilter = newFilter;
+                              newMeds[idx].product_id = ''; // Reset product when filter changes
+                              newMeds[idx].batch_id = ''; // Reset batch when filter changes
+                              setTreatmentData({ ...treatmentData, medications: newMeds });
+                              
+                              // If a product was already selected, refresh its stock level with the new filter
+                              if (med.product_id) {
+                                await fetchStockLevel(med.product_id, newFilter);
+                              }
+                            }}
+                            className="w-full px-2 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option value="all">Visos atsargos (ūkio + sandėlio)</option>
+                            <option value="farm">Ūkio atsargos</option>
+                            <option value="warehouse">Sandėlio atsargos</option>
+                          </select>
+                        </div>
+
                         <div className="grid grid-cols-12 gap-2">
                           <div className="col-span-4">
                             <select
@@ -4122,10 +4320,10 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
 
                                 if (productId) {
                                   const product = products.find(p => p.id === productId);
-                                  const oldestBatchId = await getOldestBatchWithStock(productId);
+                                  const oldestBatchId = await getOldestBatchWithStock(productId, med.stockFilter || 'all');
                                   newMeds[idx].batch_id = oldestBatchId;
                                   newMeds[idx].unit = product?.primary_pack_unit || 'ml';
-                                  fetchStockLevel(productId);
+                                  await fetchStockLevel(productId, med.stockFilter || 'all');
                                 } else {
                                   newMeds[idx].batch_id = '';
                                   newMeds[idx].unit = 'ml';
@@ -4136,13 +4334,7 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                               className="w-full px-2 py-1 border border-gray-300 rounded text-sm"
                             >
                               <option value="">Pasirinkite vaistą</option>
-                              {sortByLithuanian(products.filter(p => 
-                                p.category === 'medicines' || 
-                                p.category === 'treatment_materials' || 
-                                p.category === 'svirkstukai' ||
-                                p.category === 'ovules' ||
-                                p.category === 'bolusas'
-                              ), 'name').map(product => (
+                              {sortByLithuanian(availableProducts, 'name').map(product => (
                                 <option key={product.id} value={product.id}>{product.name}</option>
                               ))}
                             </select>
@@ -4163,11 +4355,18 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                             disabled={!med.product_id}
                           >
                             <option value="">Serija *</option>
-                            {availableBatches.map(b => (
-                              <option key={b.id} value={b.id}>
-                                {b.lot || b.serial_number || b.id.slice(0, 8)} · Exp: {b.expiry_date ? new Date(b.expiry_date).toLocaleDateString('lt') : 'N/A'} · Likutis: {b.qty_left?.toFixed(2) || '0'}
-                              </option>
-                            ))}
+                            {availableBatches.map(b => {
+                              const sourceLabel = b.source === 'warehouse' ? '[Sandėlis] ' : '[Ūkis] ';
+                              const lotLabel = b.lot || b.serial_number || b.id.slice(0, 8);
+                              const expiry = b.expiry_date ? ` · Exp: ${new Date(b.expiry_date).toLocaleDateString('lt')}` : '';
+                              const qty = b.qty_left !== undefined ? ` · Likutis: ${b.qty_left.toFixed(2)}` : '';
+                              
+                              return (
+                                <option key={b.id} value={b.id}>
+                                  {sourceLabel}{lotLabel}{expiry}{qty}
+                                </option>
+                              );
+                            })}
                           </select>
                           <input
                             type="number"
@@ -4276,7 +4475,7 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                     onClick={() => {
                       setTreatmentData({
                         ...treatmentData,
-                        medications: [...treatmentData.medications, { product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'Gydymas', is_course: false, course_days: '1', teat: '', administration_route: '' }]
+                        medications: [...treatmentData.medications, { product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'Gydymas', is_course: false, course_days: '1', teat: '', administration_route: '', stockFilter: 'all' }]
                       });
                     }}
                     className="w-full px-3 py-2 border-2 border-dashed border-blue-300 rounded-lg text-blue-600 hover:bg-blue-50 flex items-center justify-center gap-2 font-medium"
@@ -4483,9 +4682,9 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                           const newVaccines = [...vaccinationData.vaccines];
 
                           if (productId) {
-                            const oldestBatchId = await getOldestBatchWithStock(productId);
+                            const oldestBatchId = await getOldestBatchWithStock(productId, 'all');
                             newVaccines[index] = { ...vaccine, product_id: productId, batch_id: oldestBatchId, unit: unit };
-                            fetchStockLevel(productId);
+                            fetchStockLevel(productId, 'all');
                           } else {
                             newVaccines[index] = { ...vaccine, product_id: '', batch_id: '', unit: 'ml' };
                           }
@@ -4663,9 +4862,9 @@ function VisitCreateModal({ animalId, animalName, animal, onClose, onSuccess, vi
                           const newProducts = [...preventionData.products];
 
                           if (productId) {
-                            const oldestBatchId = await getOldestBatchWithStock(productId);
+                            const oldestBatchId = await getOldestBatchWithStock(productId, 'all');
                             newProducts[index] = { ...product, product_id: productId, batch_id: oldestBatchId, dose_unit: unit };
-                            fetchStockLevel(productId);
+                            fetchStockLevel(productId, 'all');
                           } else {
                             newProducts[index] = { ...product, product_id: '', batch_id: '', dose_unit: 'ml' };
                           }
@@ -5172,22 +5371,44 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
 
     const clientId = requireClientId(user);
 
-    // Load batches first
-    const { data: batchesData, error: batchError } = await supabase
-      .from('batches')
-      .select('*')
-      .eq('farm_id', selectedFarm.id)
-      .order('expiry_date');
+    // Load both farm batches and warehouse batches
+    const [farmBatchesRes, warehouseBatchesRes] = await Promise.all([
+      supabase
+        .from('batches')
+        .select('*')
+        .eq('farm_id', selectedFarm.id)
+        .order('expiry_date'),
+      supabase
+        .from('warehouse_batches')
+        .select('*')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .order('expiry_date')
+    ]);
 
-    if (batchError) {
-      console.error('Error loading batches:', batchError);
-      return;
+    if (farmBatchesRes.error) {
+      console.error('Error loading farm batches:', farmBatchesRes.error);
     }
 
-    if (batchesData) setBatches(batchesData);
+    if (warehouseBatchesRes.error) {
+      console.error('Error loading warehouse batches:', warehouseBatchesRes.error);
+    }
 
-    // Get unique product IDs from batches
-    const productIds = [...new Set((batchesData || []).map((b: any) => b.product_id))];
+    // Combine batches with source labels
+    const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({ ...b, source: 'farm' }));
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({ ...b, source: 'warehouse' }));
+    const allBatches = [...farmBatches, ...warehouseBatches];
+
+    console.log('📦 VisitDetailModal loaded batches:', {
+      farm: farmBatches.length,
+      warehouse: warehouseBatches.length,
+      total: allBatches.length
+    });
+
+    setBatches(allBatches);
+
+    // Get unique product IDs from both farm and warehouse batches
+    const productIds = [...new Set(allBatches.map((b: any) => b.product_id))];
 
     if (productIds.length === 0) {
       setProducts([]);
@@ -5358,17 +5579,33 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
       if (updatedMeds && updatedMeds.length > 0) {
         const usageItems = updatedMeds
           .filter((med: any) => med.qty && med.batch_id && parseFloat(med.qty) > 0)
-          .map((med: any) => ({
-            client_id: clientId,
-            farm_id: selectedFarm!.id,
-            treatment_id: visit.related_treatment_id,
-            product_id: med.product_id,
-            batch_id: med.batch_id,
-            quantity: parseFloat(med.qty),
-            unit: med.unit,
-            administered_date: visit.visit_datetime.split('T')[0],
-            administration_route: med.administration_route || null,
-          }));
+          .map((med: any) => {
+            // Determine if this batch is from warehouse or farm
+            const batch = batches.find(b => b.id === med.batch_id);
+            const isWarehouseBatch = batch?.source === 'warehouse';
+
+            const usageItem: any = {
+              client_id: clientId,
+              farm_id: selectedFarm!.id,
+              treatment_id: visit.related_treatment_id,
+              product_id: med.product_id,
+              quantity: parseFloat(med.qty),
+              unit: med.unit,
+              administered_date: visit.visit_datetime.split('T')[0],
+              administration_route: med.administration_route || null,
+            };
+
+            // Set either batch_id (farm) or warehouse_batch_id (warehouse)
+            if (isWarehouseBatch) {
+              usageItem.warehouse_batch_id = med.batch_id;
+            } else {
+              usageItem.batch_id = med.batch_id;
+            }
+
+            console.log('📦 Visit completion usage item:', { ...usageItem, isWarehouseBatch });
+
+            return usageItem;
+          });
 
         if (usageItems.length > 0) {
           const { error: usageError } = await supabase
@@ -5405,9 +5642,7 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
             const batch = batches.find(b => b.id === med.batch_id);
             
             if (product) {
-              const batchUnitCost = batch && batch.purchase_price && batch.qty_received
-                ? batch.purchase_price / batch.qty_received
-                : 0;
+              const batchUnitCost = calculateBatchUnitCost(batch);
 
               productsUsed.push({
                 product_id: med.product_id,

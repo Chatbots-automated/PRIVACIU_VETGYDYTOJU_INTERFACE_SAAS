@@ -152,6 +152,41 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         console.error('Error loading direct batches:', directBatchError);
       }
 
+      // Load direct warehouse usage (used from warehouse without allocation)
+      let warehouseUsageQuery = supabase
+        .from('usage_items')
+        .select(`
+          id,
+          product_id,
+          quantity,
+          warehouse_batch_id,
+          used_date,
+          products (
+            name,
+            category,
+            primary_pack_unit
+          ),
+          warehouse_batch:warehouse_batches (
+            id,
+            purchase_price,
+            received_qty,
+            invoice_id
+          )
+        `)
+        .eq('farm_id', farmId)
+        .not('warehouse_batch_id', 'is', null);
+
+      if (dateFrom) warehouseUsageQuery = warehouseUsageQuery.gte('used_date', dateFrom);
+      if (dateTo) warehouseUsageQuery = warehouseUsageQuery.lte('used_date', dateTo + 'T23:59:59');
+
+      const { data: warehouseUsageData, error: warehouseUsageError } = await warehouseUsageQuery;
+      
+      if (warehouseUsageError) {
+        console.error('Error loading warehouse usage:', warehouseUsageError);
+      }
+
+      console.log('Direct warehouse usage found:', warehouseUsageData);
+
       // Also get usage data for allocated stock (from warehouse)
       const { data: batchesData, error: batchError } = await supabase
         .from('batches')
@@ -164,7 +199,10 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       }
 
       // Get invoice items with discount info using warehouse_batch_id
-      const warehouseBatchIds = [...new Set(allocationsData?.map(a => a.warehouse_batch_id).filter(Boolean))];
+      const warehouseBatchIds = [
+        ...new Set(allocationsData?.map(a => a.warehouse_batch_id).filter(Boolean)),
+        ...new Set(warehouseUsageData?.map((u: any) => u.warehouse_batch_id).filter(Boolean))
+      ];
       let invoiceItemsData: any[] = [];
       
       if (warehouseBatchIds.length > 0) {
@@ -268,6 +306,66 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           }
         });
 
+        // Process direct warehouse usage (used without allocation)
+        if (warehouseUsageData) {
+          warehouseUsageData.forEach((usage: any) => {
+            const product = usage.products;
+            const warehouseBatch = usage.warehouse_batch;
+            if (!product || !warehouseBatch) return;
+
+            const productName = product.name;
+            const usedQty = parseFloat(usage.quantity) || 0;
+            const purchasePrice = parseFloat(warehouseBatch.purchase_price) || 0;
+            const warehouseReceivedQty = parseFloat(warehouseBatch.received_qty) || 1;
+
+            const invoiceItem = invoiceItemsData?.find(
+              (ii) => ii.warehouse_batch_id === usage.warehouse_batch_id
+            );
+
+            const { unitAfterDiscount, unitBeforeDiscount } = allocationUnitPricesFromBatchAndInvoice({
+              purchasePrice,
+              receivedQty: warehouseReceivedQty,
+              invoiceItem,
+            });
+
+            const lineDiscountAmount = (unitBeforeDiscount - unitAfterDiscount) * usedQty;
+
+            if (productMap.has(productName)) {
+              const existing = productMap.get(productName)!;
+              existing.total_allocated_qty += usedQty;
+              existing.total_used_qty += usedQty;
+              // remaining_qty stays the same (already used)
+              existing.total_discount += lineDiscountAmount;
+
+              const prevTotalQty = existing.total_allocated_qty - usedQty;
+              existing.avg_purchase_price =
+                ((existing.avg_purchase_price * prevTotalQty) + (unitAfterDiscount * usedQty)) /
+                existing.total_allocated_qty;
+              existing.avg_price_before_discount =
+                ((existing.avg_price_before_discount * prevTotalQty) + (unitBeforeDiscount * usedQty)) /
+                existing.total_allocated_qty;
+              existing.total_value = existing.remaining_qty * existing.avg_purchase_price;
+              existing.remaining_value_before_discount =
+                existing.remaining_qty * existing.avg_price_before_discount;
+            } else {
+              const defaultUnit = product.category === 'supplier_services' ? 'vnt' : 'ml';
+              productMap.set(productName, {
+                product_name: productName,
+                category: product.category || 'N/A',
+                unit: product.primary_pack_unit || defaultUnit,
+                total_allocated_qty: usedQty,
+                total_used_qty: usedQty,
+                remaining_qty: 0, // Already used
+                avg_purchase_price: unitAfterDiscount,
+                avg_price_before_discount: unitBeforeDiscount,
+                total_discount: lineDiscountAmount,
+                total_value: 0,
+                remaining_value_before_discount: 0,
+              });
+            }
+          });
+        }
+
         // Process directly assigned batches (from invoices assigned directly to farm)
         if (directBatchesData) {
           directBatchesData.forEach(batch => {
@@ -347,81 +445,64 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
     try {
       console.log('Loading unpaid visits for farm:', farmId, 'dateFrom:', dateFrom, 'dateTo:', dateTo);
       
-      // Load all uninvoiced visits for the farm
-      let visitsQuery = supabase
-        .from('animal_visits')
+      // Load uninvoiced visit charges (these already have the calculated prices)
+      let chargesQuery = supabase
+        .from('visit_charges')
         .select(`
           id,
-          visit_datetime,
-          procedures,
+          visit_id,
           animal_id,
-          animals(tag_no)
+          total_price,
+          charge_type,
+          invoiced,
+          created_at,
+          animal_visits!inner (
+            id,
+            visit_datetime,
+            procedures,
+            farm_id
+          ),
+          animals (
+            tag_no
+          )
         `)
-        .eq('farm_id', farmId)
-        .eq('status', 'Baigtas')
-        .order('visit_datetime', { ascending: false });
+        .eq('animal_visits.farm_id', farmId)
+        .eq('charge_type', 'paslauga')
+        .eq('invoiced', false)
+        .order('created_at', { ascending: false });
 
-      if (dateFrom) visitsQuery = visitsQuery.gte('visit_datetime', dateFrom);
-      if (dateTo) visitsQuery = visitsQuery.lte('visit_datetime', dateTo + 'T23:59:59');
+      if (dateFrom) chargesQuery = chargesQuery.gte('created_at', dateFrom);
+      if (dateTo) chargesQuery = chargesQuery.lte('created_at', dateTo + 'T23:59:59');
 
-      const { data: visitsData, error: visitsError } = await visitsQuery;
+      const { data: chargesData, error: chargesError } = await chargesQuery;
 
-      if (visitsError) {
-        console.error('Error loading visits:', visitsError);
+      if (chargesError) {
+        console.error('Error loading visit charges:', chargesError);
         return;
       }
 
-      // Check which visits have already been invoiced via visit_charges
-      const visitIds = visitsData?.map(v => v.id) || [];
-      const { data: invoicedCharges } = await supabase
-        .from('visit_charges')
-        .select('visit_id')
-        .in('visit_id', visitIds)
-        .eq('charge_type', 'paslauga')
-        .eq('invoiced', true);
+      console.log('Loaded visit charges:', chargesData);
 
-      const invoicedVisitIds = new Set(invoicedCharges?.map(c => c.visit_id) || []);
-
-      // Filter out visits that are already invoiced
-      const uninvoicedVisits = visitsData?.filter(v => !invoicedVisitIds.has(v.id)) || [];
-
-      // Load service prices to calculate costs
-      const { data: farm } = await supabase
-        .from('farms')
-        .select('client_id')
-        .eq('id', farmId)
-        .single();
-
-      const { data: servicePricesData } = await supabase
-        .from('service_prices')
-        .select('procedure_type, base_price')
-        .eq('client_id', farm?.client_id)
-        .eq('active', true);
-
-      const servicePrices = new Map<string, number>();
-      (servicePricesData || []).forEach(sp => {
-        servicePrices.set(sp.procedure_type, sp.base_price);
-      });
-
-      // Calculate service costs for each visit
-      const charges = uninvoicedVisits.map(visit => {
-        const procedures = Array.isArray(visit.procedures) ? visit.procedures : [];
-        const totalPrice = procedures.reduce((sum, proc) => sum + (servicePrices.get(proc) || 0), 0);
-
+      // Transform to expected format and sort by visit datetime
+      const charges = (chargesData || []).map((charge: any) => {
         return {
-          id: visit.id,
-          visit_id: visit.id,
-          animal_id: visit.animal_id,
-          total_price: totalPrice,
+          id: charge.id,
+          visit_id: charge.visit_id,
+          animal_id: charge.animal_id,
+          total_price: parseFloat(charge.total_price) || 0,
           animal_visits: {
-            visit_datetime: visit.visit_datetime,
-            procedures: visit.procedures
+            visit_datetime: charge.animal_visits?.visit_datetime,
+            procedures: charge.animal_visits?.procedures || []
           },
-          animals: visit.animals
+          animals: charge.animals
         };
+      }).sort((a, b) => {
+        const dateA = new Date(a.animal_visits.visit_datetime);
+        const dateB = new Date(b.animal_visits.visit_datetime);
+        return dateB.getTime() - dateA.getTime();
       });
 
-      console.log('Uninvoiced visits with service costs:', charges);
+      console.log('Uninvoiced visit charges:', charges);
       console.log('Total service charges:', charges.reduce((sum, c) => sum + c.total_price, 0));
       setUnpaidCharges(charges);
     } catch (error) {
@@ -432,6 +513,16 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
   const totalStockValue = allocatedStock.reduce((sum, item) => sum + item.total_value, 0);
   const totalStockValueBeforeDiscount = allocatedStock.reduce(
     (sum, item) => sum + item.remaining_qty * item.avg_price_before_discount,
+    0
+  );
+  
+  // Calculate total allocated value (not just remaining)
+  const totalAllocatedValue = allocatedStock.reduce(
+    (sum, item) => sum + item.total_allocated_qty * item.avg_purchase_price,
+    0
+  );
+  const totalAllocatedValueBeforeDiscount = allocatedStock.reduce(
+    (sum, item) => sum + item.total_allocated_qty * item.avg_price_before_discount,
     0
   );
 
@@ -640,8 +731,8 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       ]);
 
       const totalDiscount = allocatedStock.reduce((sum, item) => sum + item.total_discount, 0);
-      const totalBeforeDiscount = totalStockValueBeforeDiscount;
-      const totalWithDiscount = totalStockValue;
+      const totalBeforeDiscount = totalAllocatedValueBeforeDiscount;
+      const totalWithDiscount = totalAllocatedValue;
       const vat = totalBeforeDiscount * 0.21;
       const totalWithVat = totalBeforeDiscount * 1.21;
 
@@ -739,9 +830,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         });
 
         // Add combined total - Professional Summary Box
-        const productTotal = allocatedStock.reduce((sum, item) =>
-          sum + (item.total_allocated_qty * item.avg_price_before_discount), 0
-        ) * 1.21;
+        const productTotal = totalAllocatedValueBeforeDiscount * 1.21;
         const combinedTotal = productTotal + unpaidTotal;
 
         const finalYAfterCharges = (doc as any).lastAutoTable.finalY || 40;
@@ -961,14 +1050,14 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
             <h1 className="text-3xl font-bold">{farmName}</h1>
             <p className="text-blue-100 mt-1">Ūkio kodas: {farmCode}</p>
           </div>
-          <div className="text-right space-y-1">
+          <div className="text-right space-y-2">
             <div>
-              <p className="text-sm text-blue-100">Vertė be nuolaidos (likutis)</p>
-              <p className="text-2xl font-bold text-white/95">€{totalStockValueBeforeDiscount.toFixed(2)}</p>
+              <p className="text-sm text-blue-100">Paskirstyta vertė (be PVM)</p>
+              <p className="text-2xl font-bold text-white/95">€{totalAllocatedValueBeforeDiscount.toFixed(2)}</p>
             </div>
             <div>
-              <p className="text-sm text-blue-100">Vertė su nuolaida (likutis)</p>
-              <p className="text-4xl font-bold">€{totalStockValue.toFixed(2)}</p>
+              <p className="text-sm text-blue-100">Likutis sandėlyje (be PVM)</p>
+              <p className="text-xl font-semibold text-blue-100">€{totalStockValueBeforeDiscount.toFixed(2)}</p>
             </div>
           </div>
         </div>
@@ -1116,20 +1205,20 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                 </tr>
                 <tr className="bg-slate-50 border-t border-slate-200">
                   <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                    Likutis bendra vertė be nuolaidos:
+                    Paskirstyta bendra vertė be nuolaidos:
                   </td>
                   <td className="px-4 py-3 text-sm font-bold text-slate-800 text-right">
-                    €{totalStockValueBeforeDiscount.toFixed(2)}
+                    €{totalAllocatedValueBeforeDiscount.toFixed(2)}
                   </td>
                   <td className="px-4 py-3"></td>
                 </tr>
                 <tr className="bg-gray-50 border-t border-gray-200">
                   <td colSpan={7} className="px-4 py-3 text-sm font-bold text-gray-900 text-right">
-                    Likutis bendra vertė su nuolaida:
+                    Paskirstyta bendra vertė su nuolaida:
                   </td>
                   <td className="px-4 py-3"></td>
                   <td className="px-4 py-3 text-sm font-bold text-green-600 text-right">
-                    €{totalStockValue.toFixed(2)}
+                    €{totalAllocatedValue.toFixed(2)}
                   </td>
                 </tr>
                 <tr className="bg-blue-50 border-t-2 border-blue-300">
@@ -1138,7 +1227,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                   </td>
                   <td className="px-4 py-3"></td>
                   <td className="px-4 py-3 text-sm font-bold text-blue-700 text-right">
-                    €{(totalStockValueBeforeDiscount * 0.21).toFixed(2)}
+                    €{(totalAllocatedValueBeforeDiscount * 0.21).toFixed(2)}
                   </td>
                 </tr>
                 <tr className="bg-green-50 border-t-2 border-green-400">
@@ -1147,7 +1236,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                   </td>
                   <td className="px-4 py-4"></td>
                   <td className="px-4 py-4 text-base font-bold text-green-700 text-right">
-                    €{(totalStockValueBeforeDiscount * 1.21).toFixed(2)}
+                    €{(totalAllocatedValueBeforeDiscount * 1.21).toFixed(2)}
                   </td>
                 </tr>
               </tfoot>
@@ -1284,7 +1373,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                 <div className="flex justify-between items-center">
                   <span className="text-gray-700">Produktų vertė (su PVM):</span>
                   <span className="font-medium text-gray-900">
-                    €{(allocatedStock.reduce((sum, item) => sum + (item.total_allocated_qty * item.avg_price_before_discount), 0) * 1.21).toFixed(2)}
+                    €{(totalAllocatedValueBeforeDiscount * 1.21).toFixed(2)}
                   </span>
                 </div>
                 <div className="flex justify-between items-center">
@@ -1298,7 +1387,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                     <span className="font-bold text-gray-900">VISO MOKĖTI:</span>
                     <span className="text-lg font-bold text-gray-900">
                       €{(
-                        (allocatedStock.reduce((sum, item) => sum + (item.total_allocated_qty * item.avg_price_before_discount), 0) * 1.21) +
+                        (totalAllocatedValueBeforeDiscount * 1.21) +
                         unpaidCharges.reduce((sum, charge) => sum + charge.total_price, 0)
                       ).toFixed(2)}
                     </span>

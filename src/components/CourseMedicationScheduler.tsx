@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Calendar, Plus, Trash2, AlertCircle, CheckCircle, X } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { SearchableSelect } from './SearchableSelect';
+import { useAuth } from '../contexts/AuthContext';
 
 interface Product {
   id: string;
@@ -62,6 +63,7 @@ export function CourseMedicationScheduler({
   initialStartDate,
   initialSchedule
 }: CourseMedicationSchedulerProps) {
+  const { user } = useAuth();
   const [step, setStep] = useState<'dates' | 'medications' | 'review'>('dates');
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<Map<string, Batch[]>>(new Map());
@@ -104,25 +106,43 @@ export function CourseMedicationScheduler({
   }, [initialStartDate, initialSchedule]);
 
   const loadProducts = async () => {
-    // Load products that have stock at this farm (from batches)
-    const { data: batchesData, error: batchError } = await supabase
-      .from('batches')
-      .select('product_id')
-      .eq('farm_id', farmId)
-      .gt('qty_left', 0);
+    const clientId = user?.client_id;
     
-    if (batchError) {
-      console.error('Error loading batches:', batchError);
+    // Load products that have stock at this farm or in warehouse
+    const [farmBatchesData, warehouseBatchesData] = await Promise.all([
+      supabase
+        .from('batches')
+        .select('product_id')
+        .eq('farm_id', farmId)
+        .gt('qty_left', 0),
+      clientId
+        ? supabase
+            .from('warehouse_batches')
+            .select('product_id')
+            .eq('client_id', clientId)
+            .is('farm_id', null)
+            .gt('qty_left', 0)
+        : Promise.resolve({ data: null, error: null })
+    ]);
+
+    if (farmBatchesData.error) {
+      console.error('Error loading farm batches:', farmBatchesData.error);
       return;
     }
-    
-    if (batchesData && batchesData.length > 0) {
-      const productIds = [...new Set(batchesData.map((b: any) => b.product_id))];
-      
+
+    if (warehouseBatchesData.error) {
+      console.error('Error loading warehouse batches:', warehouseBatchesData.error);
+    }
+
+    const farmProductIds = (farmBatchesData.data || []).map((b: any) => b.product_id);
+    const warehouseProductIds = (warehouseBatchesData.data || []).map((b: any) => b.product_id);
+    const allProductIds = [...new Set([...farmProductIds, ...warehouseProductIds])];
+
+    if (allProductIds.length > 0) {
       const { data, error } = await supabase
         .from('products')
         .select('*')
-        .in('id', productIds)
+        .in('id', allProductIds)
         .order('name');
 
       if (!error && data) {
@@ -138,25 +158,48 @@ export function CourseMedicationScheduler({
   const loadBatchesForProduct = async (productId: string) => {
     if (batches.has(productId)) return;
 
+    const clientId = user?.client_id;
+
     console.log('Loading batches for product:', productId, 'farm:', farmId);
-    const { data, error } = await supabase
-      .from('batches')
-      .select('id, lot, qty_left')
-      .eq('product_id', productId)
-      .eq('farm_id', farmId)
-      .gt('qty_left', 0)
-      .order('expiry_date', { ascending: true });
+    
+    const [farmBatchesRes, warehouseBatchesRes] = await Promise.all([
+      supabase
+        .from('batches')
+        .select('id, lot, qty_left, expiry_date')
+        .eq('product_id', productId)
+        .eq('farm_id', farmId)
+        .gt('qty_left', 0)
+        .order('expiry_date', { ascending: true }),
+      clientId
+        ? supabase
+            .from('warehouse_batches')
+            .select('id, lot, qty_left, expiry_date')
+            .eq('product_id', productId)
+            .eq('client_id', clientId)
+            .is('farm_id', null)
+            .gt('qty_left', 0)
+            .order('expiry_date', { ascending: true })
+        : Promise.resolve({ data: null, error: null })
+    ]);
 
-    console.log('Batches data:', data, 'error:', error);
+    console.log('Farm batches data:', farmBatchesRes.data);
+    console.log('Warehouse batches data:', warehouseBatchesRes.data);
 
-    if (error) {
-      console.error('Error loading batches:', error);
-      return;
+    if (farmBatchesRes.error) {
+      console.error('Error loading farm batches:', farmBatchesRes.error);
+    }
+    
+    if (warehouseBatchesRes.error) {
+      console.error('Error loading warehouse batches:', warehouseBatchesRes.error);
     }
 
-    if (data) {
+    const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({ ...b, source: 'farm' }));
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({ ...b, source: 'warehouse' }));
+    const allBatches = [...farmBatches, ...warehouseBatches];
+
+    if (allBatches.length > 0) {
       const newBatches = new Map(batches);
-      newBatches.set(productId, data);
+      newBatches.set(productId, allBatches);
       setBatches(newBatches);
       console.log('Updated batches state:', newBatches);
     }
@@ -227,18 +270,48 @@ export function CourseMedicationScheduler({
       console.log('Calling loadBatchesForProduct...');
       await loadBatchesForProduct(value);
 
-      const { data: batchData } = await supabase
-        .from('batches')
-        .select('id')
-        .eq('product_id', value)
-        .eq('farm_id', farmId)
-        .gt('qty_left', 0)
-        .order('expiry_date', { ascending: true })
-        .limit(1);
+      const clientId = user?.client_id;
+
+      // Get oldest batch from either farm or warehouse
+      const [farmBatchData, warehouseBatchData] = await Promise.all([
+        supabase
+          .from('batches')
+          .select('id, expiry_date')
+          .eq('product_id', value)
+          .eq('farm_id', farmId)
+          .gt('qty_left', 0)
+          .order('expiry_date', { ascending: true })
+          .limit(1),
+        clientId
+          ? supabase
+              .from('warehouse_batches')
+              .select('id, expiry_date')
+              .eq('product_id', value)
+              .eq('client_id', clientId)
+              .is('farm_id', null)
+              .gt('qty_left', 0)
+              .order('expiry_date', { ascending: true })
+              .limit(1)
+          : Promise.resolve({ data: null })
+      ]);
+
+      // Pick the oldest batch (earliest expiry) from either source
+      let selectedBatchId = null;
+      if (farmBatchData.data?.[0] && warehouseBatchData.data?.[0]) {
+        const farmExpiry = new Date(farmBatchData.data[0].expiry_date || '9999-12-31');
+        const warehouseExpiry = new Date(warehouseBatchData.data[0].expiry_date || '9999-12-31');
+        selectedBatchId = farmExpiry <= warehouseExpiry 
+          ? farmBatchData.data[0].id 
+          : warehouseBatchData.data[0].id;
+      } else if (farmBatchData.data?.[0]) {
+        selectedBatchId = farmBatchData.data[0].id;
+      } else if (warehouseBatchData.data?.[0]) {
+        selectedBatchId = warehouseBatchData.data[0].id;
+      }
 
       updated = updated.map(m => {
         if (m.id === medId) {
-          return { ...m, batch_id: batchData?.[0]?.id || null };
+          return { ...m, batch_id: selectedBatchId };
         }
         return m;
       });

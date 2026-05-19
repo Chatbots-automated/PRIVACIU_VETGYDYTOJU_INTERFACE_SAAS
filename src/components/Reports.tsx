@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/helpers';
+import { requireClientId } from '../lib/clientHelpers';
 import { useFarm } from '../contexts/FarmContext';
 import { useAuth } from '../contexts/AuthContext';
 import {
@@ -519,8 +520,17 @@ export function Reports() {
 
         case 'stock_balance': {
           if (!selectedFarm) return;
-          
-          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
+
+          const clientId = requireClientId(user);
+
+          // Use the comprehensive view that includes both farm and warehouse batches
+          let query = supabase
+            .from('vw_vet_drug_journal_complete')
+            .select('*')
+            .eq('client_id', clientId);
+
+          // For stock balance, show both farm-specific and warehouse (farm_id IS NULL) batches
+          // This gives a complete picture of all available stock
           if (filterProduct) query = query.eq('product_id', filterProduct);
 
           const { data, error } = await query;
@@ -536,9 +546,15 @@ export function Reports() {
 
         case 'write_off_act': {
           if (!selectedFarm) return;
-          
-          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
-          
+
+          const clientId = requireClientId(user);
+
+          // Use the comprehensive view that includes both farm and warehouse batches
+          let query = supabase
+            .from('vw_vet_drug_journal_complete')
+            .select('*')
+            .eq('client_id', clientId);
+
           // Don't filter by receipt_date for write-off - we want items that have been used
           if (filterProduct) query = query.eq('product_id', filterProduct);
 
@@ -551,7 +567,7 @@ export function Reports() {
           if (filterBatch) {
             result = result.filter(r => r.batch_number?.toLowerCase().includes(filterBatch.toLowerCase()));
           }
-          
+
           console.log('Write-off act results:', result.length, 'items with usage');
           break;
         }

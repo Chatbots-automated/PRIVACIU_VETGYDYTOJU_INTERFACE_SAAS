@@ -24,6 +24,7 @@ export function Treatment() {
   const [diseases, setDiseases] = useState<Disease[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<(StockByBatch & { products?: { name: string }; batches?: { expiry_date: string | null } })[]>([]);
+  const [stockFilter, setStockFilter] = useState<'all' | 'farm' | 'warehouse'>('all'); // Filter for stock source
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
   const [animalSearch, setAnimalSearch] = useState('');
@@ -69,14 +70,21 @@ export function Treatment() {
 
     const clientId = requireClientId(user);
 
-    const [animalsRes, diseasesRes, productsRes, batchesRes] = await Promise.all([
+    const [animalsRes, diseasesRes, productsRes, batchesRes, warehouseBatchesRes] = await Promise.all([
       supabase.from('animals').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('tag_no'),
       supabase.from('diseases').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).order('name'),
       supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true),
+      // Farm-specific batches from stock_by_batch view
       supabase.from('stock_by_batch').select(`
         *,
         products!inner(name)
       `).eq('client_id', clientId).eq('farm_id', selectedFarm.id).gt('on_hand', 0),
+      // Warehouse batches (client-wide, available to all farms)
+      supabase.from('warehouse_batches')
+        .select('id, client_id, farm_id, product_id, lot, expiry_date, qty_left, purchase_price, created_at, updated_at, products!inner(name, category, primary_pack_unit)')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .gt('qty_left', 0),
     ]);
 
     if (animalsRes.data) setAnimals(animalsRes.data);
@@ -85,7 +93,36 @@ export function Treatment() {
       const sortedProducts = sortByLithuanian(productsRes.data, 'name');
       setProducts(sortedProducts);
     }
-    if (batchesRes.data) setBatches(batchesRes.data);
+    
+    // Combine farm batches and warehouse batches
+    // Map warehouse batches to match stock_by_batch structure
+    const farmBatches = (batchesRes.data || []).map((b: any) => ({
+      ...b,
+      batch_number: b.lot || b.batch_number,
+      source: 'farm'
+    }));
+    
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({
+      batch_id: b.id,
+      client_id: b.client_id,
+      farm_id: b.farm_id,
+      product_id: b.product_id,
+      batch_number: b.lot,
+      lot: b.lot,
+      expiry_date: b.expiry_date,
+      on_hand: b.qty_left,
+      purchase_price: b.purchase_price,
+      product_name: b.products?.name,
+      product_category: b.products?.category,
+      unit: b.products?.primary_pack_unit,
+      created_at: b.created_at,
+      updated_at: b.updated_at,
+      products: { name: b.products?.name },
+      source: 'warehouse'
+    }));
+    
+    const allBatches = [...farmBatches, ...warehouseBatches];
+    setBatches(allBatches);
   };
 
   const addUsageLine = () => {
@@ -308,17 +345,25 @@ export function Treatment() {
 
       const usageInserts = usageItems
         .filter(item => item.product_id && item.batch_id && item.qty)
-        .map(item => ({
-          client_id: clientId,
-          farm_id: selectedFarm.id,
-          treatment_id: treatment.id,
-          animal_id: formData.animal_id || null,
-          product_id: item.product_id,
-          batch_id: item.batch_id,
-          quantity: parseFloat(item.qty),
-          unit: item.unit,
-          used_date: formData.reg_date,
-        }));
+        .map(item => {
+          // Find the batch to determine if it's from warehouse or farm
+          const batch = batches.find(b => b.batch_id === item.batch_id);
+          const isWarehouseBatch = batch?.source === 'warehouse';
+          
+          return {
+            client_id: clientId,
+            farm_id: selectedFarm.id,
+            treatment_id: treatment.id,
+            animal_id: formData.animal_id || null,
+            product_id: item.product_id,
+            // Use warehouse_batch_id if from warehouse, otherwise use batch_id
+            batch_id: isWarehouseBatch ? null : item.batch_id,
+            warehouse_batch_id: isWarehouseBatch ? item.batch_id : null,
+            quantity: parseFloat(item.qty),
+            unit: item.unit,
+            used_date: formData.reg_date,
+          };
+        });
 
       if (usageInserts.length > 0) {
         const { error: usageError } = await supabase
@@ -371,7 +416,30 @@ export function Treatment() {
   };
 
   const getAvailableBatches = (productId: string) => {
-    return batches.filter(b => b.product_id === productId);
+    const allBatches = batches.filter(b => b.product_id === productId);
+    
+    if (stockFilter === 'farm') {
+      return allBatches.filter(b => b.source === 'farm');
+    } else if (stockFilter === 'warehouse') {
+      return allBatches.filter(b => b.source === 'warehouse');
+    }
+    
+    return allBatches; // 'all' - show both
+  };
+
+  const getAvailableProducts = () => {
+    if (stockFilter === 'all') {
+      return products; // Show all products
+    }
+    
+    // Filter products that have stock in the selected source
+    const productIdsWithStock = new Set(
+      batches
+        .filter(b => b.source === stockFilter && (b.on_hand > 0 || b.qty_left > 0))
+        .map(b => b.product_id)
+    );
+    
+    return products.filter(p => productIdsWithStock.has(p.id));
   };
 
   return (
@@ -597,14 +665,32 @@ export function Treatment() {
           <div className="border-t border-gray-200 pt-6">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-lg font-semibold text-gray-900">Panaudoti produktai</h3>
-              <button
-                type="button"
-                onClick={addUsageLine}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                Pridėti produktą
-              </button>
+              <div className="flex items-center gap-4">
+                <div className="flex items-center gap-2">
+                  <label className="text-sm font-medium text-gray-700">Atsargų šaltinis:</label>
+                  <select
+                    value={stockFilter}
+                    onChange={(e) => {
+                      setStockFilter(e.target.value as 'all' | 'farm' | 'warehouse');
+                      // Clear product and batch selections when filter changes
+                      setUsageItems(usageItems.map(item => ({ ...item, product_id: '', batch_id: '' })));
+                    }}
+                    className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                  >
+                    <option value="all">Visos atsargos</option>
+                    <option value="farm">Tik ūkio atsargos</option>
+                    <option value="warehouse">Tik sandėlio atsargos</option>
+                  </select>
+                </div>
+                <button
+                  type="button"
+                  onClick={addUsageLine}
+                  className="flex items-center gap-2 px-4 py-2 text-sm font-medium text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                >
+                  <Plus className="w-4 h-4" />
+                  Pridėti produktą
+                </button>
+              </div>
             </div>
 
             <div className="space-y-4">
@@ -617,7 +703,7 @@ export function Treatment() {
                       className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
                     >
                       <option value="">Pasirinkite produktą...</option>
-                      {products.map((product) => (
+                      {getAvailableProducts().map((product) => (
                         <option key={product.id} value={product.id}>
                           {product.name}
                         </option>
@@ -632,14 +718,15 @@ export function Treatment() {
                     >
                       <option value="">Pasirinkite partiją...</option>
                       {getAvailableBatches(item.product_id).map((batch) => {
-                        const expiryDate = batch.batches?.expiry_date || null;
+                        const expiryDate = batch.batches?.expiry_date || batch.expiry_date || null;
                         const daysUntil = getDaysUntil(expiryDate);
                         const isExpired = daysUntil !== null && daysUntil < 0;
                         const expiryInfo = expiryDate ? ` · Galioja iki ${formatDateLT(expiryDate)}` : '';
+                        const sourceLabel = batch.source === 'warehouse' ? ' [Sandėlis]' : ' [Ūkis]';
 
                         return (
                           <option key={batch.batch_id} value={batch.batch_id} disabled={isExpired}>
-                            LOT: {batch.lot || 'N/A'}{expiryInfo} · Likutis: {batch.on_hand} {isExpired ? '(PASIBAIGĘS)' : ''}
+                            {sourceLabel} LOT: {batch.lot || 'N/A'}{expiryInfo} · Likutis: {batch.on_hand} {isExpired ? '(PASIBAIGĘS)' : ''}
                           </option>
                         );
                       })}

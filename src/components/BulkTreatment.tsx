@@ -55,6 +55,7 @@ export function BulkTreatment() {
   const [filteredAnimals, setFilteredAnimals] = useState<SelectedAnimal[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<StockByBatch[]>([]);
+  const [stockFilter, setStockFilter] = useState<'all' | 'farm' | 'warehouse'>('all'); // Filter for stock source
   const [selectedAnimals, setSelectedAnimals] = useState<SelectedAnimal[]>([]);
   const [selectedMedications, setSelectedMedications] = useState<SelectedMedication[]>([
     { id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }
@@ -96,14 +97,22 @@ export function BulkTreatment() {
   const loadData = async () => {
     if (!selectedFarm) return;
 
-    const [animalsRes, batchesRes, vetsRes] = await Promise.all([
+    const clientId = requireClientId(user);
+
+    const [animalsRes, farmBatchesRes, warehouseBatchesRes, vetsRes] = await Promise.all([
       supabase.from('animals').select('*').eq('farm_id', selectedFarm.id).order('tag_no'),
+      // Farm-specific batches
       supabase.from('stock_by_batch').select('*').eq('farm_id', selectedFarm.id).gt('on_hand', 0),
+      // Warehouse batches
+      supabase.from('warehouse_batches')
+        .select('id, client_id, farm_id, product_id, lot, expiry_date, qty_left, purchase_price, created_at, updated_at, products!inner(name, category, primary_pack_unit)')
+        .eq('client_id', clientId)
+        .is('farm_id', null)
+        .gt('qty_left', 0),
       supabase.from('treatments').select('vet_name').eq('farm_id', selectedFarm.id).not('vet_name', 'is', null),
     ]);
 
     setAnimals(animalsRes.data || []);
-    if (batchesRes.data) setBatches(batchesRes.data);
 
     // Get unique vet names
     if (vetsRes.data) {
@@ -111,10 +120,37 @@ export function BulkTreatment() {
       setVetNames(uniqueVets.sort());
     }
 
-    // Load products that have stock at this farm (from batches)
-    // This ensures we show products from warehouse that are allocated to this farm
-    if (batchesRes.data && batchesRes.data.length > 0) {
-      const productIds = [...new Set(batchesRes.data.map((b: any) => b.product_id))];
+    // Combine farm and warehouse batches
+    const farmBatches = (farmBatchesRes.data || []).map((b: any) => ({
+      ...b,
+      source: 'farm'
+    }));
+    
+    const warehouseBatches = (warehouseBatchesRes.data || []).map((b: any) => ({
+      batch_id: b.id,
+      client_id: b.client_id,
+      farm_id: b.farm_id,
+      product_id: b.product_id,
+      batch_number: b.lot,
+      lot: b.lot,
+      expiry_date: b.expiry_date,
+      on_hand: b.qty_left,
+      purchase_price: b.purchase_price,
+      avg_price_before_discount: b.purchase_price,
+      product_name: b.products?.name,
+      product_category: b.products?.category,
+      unit: b.products?.primary_pack_unit,
+      created_at: b.created_at,
+      updated_at: b.updated_at,
+      source: 'warehouse'
+    }));
+    
+    const allBatches = [...farmBatches, ...warehouseBatches];
+    setBatches(allBatches);
+
+    // Load products that have stock (from either farm or warehouse)
+    if (allBatches.length > 0) {
+      const productIds = [...new Set(allBatches.map((b: any) => b.product_id))];
       
       const { data: productsData, error: productsError } = await supabase
         .from('products')
@@ -361,16 +397,22 @@ export function BulkTreatment() {
             visitTreatmentId = treatment.id;
 
             // Add all medicines to this treatment
-            const usageItems = treatments.map(med => ({
-              client_id: clientId,
-              farm_id: selectedFarm.id,
-              treatment_id: treatment.id,
-              product_id: med.product_id,
-              batch_id: med.batch_id,
-              quantity: parseFloat(med.qty),
-              unit: med.unit,
-              administered_date: formData.treatment_date,
-            }));
+            const usageItems = treatments.map(med => {
+              const batch = batches.find(b => b.batch_id === med.batch_id);
+              const isWarehouseBatch = batch?.source === 'warehouse';
+              
+              return {
+                client_id: clientId,
+                farm_id: selectedFarm.id,
+                treatment_id: treatment.id,
+                product_id: med.product_id,
+                batch_id: isWarehouseBatch ? null : med.batch_id,
+                warehouse_batch_id: isWarehouseBatch ? med.batch_id : null,
+                quantity: parseFloat(med.qty),
+                unit: med.unit,
+                administered_date: formData.treatment_date,
+              };
+            });
 
             const { error: usageError } = await supabase
               .from('usage_items')
@@ -403,6 +445,9 @@ export function BulkTreatment() {
 
           // Create vaccinations (usage_items are created automatically by trigger)
           for (const vac of vaccinations) {
+            const batch = batches.find(b => b.batch_id === vac.batch_id);
+            const isWarehouseBatch = batch?.source === 'warehouse';
+            
             // Create vaccination record
             // NOTE: Database trigger 'create_usage_from_vaccination' will automatically
             // create a usage_item and deduct stock - DO NOT create usage_item manually!
@@ -413,7 +458,8 @@ export function BulkTreatment() {
                 farm_id: selectedFarm.id,
                 animal_id: animal.id,
                 product_id: vac.product_id,
-                batch_id: vac.batch_id,
+                batch_id: isWarehouseBatch ? null : vac.batch_id,
+                warehouse_batch_id: isWarehouseBatch ? vac.batch_id : null,
                 vaccination_date: formData.treatment_date,
                 dose_amount: parseFloat(vac.qty),
                 unit: vac.unit,
@@ -448,6 +494,9 @@ export function BulkTreatment() {
           if (prevError) throw prevError;
 
           // Add usage item for prevention
+          const batch = batches.find(b => b.batch_id === prev.batch_id);
+          const isWarehouseBatch = batch?.source === 'warehouse';
+          
           const { error: usageError } = await supabase
             .from('usage_items')
             .insert({
@@ -455,7 +504,8 @@ export function BulkTreatment() {
               farm_id: selectedFarm.id,
               prevention_id: preventionData.id,
               product_id: prev.product_id,
-              batch_id: prev.batch_id,
+              batch_id: isWarehouseBatch ? null : prev.batch_id,
+              warehouse_batch_id: isWarehouseBatch ? prev.batch_id : null,
               quantity: parseFloat(prev.qty),
               unit: prev.unit,
             });
@@ -614,6 +664,33 @@ export function BulkTreatment() {
     return `Likutis: ${batch.on_hand}${expiry}`;
   };
 
+  const getFilteredBatches = (productId: string) => {
+    const productBatches = batches.filter(b => b.product_id === productId);
+    
+    if (stockFilter === 'farm') {
+      return productBatches.filter(b => b.source === 'farm');
+    } else if (stockFilter === 'warehouse') {
+      return productBatches.filter(b => b.source === 'warehouse');
+    }
+    
+    return productBatches; // 'all' - show both
+  };
+
+  const getAvailableProducts = () => {
+    if (stockFilter === 'all') {
+      return products; // Show all products
+    }
+    
+    // Filter products that have stock in the selected source
+    const productIdsWithStock = new Set(
+      batches
+        .filter(b => b.source === stockFilter && b.on_hand > 0)
+        .map(b => b.product_id)
+    );
+    
+    return products.filter(p => productIdsWithStock.has(p.id));
+  };
+
   return (
     <div className="p-6 max-w-7xl mx-auto">
       <div className="mb-6 flex items-center justify-between">
@@ -689,9 +766,27 @@ export function BulkTreatment() {
         {/* Medications Selection */}
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
           <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-2">
-              <Package className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Produktai (Vaistai / Vakcinos / Profilaktika)</h3>
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-2">
+                <Package className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-semibold text-gray-900">Produktai (Vaistai / Vakcinos / Profilaktika)</h3>
+              </div>
+              <div className="flex items-center gap-2">
+                <label className="text-sm font-medium text-gray-700">Atsargų šaltinis:</label>
+                <select
+                  value={stockFilter}
+                  onChange={(e) => {
+                    setStockFilter(e.target.value as 'all' | 'farm' | 'warehouse');
+                    // Clear medication selections when filter changes
+                    setSelectedMedications(selectedMedications.map(m => ({ ...m, product_id: '', batch_id: '' })));
+                  }}
+                  className="px-3 py-1.5 text-sm border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                >
+                  <option value="all">Visos atsargos</option>
+                  <option value="farm">Tik ūkio atsargos</option>
+                  <option value="warehouse">Tik sandėlio atsargos</option>
+                </select>
+              </div>
             </div>
             <button
               type="button"
@@ -706,15 +801,16 @@ export function BulkTreatment() {
           <div className="space-y-3">
             {selectedMedications.map((med, index) => {
               const selectedProduct = products.find(p => p.id === med.product_id);
-              const medicineProducts = products.filter(p => 
-                p.category === 'medicines' || 
-                p.category === 'treatment_materials' || 
+              const availableProducts = getAvailableProducts();
+              const medicineProducts = availableProducts.filter(p =>
+                p.category === 'medicines' ||
+                p.category === 'treatment_materials' ||
                 p.category === 'svirkstukai' ||
                 p.category === 'ovules' ||
                 p.category === 'bolusas'
               );
-              const vaccineProducts = products.filter(p => p.category === 'vakcina');
-              const preventionProducts = products.filter(p => p.category === 'prevention');
+              const vaccineProducts = availableProducts.filter(p => p.category === 'vakcina');
+              const preventionProducts = availableProducts.filter(p => p.category === 'prevention');
 
               return (
               <div key={med.id} className="flex gap-3 items-start bg-gray-50 p-4 rounded-lg border-2 border-gray-200">
@@ -783,13 +879,14 @@ export function BulkTreatment() {
                       disabled={!med.product_id}
                     >
                       <option value="">Pasirinkite partiją</option>
-                      {batches
-                        .filter(b => b.product_id === med.product_id)
-                        .map(batch => (
+                      {getFilteredBatches(med.product_id).map(batch => {
+                        const sourceLabel = batch.source === 'warehouse' ? '[Sandėlis] ' : '[Ūkis] ';
+                        return (
                           <option key={batch.batch_id} value={batch.batch_id}>
-                            {batch.lot || 'Be partijos'} - {getBatchInfo(batch.batch_id)}
+                            {sourceLabel}{batch.lot || 'Be partijos'} - {getBatchInfo(batch.batch_id)}
                           </option>
-                        ))}
+                        );
+                      })}
                     </select>
                   </div>
 

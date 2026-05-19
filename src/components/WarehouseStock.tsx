@@ -1678,34 +1678,37 @@ export function WarehouseStock() {
                 💡 <strong>Patarimas:</strong> Jei kiekviena prekė turi savo seriją ir galiojimo datą (automatiškai ištraukta iš PDF), galite priimti be šių laukų pildymo. Arba užpildinkit šiuos laukus, jei norite naudoti tą pačią datą visoms prekėms.
               </p>
               
-              <div className="mb-4 p-4 bg-white border-2 border-blue-400 rounded-lg">
-                <label className="block text-sm font-bold text-gray-900 mb-2 flex items-center gap-2">
-                  <Building2 className="w-4 h-4 text-blue-600" />
-                  Paskirti sąskaitą
-                </label>
-                <p className="text-xs text-gray-600 mb-3">
-                  Pasirinkite, ar sąskaita ir atsargos bus priskirtos konkrečiam ūkiui, ar bendram sandėliui.
-                </p>
+              <div className="mb-6 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-500 rounded-lg shadow-md">
+                <div className="flex items-start gap-3 mb-3">
+                  <Building2 className="w-6 h-6 text-blue-700 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <label className="block text-base font-bold text-gray-900 mb-1">
+                      Kur priimti produktus? *
+                    </label>
+                    <p className="text-sm text-gray-700 mb-3">
+                      Pasirinkite, ar produktai bus priimti tiesiogiai į konkrečią įmonę, ar į bendrą sandėlį vėlesniam paskirstymui.
+                    </p>
+                  </div>
+                </div>
                 <select
                   value={assignToFarmId || ''}
                   onChange={(e) => setAssignToFarmId(e.target.value || null)}
-                  className="w-full px-3 py-2 border-2 border-gray-300 rounded-lg text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 font-medium"
+                  className="w-full px-4 py-3 border-2 border-blue-400 rounded-lg text-base focus:ring-2 focus:ring-blue-600 focus:border-blue-600 font-medium bg-white shadow-sm"
                 >
-                  <option value="">🏢 Bendras sandėlis</option>
-                  {farms.filter(f => f.is_active).map(farm => (
-                    <option key={farm.id} value={farm.id}>
-                      🏠 {farm.name} ({farm.code})
-                    </option>
-                  ))}
+                  <option value="" className="font-semibold">🏢 Bendras sandėlis (paskirstysite vėliau)</option>
+                  <optgroup label="═══ Priimti tiesiogiai į įmonę ═══">
+                    {farms.filter(f => f.is_active).map(farm => (
+                      <option key={farm.id} value={farm.id} className="font-medium">
+                        🏠 {farm.name} {farm.code ? `(${farm.code})` : ''}
+                      </option>
+                    ))}
+                  </optgroup>
                 </select>
                 {assignToFarmId && (
-                  <div className="mt-2 p-2 bg-green-50 border border-green-300 rounded text-xs text-green-800">
-                    ✓ Sąskaita ir atsargos bus priskirtos pasirinktam ūkiui ir bus matomos jų ataskaitose.
-                  </div>
-                )}
-                {!assignToFarmId && (
-                  <div className="mt-2 p-2 bg-blue-50 border border-blue-300 rounded text-xs text-blue-800">
-                    ℹ️ Sąskaita ir atsargos bus bendrame sandėlyje. Galėsite paskirstyti produktus ūkiams per "Paskirstymas" skiltį.
+                  <div className="mt-3 p-3 bg-green-50 border border-green-400 rounded-lg">
+                    <p className="text-xs text-green-900 font-medium">
+                      ✓ Produktai bus tiesiogiai prieinami pasirinktam ūkiui ir bus rodomi jo sandėlio atsargose.
+                    </p>
                   </div>
                 )}
               </div>
