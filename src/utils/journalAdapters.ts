@@ -86,13 +86,17 @@ export function transformToTreatedAnimalRegistrationJournal(
       : '-';
 
     // Format withdrawal (Išlauka) with icons
+    // Only show withdrawal dates if the product actually has withdrawal days > 0
     let withdrawal = '';
-    if (record.withdrawal_until_meat || record.withdrawal_until_milk) {
+    const hasMeatWithdrawal = record.withdrawal_until_meat && record.withdrawal_days_meat && record.withdrawal_days_meat > 0;
+    const hasMilkWithdrawal = record.withdrawal_until_milk && record.withdrawal_days_milk && record.withdrawal_days_milk > 0;
+    
+    if (hasMeatWithdrawal || hasMilkWithdrawal) {
       const dates = [];
-      if (record.withdrawal_until_meat) {
+      if (hasMeatWithdrawal) {
         dates.push(`🥩 ${record.withdrawal_until_meat}`);
       }
-      if (record.withdrawal_until_milk) {
+      if (hasMilkWithdrawal) {
         dates.push(`🥛 ${record.withdrawal_until_milk}`);
       }
       withdrawal = dates.join(' | ');
@@ -159,13 +163,17 @@ export function transformToProductionAnimalMedicineUsageJournal(
       : '1';
 
     // Format withdrawal with icons
+    // Only show withdrawal dates if the product actually has withdrawal days > 0
     let withdrawal = '';
-    if (record.withdrawal_until_meat || record.withdrawal_until_milk) {
+    const hasMeatWithdrawal = record.withdrawal_until_meat && record.withdrawal_days_meat && record.withdrawal_days_meat > 0;
+    const hasMilkWithdrawal = record.withdrawal_until_milk && record.withdrawal_days_milk && record.withdrawal_days_milk > 0;
+    
+    if (hasMeatWithdrawal || hasMilkWithdrawal) {
       const dates = [];
-      if (record.withdrawal_until_meat) {
+      if (hasMeatWithdrawal) {
         dates.push(`🥩 ${record.withdrawal_until_meat}`);
       }
-      if (record.withdrawal_until_milk) {
+      if (hasMilkWithdrawal) {
         dates.push(`🥛 ${record.withdrawal_until_milk}`);
       }
       withdrawal = dates.join(' | ');

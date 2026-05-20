@@ -1869,6 +1869,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
             setPricingModalData(data);
             setShowPricingModal(true);
           }}
+          clientVatInfoProp={clientVatInfo}
         />
       )}
 
@@ -1890,6 +1891,7 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
             setPricingModalData(data);
             setShowPricingModal(true);
           }}
+          clientVatInfoProp={clientVatInfo}
         />
       )}
 
@@ -1977,7 +1979,8 @@ function VisitCreateModal({
   onClose, 
   onSuccess, 
   visitToEdit, 
-  onPricingModalDataReady 
+  onPricingModalDataReady,
+  clientVatInfoProp
 }: { 
   animalId: string; 
   animalName?: string; 
@@ -1986,10 +1989,12 @@ function VisitCreateModal({
   onSuccess: () => void; 
   visitToEdit?: AnimalVisit; 
   onPricingModalDataReady?: (data: any) => void;
+  clientVatInfoProp?: ClientVatInfo | null;
 }) {
   const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const modalContentRef = useRef<HTMLDivElement>(null);
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(clientVatInfoProp || null);
 
   // Refs for auto-scrolling to sections in modal
   const treatmentSectionRef = useRef<HTMLDivElement>(null);
@@ -2022,6 +2027,29 @@ function VisitCreateModal({
       }));
     }
   }, [user, visitToEdit]);
+
+  // Load clientVatInfo if not provided as prop
+  useEffect(() => {
+    const loadVatInfo = async () => {
+      if (!clientVatInfoProp && user?.client_id) {
+        try {
+          const { data, error } = await supabase
+            .from('clients')
+            .select('vat_code, vat_rate, vat_registered')
+            .eq('id', user.client_id)
+            .single();
+
+          if (!error && data) {
+            setClientVatInfo(data);
+          }
+        } catch (error) {
+          console.error('Error loading client VAT info in VisitCreateModal:', error);
+        }
+      }
+    };
+    loadVatInfo();
+  }, [user?.client_id, clientVatInfoProp]);
+
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [diseases, setDiseases] = useState<any[]>([]);
@@ -5394,7 +5422,7 @@ function VisitCreateModal({
   );
 }
 
-function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onPricingModalDataReady }: { visit: AnimalVisit; animalId: string; animalName?: string; onClose: () => void; onSuccess: () => void; onPricingModalDataReady?: (data: any) => void }) {
+function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onPricingModalDataReady, clientVatInfoProp }: { visit: AnimalVisit; animalId: string; animalName?: string; onClose: () => void; onSuccess: () => void; onPricingModalDataReady?: (data: any) => void; clientVatInfoProp?: ClientVatInfo | null }) {
   const { logAction, user } = useAuth();
   const { selectedFarm } = useFarm();
   const [loading, setLoading] = useState(false);
@@ -5410,6 +5438,29 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
   const [syncStepBatchId, setSyncStepBatchId] = useState<string>('');
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(clientVatInfoProp || null);
+
+  // Load clientVatInfo if not provided as prop
+  useEffect(() => {
+    const loadVatInfo = async () => {
+      if (!clientVatInfoProp && user?.client_id) {
+        try {
+          const { data, error } = await supabase
+            .from('clients')
+            .select('vat_code, vat_rate, vat_registered')
+            .eq('id', user.client_id)
+            .single();
+
+          if (!error && data) {
+            setClientVatInfo(data);
+          }
+        } catch (error) {
+          console.error('Error loading client VAT info in VisitDetailModal:', error);
+        }
+      }
+    };
+    loadVatInfo();
+  }, [user?.client_id, clientVatInfoProp]);
 
   useEffect(() => {
     if (selectedFarm && user) {
@@ -5486,6 +5537,29 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
 
     console.log('📦 VisitDetailModal loaded products:', productsData?.length || 0);
     if (productsData) setProducts(productsData);
+  };
+
+  const calculateBatchUnitCost = (batch: any): number => {
+    if (!batch) return 0;
+
+    // Determine if client is VAT registered
+    const isVatRegistered = isClientVatRegistered(clientVatInfo);
+
+    // Use VAT-aware pricing: NET for VAT-registered, GROSS for non-VAT
+    const priceToUse = isVatRegistered
+      ? (batch.purchase_price_net || batch.purchase_price || 0)
+      : (batch.purchase_price_gross || batch.purchase_price || 0);
+
+    // Warehouse batches use 'received_qty', farm batches use 'qty_received'
+    const qtyReceived = batch.source === 'warehouse'
+      ? batch.received_qty
+      : batch.qty_received;
+
+    if (!qtyReceived || qtyReceived <= 0) {
+      return 0;
+    }
+
+    return priceToUse / qtyReceived;
   };
 
   const checkMedicationEntry = () => {

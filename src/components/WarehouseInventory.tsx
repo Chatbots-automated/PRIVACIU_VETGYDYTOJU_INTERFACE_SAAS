@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { Search, Package, AlertCircle, Download } from 'lucide-react';
 import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 import { translateCategory } from '../lib/helpers';
 import * as XLSX from 'xlsx';
 
@@ -25,7 +26,7 @@ interface WarehouseStock {
 }
 
 export function WarehouseInventory() {
-  const { logAction } = useAuth();
+  const { logAction, user } = useAuth();
   const [inventory, setInventory] = useState<WarehouseStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
@@ -38,9 +39,12 @@ export function WarehouseInventory() {
 
   const loadInventory = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('vw_warehouse_inventory')
         .select('*')
+        .eq('client_id', clientId)
         .order('created_at', { ascending: false });
 
       console.log('📦 Warehouse inventory raw data:', data?.length || 0, data);

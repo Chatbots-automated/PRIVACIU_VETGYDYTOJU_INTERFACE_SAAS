@@ -3,6 +3,8 @@ import { supabase } from '../lib/supabase';
 import { BarChart3, TrendingUp, Building2, Package, Euro, Download, ChevronRight } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FarmDetailAnalytics } from './FarmDetailAnalytics';
+import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 
 // Helper to translate category names to Lithuanian
 function translateCategory(category: string | null | undefined): string {
@@ -65,6 +67,7 @@ interface AllocationHistory {
 }
 
 export function AllocationAnalytics() {
+  const { user } = useAuth();
   const [farmAnalytics, setFarmAnalytics] = useState<FarmAnalytics[]>([]);
   const [productAnalytics, setProductAnalytics] = useState<ProductAnalytics[]>([]);
   const [allocationHistory, setAllocationHistory] = useState<AllocationHistory[]>([]);
@@ -89,9 +92,12 @@ export function AllocationAnalytics() {
 
   const loadFarms = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const { data, error } = await supabase
         .from('farms')
         .select('id, name, code')
+        .eq('client_id', clientId)
         .order('name');
       
       if (error) throw error;
@@ -104,10 +110,13 @@ export function AllocationAnalytics() {
   const loadAnalytics = async () => {
     setLoading(true);
     try {
+      const clientId = requireClientId(user);
+      
       // Build query for history with filters
       let historyQuery = supabase
         .from('vw_stock_allocation_history')
         .select('*')
+        .eq('client_id', clientId)
         .order('allocation_date', { ascending: false })
         .limit(100);
 
@@ -122,8 +131,8 @@ export function AllocationAnalytics() {
       }
 
       const [farmsRes, productsRes, historyRes] = await Promise.all([
-        supabase.from('vw_allocation_analytics_by_farm').select('*').order('total_value_allocated', { ascending: false, nullsFirst: false }),
-        supabase.from('vw_allocation_analytics_by_product').select('*').order('total_qty_allocated', { ascending: false, nullsFirst: false }),
+        supabase.from('vw_allocation_analytics_by_farm').select('*').eq('client_id', clientId).order('total_value_allocated', { ascending: false, nullsFirst: false }),
+        supabase.from('vw_allocation_analytics_by_product').select('*').eq('client_id', clientId).order('total_qty_allocated', { ascending: false, nullsFirst: false }),
         historyQuery,
       ]);
 

@@ -1,6 +1,7 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { fetchAllRows } from '../lib/helpers';
+import { requireClientId } from '../lib/clientHelpers';
 import {
   FileText,
   Download,
@@ -95,11 +96,13 @@ export function AllFarmsReports() {
 
   const loadFilterOptions = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const [animalsRes, productsRes, diseasesRes, farmsRes] = await Promise.all([
-        supabase.from('animals').select('id, tag_no, species, farm_id').order('tag_no'),
-        supabase.from('products').select('id, name').eq('is_active', true).order('name'),
-        supabase.from('diseases').select('id, name').order('name'),
-        supabase.from('farms').select('id, name, code').eq('is_active', true).order('name'),
+        supabase.from('animals').select('id, tag_no, species, farm_id').eq('client_id', clientId).order('tag_no'),
+        supabase.from('products').select('id, name').eq('client_id', clientId).eq('is_active', true).order('name'),
+        supabase.from('diseases').select('id, name').eq('client_id', clientId).order('name'),
+        supabase.from('farms').select('id, name, code').eq('client_id', clientId).eq('is_active', true).order('name'),
       ]);
 
       if (animalsRes.data) setAnimals(animalsRes.data);
@@ -118,7 +121,9 @@ export function AllFarmsReports() {
 
       switch (reportType) {
         case 'drug_journal': {
-          let query = supabase.from('vw_vet_drug_journal_all_farms').select('*').order('receipt_date', { ascending: false });
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_vet_drug_journal_all_farms').select('*').eq('client_id', clientId).order('receipt_date', { ascending: false });
           if (dateFrom) query = query.gte('receipt_date', dateFrom);
           if (dateTo) query = query.lte('receipt_date', dateTo);
           if (filterFarm) query = query.eq('farm_id', filterFarm);
@@ -136,7 +141,11 @@ export function AllFarmsReports() {
         }
 
         case 'treated_animals': {
-          const filters: { column: string; value: any; operator?: string }[] = [];
+          const clientId = requireClientId(user);
+          
+          const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'client_id', value: clientId }
+          ];
 
           if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
           if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });
@@ -244,7 +253,11 @@ export function AllFarmsReports() {
         }
 
         case 'treated_animal_registration': {
-          const filters: { column: string; value: any; operator?: string }[] = [];
+          const clientId = requireClientId(user);
+          
+          const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'client_id', value: clientId }
+          ];
 
           if (dateFrom) filters.push({ column: 'registration_date', value: dateFrom, operator: 'gte' });
           if (dateTo) filters.push({ column: 'registration_date', value: dateTo, operator: 'lte' });

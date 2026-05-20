@@ -166,18 +166,14 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
 
   const handleSave = async () => {
     try {
-      // When editing, use the stored editingFarmId
-      // When creating new, require selectedFarm
-      const farmId = editing ? editingFarmId : selectedFarm?.id;
-
-      console.log('handleSave - editing:', editing, 'editingFarmId:', editingFarmId, 'selectedFarm:', selectedFarm?.id, 'finalFarmId:', farmId);
-
-      if (!farmId) {
-        alert('Pasirinkite ūkį');
-        return;
-      }
-
       const clientId = requireClientId(user);
+      
+      // Products are client-wide, farm_id can be null
+      // When editing: keep the original farm_id (usually null)
+      // When creating new: use selectedFarm if available, otherwise null (client-wide)
+      const farmId = editing ? editingFarmId : (selectedFarm?.id || null);
+
+      console.log('handleSave - editing:', editing, 'clientId:', clientId, 'farmId:', farmId);
       
       const productData = {
         client_id: clientId,

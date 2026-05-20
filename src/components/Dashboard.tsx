@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
+import { requireClientId } from '../lib/clientHelpers';
 import {
   AlertTriangle,
   Package,
@@ -85,6 +87,7 @@ interface MonthlyTrend {
 
 export function Dashboard() {
   const { selectedFarm } = useFarm();
+  const { user } = useAuth();
   const [stats, setStats] = useState<DashboardStats>({
     totalProducts: 0,
     lowStock: 0,
@@ -133,6 +136,20 @@ export function Dashboard() {
   const loadDashboardData = async () => {
     try {
       if (!selectedFarm) return;
+      
+      // SECURITY: Verify the selected farm belongs to this client
+      const clientId = requireClientId(user);
+      const { data: farmCheck, error: farmCheckError } = await supabase
+        .from('farms')
+        .select('id')
+        .eq('id', selectedFarm.id)
+        .eq('client_id', clientId)
+        .single();
+      
+      if (farmCheckError || !farmCheck) {
+        console.error('Security violation: Farm does not belong to client');
+        return;
+      }
       
       const now = new Date();
 

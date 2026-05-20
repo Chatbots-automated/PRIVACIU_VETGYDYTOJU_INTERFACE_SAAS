@@ -334,7 +334,9 @@ export function Reports() {
         case 'drug_journal': {
           if (!selectedFarm) return;
           
-          let query = supabase.from('vw_vet_drug_journal').select('*').eq('farm_id', selectedFarm.id);
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_vet_drug_journal').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('receipt_date', dateFrom);
           if (dateTo) query = query.lte('receipt_date', dateTo);
           if (filterProduct) query = query.eq('product_id', filterProduct);
@@ -356,8 +358,11 @@ export function Reports() {
         case 'treated_animals': {
           if (!selectedFarm) return;
           
-          // Build filters array for fetchAllRows
+          const clientId = requireClientId(user);
+          
+          // Build filters array for fetchAllRows - MUST filter by client_id
           const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'client_id', value: clientId },
             { column: 'farm_id', value: selectedFarm.id }
           ];
 
@@ -394,7 +399,9 @@ export function Reports() {
         case 'biocide_journal': {
           if (!selectedFarm) return;
           
-          let query = supabase.from('vw_biocide_journal').select('*').eq('farm_id', selectedFarm.id);
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_biocide_journal').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('use_date', dateFrom);
           if (dateTo) query = query.lte('use_date', dateTo);
           if (filterProduct) query = query.eq('product_id', filterProduct);
@@ -413,6 +420,8 @@ export function Reports() {
         case 'insemination_journal': {
           if (!selectedFarm) return;
           
+          const clientId = requireClientId(user);
+          
           let query = supabase
             .from('insemination_records')
             .select(`
@@ -421,6 +430,7 @@ export function Reports() {
               sperm_product:insemination_products!insemination_records_sperm_product_id_fkey(name, unit),
               glove_product:insemination_products!insemination_records_glove_product_id_fkey(name, unit)
             `)
+            .eq('client_id', clientId)
             .eq('farm_id', selectedFarm.id)
             .order('insemination_date', { ascending: false });
 
@@ -438,7 +448,9 @@ export function Reports() {
         case 'medical_waste': {
           if (!selectedFarm) return;
           
-          let query = supabase.from('vw_medical_waste').select('*').eq('farm_id', selectedFarm.id);
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_medical_waste').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('record_date', dateFrom);
           if (dateTo) query = query.lte('record_date', dateTo);
 
@@ -452,7 +464,9 @@ export function Reports() {
         case 'withdrawal': {
           if (!selectedFarm) return;
           
-          let query = supabase.from('vw_withdrawal_report').select('*').eq('farm_id', selectedFarm.id);
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_withdrawal_report').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id);
           if (dateFrom) query = query.gte('treatment_date', dateFrom);
           if (dateTo) query = query.lte('treatment_date', dateTo);
           if (filterAnimal) query = query.eq('animal_id', filterAnimal);
@@ -467,8 +481,11 @@ export function Reports() {
         case 'treated_animal_registration': {
           if (!selectedFarm) return;
           
-          // Use same data source as treated_animals
+          const clientId = requireClientId(user);
+          
+          // Use same data source as treated_animals - MUST filter by client_id for multi-tenancy
           const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'client_id', value: clientId },
             { column: 'farm_id', value: selectedFarm.id }
           ];
 
@@ -501,8 +518,11 @@ export function Reports() {
         case 'production_animal_medicine': {
           if (!selectedFarm) return;
           
-          // Use same data source as treated_animal_registration but can be filtered by owner
+          const clientId = requireClientId(user);
+          
+          // Use same data source as treated_animal_registration - MUST filter by client_id
           const filters: { column: string; value: any; operator?: string }[] = [
+            { column: 'client_id', value: clientId },
             { column: 'farm_id', value: selectedFarm.id }
           ];
 

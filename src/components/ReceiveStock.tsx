@@ -124,6 +124,8 @@ export function ReceiveStock() {
   const loadData = async () => {
     if (!selectedFarm) return;
 
+    const clientId = requireClientId(user);
+
     // Load client VAT info
     if (user?.client_id) {
       const { data: clientData, error: clientError } = await supabase
@@ -131,16 +133,16 @@ export function ReceiveStock() {
         .select('vat_code, vat_rate, vat_registered')
         .eq('id', user.client_id)
         .single();
-      
+
       if (!clientError && clientData) {
         setClientVatInfo(clientData);
       }
     }
 
     const [productsRes, inseminationProductsRes, suppliersRes] = await Promise.all([
-      supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
-      supabase.from('insemination_products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
-      supabase.from('suppliers').select('*').eq('farm_id', selectedFarm.id).order('name'),
+      supabase.from('products').select('*').eq('client_id', clientId).or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`).eq('is_active', true).order('name'),
+      supabase.from('insemination_products').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
+      supabase.from('suppliers').select('*').eq('client_id', clientId).eq('farm_id', selectedFarm.id).order('name'),
     ]);
 
     if (productsRes.data) setProducts(productsRes.data);

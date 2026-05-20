@@ -3,6 +3,7 @@ import { X, Trash2, Euro, Package } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { requireClientId } from '../lib/clientHelpers';
+import { isClientVatRegistered, ClientVatInfo, getClientVatRate } from '../lib/vatHelpers';
 
 interface PricingModalProps {
   isOpen: boolean;
@@ -43,13 +44,33 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
   const [serviceCharges, setServiceCharges] = useState<ServiceCharge[]>([]);
   const [productCharges, setProductCharges] = useState<ProductCharge[]>([]);
   const [notes, setNotes] = useState('');
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(null);
 
   useEffect(() => {
     if (isOpen && visitData) {
+      loadClientVatInfo();
       loadDefaultPrices();
       loadProductsUsed();
     }
   }, [isOpen, visitData]);
+
+  const loadClientVatInfo = async () => {
+    if (!user?.client_id) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('vat_code, vat_rate, vat_registered')
+        .eq('id', user.client_id)
+        .single();
+
+      if (!error && data) {
+        setClientVatInfo(data);
+      }
+    } catch (error) {
+      console.error('Error loading client VAT info:', error);
+    }
+  };
 
   const loadDefaultPrices = async () => {
     if (!user) return;
@@ -267,22 +288,53 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
               <p className="text-gray-500 text-sm italic">Produktų nesunaudota</p>
             ) : (
               <div className="space-y-3">
-                {productCharges.map((charge, index) => (
-                  <div key={index} className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
-                    <div className="flex items-start justify-between">
-                      <div className="flex-1">
-                        <p className="font-medium text-gray-900">{charge.product_name}</p>
-                        <div className="mt-2 space-y-1 text-sm text-gray-600">
-                          <p>Kiekis: <span className="font-semibold">{charge.quantity}</span></p>
-                          <p>Savikaina: <span className="font-semibold">€{charge.cost_price.toFixed(2)}/vnt</span></p>
-                          <p className="text-xs text-blue-700 mt-2">
+                {productCharges.map((charge, index) => {
+                  const totalCost = charge.cost_price * charge.quantity;
+                  const isVatRegistered = isClientVatRegistered(clientVatInfo);
+                  const vatRate = getClientVatRate(clientVatInfo);
+                  
+                  return (
+                    <div key={index} className="bg-blue-50 rounded-lg p-4 border-2 border-blue-200">
+                      <div className="flex items-start justify-between">
+                        <div className="flex-1">
+                          <p className="font-medium text-gray-900 mb-3">{charge.product_name}</p>
+                          
+                          <div className="grid grid-cols-2 gap-4 text-sm">
+                            <div>
+                              <p className="text-gray-600">Kiekis:</p>
+                              <p className="font-semibold text-gray-900">{charge.quantity}</p>
+                            </div>
+                            
+                            <div>
+                              <p className="text-gray-600">
+                                Vieneto savikaina {isVatRegistered ? '(be PVM)' : '(su PVM)'}:
+                              </p>
+                              <p className="font-semibold text-gray-900">€{charge.cost_price.toFixed(3)}</p>
+                            </div>
+                            
+                            <div className="col-span-2 pt-2 border-t border-blue-300">
+                              <p className="text-gray-600">
+                                Bendra savikaina {isVatRegistered ? '(be PVM)' : '(su PVM)'}:
+                              </p>
+                              <p className="text-xl font-bold text-blue-700">€{totalCost.toFixed(2)}</p>
+                              
+                              {isVatRegistered && (
+                                <div className="mt-2 text-xs space-y-1 text-gray-600">
+                                  <p>PVM ({vatRate}%): €{(totalCost * vatRate / 100).toFixed(2)}</p>
+                                  <p>Su PVM: €{(totalCost * (1 + vatRate / 100)).toFixed(2)}</p>
+                                </div>
+                              )}
+                            </div>
+                          </div>
+                          
+                          <p className="text-xs text-blue-700 mt-3 bg-blue-100 px-2 py-1 rounded">
                             💡 Produkto kaina jau įtraukta paskirstymo metu iš sandėlio
                           </p>
                         </div>
                       </div>
                     </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>

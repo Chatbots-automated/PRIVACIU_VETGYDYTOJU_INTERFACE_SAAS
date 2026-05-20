@@ -53,9 +53,11 @@ export function StockAllocation() {
 
   const loadData = async () => {
     try {
+      const clientId = requireClientId(user);
+      
       const [stockRes, farmsRes] = await Promise.all([
-        supabase.from('vw_warehouse_stock_available').select('*').order('expiry_date', { ascending: true, nullsFirst: false }),
-        supabase.from('farms').select('id, name, code').eq('is_active', true).order('name'),
+        supabase.from('vw_warehouse_stock_available').select('*').eq('client_id', clientId).order('expiry_date', { ascending: true, nullsFirst: false }),
+        supabase.from('farms').select('id, name, code').eq('client_id', clientId).eq('is_active', true).order('name'),
       ]);
 
       // Group by product but keep individual batches for FIFO allocation
