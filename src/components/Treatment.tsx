@@ -385,6 +385,15 @@ export function Treatment() {
         } catch (logError: any) {
           console.error('❌ Failed to log usage items:', logError);
         }
+
+        // Calculate withdrawal dates based on products used
+        console.log('🔧 Calculating withdrawal dates...');
+        try {
+          await supabase.rpc('calculate_withdrawal_dates', { p_treatment_id: treatment.id });
+          console.log('✅ Withdrawal dates calculated');
+        } catch (calcError: any) {
+          console.error('❌ Failed to calculate withdrawal dates:', calcError);
+        }
       }
 
       setSuccess(true);

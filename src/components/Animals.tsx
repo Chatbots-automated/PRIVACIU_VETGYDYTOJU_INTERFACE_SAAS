@@ -1221,167 +1221,208 @@ export function Animals() {
           <table className="w-full">
             <thead className="bg-gray-50 border-b border-gray-200">
               <tr>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">ID</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Kaklo nr.</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Rūšis</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Amžius</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Savininkas</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">Veiksmai</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Eil. Nr.</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Rūšis</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Numeris</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Vardas</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Lytis</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Veislė</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Gimimo data</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Amžius</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Paso Serija | Numeris</th>
+                <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Veiksmai</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200">
-              {filteredAnimals.map((animal) => (
-                <tr key={animal.id} className="hover:bg-gray-50 transition-colors">
-                  {editing === animal.id ? (
-                    <>
-                      <td className="px-6 py-4" colSpan={6}>
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                          <input
-                            type="text"
-                            value={formData.tag_no}
-                            onChange={(e) => setFormData({ ...formData, tag_no: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Ženklo numeris"
-                          />
-                          <select
-                            value={formData.species}
-                            onChange={(e) => {
-                              if (e.target.value === '__add_new__') {
-                                setShowAddSpecies(true);
-                              } else {
-                                setFormData({ ...formData, species: e.target.value });
-                              }
-                            }}
-                            className="w-full px-4 py-2 border border-gray-300 rounded-lg"
-                          >
-                            <option value="">Pasirinkite rūšį...</option>
-                            {speciesList.map(species => (
-                              <option key={species.id} value={species.code}>
-                                {species.name_lt}
-                              </option>
-                            ))}
-                            <option value="__add_new__" className="font-bold text-blue-600">+ Pridėti naują rūšį</option>
-                          </select>
-                          <select
-                            value={formData.sex}
-                            onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                          >
-                            <option value="">Pasirinkite lytį...</option>
-                            <option value="male">Patinas</option>
-                            <option value="female">Patelė</option>
-                          </select>
-                          <select
-                            value={formData.animal_type}
-                            onChange={(e) => setFormData({ ...formData, animal_type: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                          >
-                            <option value="produkcinis">Produkcinis gyvūnas</option>
-                            <option value="augintinis">Augintinis</option>
-                          </select>
-                          <input
-                            type="text"
-                            value={formData.breed}
-                            onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Veislė"
-                          />
-                          <div>
+              {filteredAnimals.map((animal, index) => {
+                // Format age as years (e.g., "8 m." for 95 months = 7 years 11 months)
+                const formatAge = (months: number | undefined | null) => {
+                  if (!months) return '';
+                  const years = Math.floor(months / 12);
+                  const remainingMonths = months % 12;
+                  if (years === 0) return `${remainingMonths} mėn.`;
+                  if (remainingMonths === 0) return `${years} m.`;
+                  return `${years} m. ${remainingMonths} mėn.`;
+                };
+
+                // Translate sex to display format
+                const formatSex = (sex: string | undefined | null) => {
+                  if (!sex) return '';
+                  if (sex === 'male' || sex === 'Patinas') return 'Patinas';
+                  if (sex === 'female' || sex === 'Patelė') return 'Karvė';
+                  return sex;
+                };
+
+                return (
+                  <tr key={animal.id} className="hover:bg-gray-50 transition-colors">
+                    {editing === animal.id ? (
+                      <>
+                        <td className="px-4 py-4" colSpan={10}>
+                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <input
-                              type="date"
-                              value={formData.birth_date}
-                              onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
-                              className="px-4 py-2 border border-gray-300 rounded-lg w-full"
-                              placeholder="Gimimo data"
+                              type="text"
+                              value={formData.tag_no}
+                              onChange={(e) => setFormData({ ...formData, tag_no: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="Ženklo numeris"
+                            />
+                            <select
+                              value={formData.species}
+                              onChange={(e) => {
+                                if (e.target.value === '__add_new__') {
+                                  setShowAddSpecies(true);
+                                } else {
+                                  setFormData({ ...formData, species: e.target.value });
+                                }
+                              }}
+                              className="w-full px-4 py-2 border border-gray-300 rounded-lg"
+                            >
+                              <option value="">Pasirinkite rūšį...</option>
+                              {speciesList.map(species => (
+                                <option key={species.id} value={species.code}>
+                                  {species.name_lt}
+                                </option>
+                              ))}
+                              <option value="__add_new__" className="font-bold text-blue-600">+ Pridėti naują rūšį</option>
+                            </select>
+                            <select
+                              value={formData.sex}
+                              onChange={(e) => setFormData({ ...formData, sex: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                            >
+                              <option value="">Pasirinkite lytį...</option>
+                              <option value="male">Patinas</option>
+                              <option value="female">Patelė</option>
+                            </select>
+                            <select
+                              value={formData.animal_type}
+                              onChange={(e) => setFormData({ ...formData, animal_type: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                            >
+                              <option value="produkcinis">Produkcinis gyvūnas</option>
+                              <option value="augintinis">Augintinis</option>
+                            </select>
+                            <input
+                              type="text"
+                              value={formData.breed}
+                              onChange={(e) => setFormData({ ...formData, breed: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="Veislė"
+                            />
+                            <div>
+                              <input
+                                type="date"
+                                value={formData.birth_date}
+                                onChange={(e) => setFormData({ ...formData, birth_date: e.target.value })}
+                                className="px-4 py-2 border border-gray-300 rounded-lg w-full"
+                                placeholder="Gimimo data"
+                              />
+                            </div>
+                            <div>
+                              <input
+                                type="number"
+                                value={formData.age_months}
+                                readOnly={!!formData.birth_date}
+                                onChange={(e) => !formData.birth_date && setFormData({ ...formData, age_months: e.target.value })}
+                                className={`px-4 py-2 border border-gray-300 rounded-lg w-full ${formData.birth_date ? 'bg-gray-50 cursor-not-allowed' : ''}`}
+                                placeholder={formData.birth_date ? 'Auto-apskaičiuota' : 'Amžius (mėn.)'}
+                              />
+                            </div>
+                            <input
+                              type="text"
+                              value={formData.holder_name}
+                              onChange={(e) => setFormData({ ...formData, holder_name: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="Savininko vardas"
+                            />
+                            <input
+                              type="text"
+                              value={formData.holder_address}
+                              onChange={(e) => setFormData({ ...formData, holder_address: e.target.value })}
+                              className="px-4 py-2 border border-gray-300 rounded-lg"
+                              placeholder="Savininko adresas"
                             />
                           </div>
-                          <div>
-                            <input
-                              type="number"
-                              value={formData.age_months}
-                              readOnly={!!formData.birth_date}
-                              onChange={(e) => !formData.birth_date && setFormData({ ...formData, age_months: e.target.value })}
-                              className={`px-4 py-2 border border-gray-300 rounded-lg w-full ${formData.birth_date ? 'bg-gray-50 cursor-not-allowed' : ''}`}
-                              placeholder={formData.birth_date ? 'Auto-apskaičiuota' : 'Amžius (mėn.)'}
-                            />
+                          <div className="flex justify-end gap-2 mt-3">
+                            <button
+                              onClick={handleCancel}
+                              className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                            >
+                              <X className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={handleSave}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
+                            >
+                              <Save className="w-4 h-4" />
+                            </button>
                           </div>
-                          <input
-                            type="text"
-                            value={formData.holder_name}
-                            onChange={(e) => setFormData({ ...formData, holder_name: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Savininko vardas"
-                          />
-                          <input
-                            type="text"
-                            value={formData.holder_address}
-                            onChange={(e) => setFormData({ ...formData, holder_address: e.target.value })}
-                            className="px-4 py-2 border border-gray-300 rounded-lg"
-                            placeholder="Savininko adresas"
-                          />
-                        </div>
-                        <div className="flex justify-end gap-2 mt-3">
+                        </td>
+                      </>
+                    ) : (
+                      <>
+                        <td className="px-4 py-4 text-sm text-gray-900 font-medium">
+                          {index + 1}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {getSpeciesDisplayName(animal.species)}
+                        </td>
+                        <td className="px-4 py-4">
                           <button
-                            onClick={handleCancel}
-                            className="p-2 text-gray-600 hover:bg-gray-100 rounded-lg"
+                            onClick={() => loadAnimalDetails(animal.id)}
+                            className="font-medium text-blue-600 hover:text-blue-800 hover:underline text-sm"
                           >
-                            <X className="w-4 h-4" />
+                            {animal.tag_no || '-'}
                           </button>
-                          <button
-                            onClick={handleSave}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg"
-                          >
-                            <Save className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  ) : (
-                    <>
-                      <td className="px-6 py-4">
-                        <button
-                          onClick={() => loadAnimalDetails(animal.id)}
-                          className="font-medium text-blue-600 hover:text-blue-800 hover:underline"
-                        >
-                          {formatAnimalDisplay(animal)}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{(animal as any).neck_no || '-'}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">{animal.sex || getSpeciesDisplayName(animal.species)}</td>
-                      <td className="px-6 py-4 text-sm text-gray-600">
-                        {animal.age_months ? `${animal.age_months} mėn.` : 'N/A'}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="text-sm font-medium text-gray-900">{animal.holder_name || 'N/A'}</div>
-                        <div className="text-xs text-gray-500">{animal.holder_address || ''}</div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <button
-                            onClick={() => handleEdit(animal)}
-                            className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
-                            title="Redaguoti"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
-                          <button
-                            onClick={() => handleDelete(animal)}
-                            disabled={deletingAnimalId === animal.id}
-                            className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
-                            title="Ištrinti"
-                          >
-                            {deletingAnimalId === animal.id ? (
-                              <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
-                            ) : (
-                              <Trash2 className="w-4 h-4" />
-                            )}
-                          </button>
-                        </div>
-                      </td>
-                    </>
-                  )}
-                </tr>
-              ))}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {(animal as any).name || ''}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {(animal as any).animal_subtype || formatSex(animal.sex)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {animal.breed || ''}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {animal.birth_date || ''}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {formatAge(animal.age_months)}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-gray-600">
+                          {(animal as any).passport_series && (animal as any).passport_number
+                            ? `${(animal as any).passport_series} | ${(animal as any).passport_number}`
+                            : ''}
+                        </td>
+                        <td className="px-4 py-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => handleEdit(animal)}
+                              className="p-2 text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"
+                              title="Redaguoti"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              onClick={() => handleDelete(animal)}
+                              disabled={deletingAnimalId === animal.id}
+                              className="p-2 text-red-600 hover:bg-red-50 rounded-lg transition-colors disabled:opacity-50"
+                              title="Ištrinti"
+                            >
+                              {deletingAnimalId === animal.id ? (
+                                <div className="w-4 h-4 border-2 border-red-600 border-t-transparent rounded-full animate-spin"></div>
+                              ) : (
+                                <Trash2 className="w-4 h-4" />
+                              )}
+                            </button>
+                          </div>
+                        </td>
+                      </>
+                    )}
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>

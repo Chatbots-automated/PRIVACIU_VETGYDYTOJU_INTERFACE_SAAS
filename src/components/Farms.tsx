@@ -286,20 +286,35 @@ export function Farms() {
       }
 
       // Prepare animals data for insertion
-      const animalsToInsert = data.animals.map((animal: any) => ({
-        client_id: clientId,
-        farm_id: formData.id,
-        tag_no: animal.tagNo || animal.animalNumber,
-        animal_type: 'produkcinis', // All cattle from VIC are production animals
-        species: animal.species || 'Galvijai',
-        sex: animal.sex === 'female' ? 'Patelė' : animal.sex === 'male' ? 'Patinas' : null,
-        age_months: animal.ageMonths || null,
-        holder_name: pageData?.clientCards?.[0]?.holderName || null,
-        holder_address: pageData?.clientCards?.[0]?.holderAddress || null,
-        breed: animal.breed || null,
-        birth_date: animal.birthDate || null,
-        active: true,
-      }));
+      const animalsToInsert = data.animals.map((animal: any) => {
+        console.log('🐄 Animal from webhook:', {
+          tagNo: animal.tagNo,
+          animalType: animal.animalType,
+          name: animal.name,
+          sex: animal.sex,
+          passportSeries: animal.passportSeries,
+          passportNumber: animal.passportNumber
+        });
+        
+        return {
+          client_id: clientId,
+          farm_id: formData.id,
+          tag_no: animal.tagNo || animal.animalNumber,
+          name: animal.name || null,
+          animal_type: 'produkcinis', // All cattle from VIC are production animals
+          animal_subtype: animal.animalType || null, // Specific type like "Karvė", "Bulius", etc.
+          species: animal.species || 'Galvijai',
+          sex: animal.sex === 'female' ? 'Patelė' : animal.sex === 'male' ? 'Patinas' : null,
+          age_months: animal.ageMonths || null,
+          holder_name: pageData?.clientCards?.[0]?.holderName || null,
+          holder_address: pageData?.clientCards?.[0]?.holderAddress || null,
+          breed: animal.breed || null,
+          birth_date: animal.birthDate || null,
+          passport_series: animal.passportSeries || null,
+          passport_number: animal.passportNumber || null,
+          active: true,
+        };
+      });
 
       // Insert animals in batches
       const { error: animalsError } = await supabase

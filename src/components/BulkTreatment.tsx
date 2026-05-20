@@ -419,6 +419,13 @@ export function BulkTreatment() {
               .insert(usageItems);
 
             if (usageError) throw usageError;
+
+            // Calculate withdrawal dates based on products used
+            try {
+              await supabase.rpc('calculate_withdrawal_dates', { p_treatment_id: treatment.id });
+            } catch (calcError) {
+              console.error('Failed to calculate withdrawal dates for treatment', treatment.id, calcError);
+            }
           }
 
         // Handle vaccinations - ALSO create treatment record so they show in reports

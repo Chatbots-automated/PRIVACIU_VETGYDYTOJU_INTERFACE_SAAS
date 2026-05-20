@@ -538,7 +538,7 @@ export function AnimalsCompact() {
                           {animal.tag_no}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
-                          {animal.sex || getSpeciesDisplayName(animal.species)}
+                          {(animal as any).animal_subtype || animal.sex || getSpeciesDisplayName(animal.species)}
                         </td>
                         <td className="px-4 py-3 text-sm text-gray-700">
                           {animal.age_months ? `${animal.age_months} mėn.` : '-'}

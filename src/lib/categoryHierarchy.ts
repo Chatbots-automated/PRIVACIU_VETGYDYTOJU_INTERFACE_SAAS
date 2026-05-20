@@ -37,6 +37,9 @@ export const CATEGORY_HIERARCHY: CategoryHierarchy = {
   hygiene: {
     subcategories: ['Biocidai', 'Kitos priemones'],
   },
+  supplier_costs: {
+    subcategories: [], // No subcategories - simple cost entries
+  },
 };
 
 /**

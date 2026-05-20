@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Trash2, Euro, Package } from 'lucide-react';
+import { X, Trash2, Euro, Package, Truck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { requireClientId } from '../lib/clientHelpers';
 import { isClientVatRegistered, ClientVatInfo, getClientVatRate } from '../lib/vatHelpers';
+import { calculateProportionalSupplierCost } from '../lib/supplierCostHelpers';
 
 interface PricingModalProps {
   isOpen: boolean;
@@ -21,6 +22,8 @@ interface PricingModalProps {
     product_name: string;
     quantity: number;
     cost_price?: number;
+    batch_id?: string;
+    is_warehouse_batch?: boolean;
   }>;
 }
 
@@ -36,6 +39,10 @@ interface ProductCharge {
   quantity: number;
   unit_price: number;
   cost_price?: number;
+  batch_id?: string;
+  is_warehouse_batch?: boolean;
+  proportional_supplier_cost?: number;
+  supplier_costs_loading?: boolean;
 }
 
 export function PricingModal({ isOpen, onClose, visitData, animalName = '', productsUsed = [] }: PricingModalProps) {
@@ -111,16 +118,60 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
     }
   };
 
-  const loadProductsUsed = () => {
+  const loadProductsUsed = async () => {
+    if (!user) return;
+    
+    const clientId = requireClientId(user);
+
     // Convert productsUsed to productCharges with suggested markup
     const charges: ProductCharge[] = productsUsed.map(p => ({
       product_id: p.product_id,
       product_name: p.product_name,
       quantity: p.quantity,
       cost_price: p.cost_price || 0,
-      unit_price: p.cost_price ? p.cost_price * 1.3 : 0 // 30% markup
+      unit_price: p.cost_price ? p.cost_price * 1.3 : 0, // 30% markup
+      batch_id: p.batch_id,
+      is_warehouse_batch: p.is_warehouse_batch,
+      proportional_supplier_cost: 0,
+      supplier_costs_loading: true,
     }));
+    
     setProductCharges(charges);
+
+    // Calculate supplier costs asynchronously for each product
+    for (let i = 0; i < charges.length; i++) {
+      const charge = charges[i];
+      if (charge.batch_id && charge.cost_price) {
+        const supplierCost = await calculateProportionalSupplierCost(
+          charge.batch_id,
+          charge.is_warehouse_batch || false,
+          charge.quantity,
+          charge.cost_price,
+          clientId
+        );
+        
+        // Update the specific charge with supplier cost
+        setProductCharges(prev => {
+          const updated = [...prev];
+          updated[i] = {
+            ...updated[i],
+            proportional_supplier_cost: supplierCost,
+            supplier_costs_loading: false,
+          };
+          return updated;
+        });
+      } else {
+        // No batch info, mark as not loading
+        setProductCharges(prev => {
+          const updated = [...prev];
+          updated[i] = {
+            ...updated[i],
+            supplier_costs_loading: false,
+          };
+          return updated;
+        });
+      }
+    }
   };
 
   const updateServiceCharge = (index: number, field: keyof ServiceCharge, value: any) => {
@@ -290,6 +341,8 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
               <div className="space-y-3">
                 {productCharges.map((charge, index) => {
                   const totalCost = charge.cost_price * charge.quantity;
+                  const supplierCost = charge.proportional_supplier_cost || 0;
+                  const totalWithSupplier = totalCost + supplierCost;
                   const isVatRegistered = isClientVatRegistered(clientVatInfo);
                   const vatRate = getClientVatRate(clientVatInfo);
                   
@@ -312,16 +365,46 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
                               <p className="font-semibold text-gray-900">€{charge.cost_price.toFixed(3)}</p>
                             </div>
                             
-                            <div className="col-span-2 pt-2 border-t border-blue-300">
-                              <p className="text-gray-600">
-                                Bendra savikaina {isVatRegistered ? '(be PVM)' : '(su PVM)'}:
-                              </p>
-                              <p className="text-xl font-bold text-blue-700">€{totalCost.toFixed(2)}</p>
+                            <div className="col-span-2 pt-2 border-t border-blue-300 space-y-2">
+                              <div>
+                                <p className="text-gray-600">
+                                  Produkto savikaina {isVatRegistered ? '(be PVM)' : '(su PVM)'}:
+                                </p>
+                                <p className="text-lg font-bold text-gray-900">€{totalCost.toFixed(2)}</p>
+                              </div>
+                              
+                              {charge.supplier_costs_loading ? (
+                                <div className="flex items-center gap-2 text-amber-600">
+                                  <Truck className="w-4 h-4 animate-pulse" />
+                                  <p className="text-xs">Skaičiuojamos transportavimo išlaidos...</p>
+                                </div>
+                              ) : supplierCost > 0 ? (
+                                <div className="bg-amber-50 rounded px-3 py-2 border border-amber-200">
+                                  <div className="flex items-center gap-2 mb-1">
+                                    <Truck className="w-4 h-4 text-amber-700" />
+                                    <p className="text-xs font-semibold text-amber-900">Tiekėjo išlaidos (proporcinė dalis):</p>
+                                  </div>
+                                  <p className="text-sm font-bold text-amber-700">€{supplierCost.toFixed(2)}</p>
+                                  <p className="text-xs text-amber-600 mt-1">
+                                    (transportavimas, kitos tiekėjo paslaugos)
+                                  </p>
+                                </div>
+                              ) : null}
+                              
+                              {supplierCost > 0 && (
+                                <div className="pt-2 border-t border-blue-400">
+                                  <p className="text-gray-700 font-semibold">
+                                    Viso su tiekėjo išlaidomis {isVatRegistered ? '(be PVM)' : '(su PVM)'}:
+                                  </p>
+                                  <p className="text-xl font-bold text-blue-700">€{totalWithSupplier.toFixed(2)}</p>
+                                </div>
+                              )}
                               
                               {isVatRegistered && (
-                                <div className="mt-2 text-xs space-y-1 text-gray-600">
-                                  <p>PVM ({vatRate}%): €{(totalCost * vatRate / 100).toFixed(2)}</p>
-                                  <p>Su PVM: €{(totalCost * (1 + vatRate / 100)).toFixed(2)}</p>
+                                <div className="mt-2 text-xs space-y-1 text-gray-600 bg-gray-100 rounded px-2 py-2">
+                                  <p className="font-semibold text-gray-700">PVM apskaičiavimas:</p>
+                                  <p>PVM ({vatRate}%): €{(totalWithSupplier * vatRate / 100).toFixed(2)}</p>
+                                  <p className="font-semibold text-gray-800">Su PVM: €{(totalWithSupplier * (1 + vatRate / 100)).toFixed(2)}</p>
                                 </div>
                               )}
                             </div>

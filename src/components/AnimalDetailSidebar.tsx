@@ -713,7 +713,12 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                 <div className="space-y-3">
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
                     <span className="text-xs text-gray-500 block mb-1">Lytis</span>
-                    <span className="font-bold text-gray-900 text-base">{animal.sex || '-'}</span>
+                    <span className="font-bold text-gray-900 text-base">
+                      {(animal as any).animal_subtype || 
+                       (animal.sex === 'Patinas' ? 'Patinas' : 
+                        animal.sex === 'Patelė' ? 'Patelė' : 
+                        animal.sex || '-')}
+                    </span>
                   </div>
                   <div className="bg-white rounded-lg p-3 border border-blue-100">
                     <span className="text-xs text-gray-500 block mb-1">Gimimo data</span>
@@ -3942,7 +3947,9 @@ function VisitCreateModal({
               product_id: med.product_id,
               product_name: product.name,
               quantity: parseFloat(med.qty) || 0,
-              cost_price: batchUnitCost
+              cost_price: batchUnitCost,
+              batch_id: med.batch_id,
+              is_warehouse_batch: batch?.source === 'warehouse',
             });
           }
         });
@@ -3968,7 +3975,9 @@ function VisitCreateModal({
                   product_id: med.product_id,
                   product_name: product.name,
                   quantity: parseFloat(med.qty) || 0,
-                  cost_price: batchUnitCost
+                  cost_price: batchUnitCost,
+                  batch_id: med.batch_id,
+                  is_warehouse_batch: batch?.source === 'warehouse',
                 });
 
                 console.log('💰 Added course med to pricing:', {
@@ -4001,7 +4010,9 @@ function VisitCreateModal({
               product_id: vac.product_id,
               product_name: product.name,
               quantity: parseFloat(vac.dose_amount) || 0,
-              cost_price: batchUnitCost
+              cost_price: batchUnitCost,
+              batch_id: vac.batch_id,
+              is_warehouse_batch: batch?.source === 'warehouse',
             });
           }
         });
@@ -4018,7 +4029,9 @@ function VisitCreateModal({
               product_id: prev.product_id,
               product_name: product.name,
               quantity: parseFloat(prev.dose_qty) || 0,
-              cost_price: batchUnitCost
+              cost_price: batchUnitCost,
+              batch_id: prev.batch_id,
+              is_warehouse_batch: batch?.source === 'warehouse',
             });
           }
         });
@@ -5779,7 +5792,9 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
                 product_id: med.product_id,
                 product_name: product.name,
                 quantity: parseFloat(med.qty),
-                cost_price: batchUnitCost
+                cost_price: batchUnitCost,
+                batch_id: med.batch_id,
+                is_warehouse_batch: batch?.source === 'warehouse',
               });
             }
           }
