@@ -16,6 +16,8 @@ import { showNotification } from './NotificationToast';
 import { HoofSelector } from './HoofSelector';
 import { CourseMedicationScheduler } from './CourseMedicationScheduler';
 import { PricingModal } from './PricingModal';
+import { isClientVatRegistered, ClientVatInfo } from '../lib/vatHelpers';
+import { calculateVatAwareUnitCost, VatAwareBatch } from '../lib/costCalculations';
 
 interface Vaccination {
   id: string;
@@ -149,6 +151,9 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
   const [showVisitDetailModal, setShowVisitDetailModal] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
   
+  // Client VAT info for VAT-aware cost calculations
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(null);
+  
   // Pricing modal state (at parent level so it persists after visit modal closes)
   const [showPricingModal, setShowPricingModal] = useState(false);
   const [pricingModalData, setPricingModalData] = useState<{
@@ -190,9 +195,31 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
       loadTreatments(),
       loadVaccinations(),
       loadProducts(),
-      loadBatches()
+      loadBatches(),
+      loadClientVatInfo()
     ]);
     setLoading(false);
+  };
+  
+  const loadClientVatInfo = async () => {
+    if (!user?.client_id) return;
+    
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('vat_code, vat_rate, vat_registered')
+        .eq('id', user.client_id)
+        .single();
+      
+      if (error) {
+        console.error('Error loading client VAT info:', error);
+        return;
+      }
+      
+      setClientVatInfo(data);
+    } catch (error) {
+      console.error('Error loading client VAT info:', error);
+    }
   };
 
   const loadVisits = async () => {
@@ -1526,9 +1553,12 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                   <div className="mt-2 space-y-2">
                                     {/* Show single doses with cost */}
                                     {treatment.usage_items && treatment.usage_items.map((item, i) => {
-                                      const unitCost = item.batch?.purchase_price && item.batch?.qty_received
-                                        ? item.batch.purchase_price / item.batch.qty_received
-                                        : 0;
+                                      const isVatRegistered = isClientVatRegistered(clientVatInfo);
+                                      const priceToUse = isVatRegistered
+                                        ? (item.batch?.purchase_price_net || item.batch?.purchase_price || 0)
+                                        : (item.batch?.purchase_price_gross || item.batch?.purchase_price || 0);
+                                      const qtyReceived = item.batch?.qty_received || item.batch?.received_qty || 0;
+                                      const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                                       const totalCost = item.qty * unitCost;
                                       return (
                                         <div key={`usage-${i}`} className="flex items-center justify-between text-xs bg-blue-50 px-2 py-1 rounded">
@@ -1543,9 +1573,12 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                     })}
                                     {/* Show courses with cost */}
                                     {treatment.treatment_courses && treatment.treatment_courses.map((course, i) => {
-                                      const unitCost = course.batch?.purchase_price && course.batch?.qty_received
-                                        ? course.batch.purchase_price / course.batch.received_qty
-                                        : 0;
+                                      const isVatRegistered = isClientVatRegistered(clientVatInfo);
+                                      const priceToUse = isVatRegistered
+                                        ? (course.batch?.purchase_price_net || course.batch?.purchase_price || 0)
+                                        : (course.batch?.purchase_price_gross || course.batch?.purchase_price || 0);
+                                      const qtyReceived = course.batch?.qty_received || course.batch?.received_qty || 0;
+                                      const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                                       const totalCost = course.total_quantity * unitCost;
                                       return (
                                         <div key={`course-${i}`} className="flex items-center justify-between text-xs bg-purple-50 px-2 py-1 rounded">
@@ -1560,16 +1593,21 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                                     })}
                                     {/* Total treatment cost */}
                                     {(() => {
+                                      const isVatRegistered = isClientVatRegistered(clientVatInfo);
                                       const usageCost = treatment.usage_items?.reduce((sum, item) => {
-                                        const unitCost = item.batch?.purchase_price && item.batch?.qty_received
-                                          ? item.batch.purchase_price / item.batch.received_qty
-                                          : 0;
+                                        const priceToUse = isVatRegistered
+                                          ? (item.batch?.purchase_price_net || item.batch?.purchase_price || 0)
+                                          : (item.batch?.purchase_price_gross || item.batch?.purchase_price || 0);
+                                        const qtyReceived = item.batch?.qty_received || item.batch?.received_qty || 0;
+                                        const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                                         return sum + (item.qty * unitCost);
                                       }, 0) || 0;
                                       const courseCost = treatment.treatment_courses?.reduce((sum, course) => {
-                                        const unitCost = course.batch?.purchase_price && course.batch?.qty_received
-                                          ? course.batch.purchase_price / course.batch.received_qty
-                                          : 0;
+                                        const priceToUse = isVatRegistered
+                                          ? (course.batch?.purchase_price_net || course.batch?.purchase_price || 0)
+                                          : (course.batch?.purchase_price_gross || course.batch?.purchase_price || 0);
+                                        const qtyReceived = course.batch?.qty_received || course.batch?.received_qty || 0;
+                                        const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                                         return sum + (course.total_quantity * unitCost);
                                       }, 0) || 0;
                                       const totalCost = usageCost + courseCost;
@@ -1681,9 +1719,12 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                     <div className="space-y-2 mt-3">
                       {/* Single doses with cost */}
                       {treatment.usage_items && treatment.usage_items.map((item, i) => {
-                        const unitCost = item.batch?.purchase_price && item.batch?.qty_received
-                          ? item.batch.purchase_price / item.batch.received_qty
-                          : 0;
+                        const isVatRegistered = isClientVatRegistered(clientVatInfo);
+                        const priceToUse = isVatRegistered
+                          ? (item.batch?.purchase_price_net || item.batch?.purchase_price || 0)
+                          : (item.batch?.purchase_price_gross || item.batch?.purchase_price || 0);
+                        const qtyReceived = item.batch?.qty_received || item.batch?.received_qty || 0;
+                        const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                         const totalCost = item.qty * unitCost;
                         return (
                           <div key={`usage-${i}`} className="flex items-center justify-between text-xs bg-blue-50 px-3 py-2 rounded-lg">
@@ -1698,9 +1739,12 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       })}
                       {/* Courses with cost */}
                       {treatment.treatment_courses && treatment.treatment_courses.map((course, i) => {
-                        const unitCost = course.batch?.purchase_price && course.batch?.qty_received
-                          ? course.batch.purchase_price / course.batch.received_qty
-                          : 0;
+                        const isVatRegistered = isClientVatRegistered(clientVatInfo);
+                        const priceToUse = isVatRegistered
+                          ? (course.batch?.purchase_price_net || course.batch?.purchase_price || 0)
+                          : (course.batch?.purchase_price_gross || course.batch?.purchase_price || 0);
+                        const qtyReceived = course.batch?.qty_received || course.batch?.received_qty || 0;
+                        const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                         const totalCost = course.total_quantity * unitCost;
                         return (
                           <div key={`course-${i}`} className="flex items-center justify-between text-xs bg-purple-50 px-3 py-2 rounded-lg">
@@ -1715,16 +1759,21 @@ export function AnimalDetailSidebar({ animal, onClose, defaultTab = 'overview' }
                       })}
                       {/* Total treatment cost */}
                       {(() => {
+                        const isVatRegistered = isClientVatRegistered(clientVatInfo);
                         const usageCost = treatment.usage_items?.reduce((sum, item) => {
-                          const unitCost = item.batch?.purchase_price && item.batch?.qty_received
-                            ? item.batch.purchase_price / item.batch.received_qty
-                            : 0;
+                          const priceToUse = isVatRegistered
+                            ? (item.batch?.purchase_price_net || item.batch?.purchase_price || 0)
+                            : (item.batch?.purchase_price_gross || item.batch?.purchase_price || 0);
+                          const qtyReceived = item.batch?.qty_received || item.batch?.received_qty || 0;
+                          const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                           return sum + (item.qty * unitCost);
                         }, 0) || 0;
                         const courseCost = treatment.treatment_courses?.reduce((sum, course) => {
-                          const unitCost = course.batch?.purchase_price && course.batch?.qty_received
-                            ? course.batch.purchase_price / course.batch.received_qty
-                            : 0;
+                          const priceToUse = isVatRegistered
+                            ? (course.batch?.purchase_price_net || course.batch?.purchase_price || 0)
+                            : (course.batch?.purchase_price_gross || course.batch?.purchase_price || 0);
+                          const qtyReceived = course.batch?.qty_received || course.batch?.received_qty || 0;
+                          const unitCost = qtyReceived > 0 ? priceToUse / qtyReceived : 0;
                           return sum + (course.total_quantity * unitCost);
                         }, 0) || 0;
                         const totalCost = usageCost + courseCost;
@@ -2386,7 +2435,15 @@ function VisitCreateModal({
   };
 
   const calculateBatchUnitCost = (batch: any): number => {
-    if (!batch || !batch.purchase_price) return 0;
+    if (!batch) return 0;
+    
+    // Determine if client is VAT registered
+    const isVatRegistered = isClientVatRegistered(clientVatInfo);
+    
+    // Use VAT-aware pricing: NET for VAT-registered, GROSS for non-VAT
+    const priceToUse = isVatRegistered
+      ? (batch.purchase_price_net || batch.purchase_price || 0)
+      : (batch.purchase_price_gross || batch.purchase_price || 0);
     
     // Warehouse batches use 'received_qty', farm batches use 'qty_received'
     const qtyReceived = batch.source === 'warehouse' 
@@ -2395,7 +2452,7 @@ function VisitCreateModal({
     
     if (!qtyReceived || qtyReceived <= 0) return 0;
     
-    return batch.purchase_price / qtyReceived;
+    return priceToUse / qtyReceived;
   };
 
   const loadResources = async () => {

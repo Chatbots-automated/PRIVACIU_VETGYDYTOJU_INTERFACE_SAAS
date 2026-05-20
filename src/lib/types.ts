@@ -2,8 +2,53 @@ export type ProductCategory = 'medicines' | 'prevention' | 'ovules' | 'vakcina' 
 export type Unit = 'ml' | 'l' | 'g' | 'kg' | 'vnt' | 'pcs' | 'tabletkė' | 'bolus' | 'syringe';
 export type AdministrationRoute = 'iv' | 'im' | 'sc' | 'iu' | 'imm' | 'pos';
 
+/**
+ * Client (Tenant) interface for SaaS multi-tenancy
+ */
+export interface Client {
+  id: string;
+  name: string;
+  company_code?: string | null;
+  vat_code?: string | null;
+  vat_rate?: number | null; // VAT rate percentage (e.g., 21.00 for 21%)
+  vat_registered?: boolean | null;
+  contact_email: string;
+  contact_phone?: string | null;
+  address?: string | null;
+  city?: string | null;
+  postal_code?: string | null;
+  subscription_plan?: string;
+  is_active?: boolean;
+  created_at?: string;
+}
+
+/**
+ * Warehouse Batch interface (client-wide inventory)
+ */
+export interface WarehouseBatch {
+  id: string;
+  client_id: string;
+  product_id: string;
+  supplier_id?: string | null;
+  invoice_id?: string | null;
+  lot?: string | null;
+  mfg_date?: string | null;
+  expiry_date?: string | null;
+  purchase_price?: number | null; // DEPRECATED: Use purchase_price_net or purchase_price_gross
+  purchase_price_net?: number | null; // Price excluding VAT
+  purchase_price_gross?: number | null; // Price including VAT
+  currency?: string;
+  received_qty: number;
+  qty_left?: number;
+  qty_allocated?: number;
+  status?: string;
+  created_at?: string;
+}
+
 export interface Product {
   id: string;
+  client_id?: string; // SaaS multi-tenant
+  farm_id?: string | null; // NULL for client-wide products
   name: string;
   category: ProductCategory;
   primary_pack_unit: Unit;
@@ -28,6 +73,9 @@ export interface Product {
   dosage_notes: string | null;
   is_active: boolean;
   package_weight_g: number | null;
+  subcategory?: string | null;
+  subcategory_2?: string | null;
+  is_shared?: boolean;
   created_at: string;
 }
 
@@ -51,13 +99,18 @@ export interface Batch {
   doc_title: string | null;
   doc_number: string | null;
   doc_date: string | null;
-  purchase_price: number | null;
+  purchase_price: number | null; // DEPRECATED: Use purchase_price_net or purchase_price_gross
+  purchase_price_net?: number | null; // Price excluding VAT
+  purchase_price_gross?: number | null; // Price including VAT
   currency: string;
   received_qty: number;
+  qty_received?: number; // Alternative field name in some queries
   package_size: number | null;
   package_count: number | null;
   invoice_path: string | null;
   created_at: string;
+  client_id?: string; // SaaS multi-tenant
+  farm_id?: string;
 }
 
 export interface Animal {

@@ -8,6 +8,7 @@ import { useRealtimeSubscription } from '../hooks/useRealtimeSubscription';
 import { Plus, Check, Upload, FileText, X, AlertCircle, CheckCircle, PlusCircle, CreditCard as Edit2, Save, AlertTriangle, ChevronLeft, ChevronRight } from 'lucide-react';
 import { getSubcategories, getNestedSubcategories, hasSubcategories, hasNestedSubcategories } from '../lib/categoryHierarchy';
 import { requireClientId } from '../lib/clientHelpers';
+import { isClientVatRegistered, ClientVatInfo, getClientVatRate, calculateGrossFromNet, calculateNetFromGross } from '../lib/vatHelpers';
 
 export function ReceiveStock() {
   const { logAction, user } = useAuth();
@@ -27,6 +28,7 @@ export function ReceiveStock() {
   const [itemsToReceive, setItemsToReceive] = useState<Map<number, boolean>>(new Map());
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [creatingProduct, setCreatingProduct] = useState<any>(null);
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(null);
   const [newProductForm, setNewProductForm] = useState({
     name: '',
     category: 'medicines' as const,
@@ -121,6 +123,19 @@ export function ReceiveStock() {
 
   const loadData = async () => {
     if (!selectedFarm) return;
+
+    // Load client VAT info
+    if (user?.client_id) {
+      const { data: clientData, error: clientError } = await supabase
+        .from('clients')
+        .select('vat_code, vat_rate, vat_registered')
+        .eq('id', user.client_id)
+        .single();
+      
+      if (!clientError && clientData) {
+        setClientVatInfo(clientData);
+      }
+    }
 
     const [productsRes, inseminationProductsRes, suppliersRes] = await Promise.all([
       supabase.from('products').select('*').eq('farm_id', selectedFarm.id).eq('is_active', true).order('name'),
@@ -868,6 +883,27 @@ export function ReceiveStock() {
         }
 
         const clientId = requireClientId(user);
+        
+        // Calculate VAT-aware pricing
+        const purchasePrice = formData.purchase_price ? parseFloat(formData.purchase_price) : null;
+        let purchasePriceNet = null;
+        let purchasePriceGross = null;
+        
+        if (purchasePrice && clientVatInfo) {
+          const isVatRegistered = isClientVatRegistered(clientVatInfo);
+          const vatRate = getClientVatRate(clientVatInfo);
+          
+          if (isVatRegistered) {
+            // Client is VAT registered: invoice price is NET (without VAT)
+            purchasePriceNet = purchasePrice;
+            purchasePriceGross = calculateGrossFromNet(purchasePrice, vatRate);
+          } else {
+            // Client is NOT VAT registered: invoice price is GROSS (with VAT)
+            purchasePriceGross = purchasePrice;
+            purchasePriceNet = calculateNetFromGross(purchasePrice, vatRate);
+          }
+        }
+        
         const batchData: any = {
           client_id: clientId,
           farm_id: selectedFarm.id,
@@ -879,7 +915,9 @@ export function ReceiveStock() {
           doc_title: formData.doc_title,
           doc_number: formData.doc_number || null,
           doc_date: formData.doc_date || null,
-          purchase_price: formData.purchase_price ? parseFloat(formData.purchase_price) : null,
+          purchase_price: purchasePrice, // Keep for backward compatibility
+          purchase_price_net: purchasePriceNet,
+          purchase_price_gross: purchasePriceGross,
           currency: formData.currency,
         };
 

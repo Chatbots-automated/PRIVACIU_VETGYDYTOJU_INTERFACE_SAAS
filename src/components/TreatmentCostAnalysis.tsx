@@ -1,9 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 import { formatCurrencyLT, formatDateLT, formatNumberLT } from '../lib/formatters';
-import { calculateSafeUnitCost, TREATMENT_COST_CONFIG, formatCost, formatUnitCost } from '../lib/costCalculations';
+import { calculateSafeUnitCost, calculateVatAwareSafeUnitCost, TREATMENT_COST_CONFIG, formatCost, formatUnitCost } from '../lib/costCalculations';
 import { fetchAllRows } from '../lib/helpers';
 import { useFarm } from '../contexts/FarmContext';
+import { useAuth } from '../contexts/AuthContext';
+import { isClientVatRegistered, ClientVatInfo } from '../lib/vatHelpers';
 import { Euro, Activity, Syringe, Calendar, TrendingDown, Package, RefreshCw, ChevronDown, ChevronRight, Search } from 'lucide-react';
 // TreatmentMilkLossAnalysis removed - GEA integration no longer available
 
@@ -75,6 +77,7 @@ interface RawData {
 
 export function TreatmentCostAnalysis() {
   const { selectedFarm } = useFarm();
+  const { user } = useAuth();
   const [costData, setCostData] = useState<AnimalCostData[]>([]);
   const [rawData, setRawData] = useState<RawData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -88,6 +91,7 @@ export function TreatmentCostAnalysis() {
   const [dateTo, setDateTo] = useState('');
   const [minCost, setMinCost] = useState('');
   const [showFilters, setShowFilters] = useState(false);
+  const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(null);
   // Milk loss modal removed - GEA integration no longer available
 
   useEffect(() => {
@@ -175,9 +179,11 @@ export function TreatmentCostAnalysis() {
         let medicationCostsFromUsageItems = 0;
         for (const usage of usageItems) {
           if (treatmentIdsInRange.has(usage.treatment_id) && usage.batches && usage.quantity) {
-            const unitCost = calculateSafeUnitCost(
-              usage.batches.purchase_price,
-              usage.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              usage.batches.purchase_price_net,
+              usage.batches.purchase_price_gross,
+              usage.batches.qty_received,
+              clientVatInfo
             );
             medicationCostsFromUsageItems += usage.quantity * unitCost;
           }
@@ -192,9 +198,11 @@ export function TreatmentCostAnalysis() {
         // Include legacy vaccinations from the vaccinations table
         for (const vaccination of filteredVaccinations) {
           if (vaccination.batches && vaccination.dose_amount) {
-            const unitCost = calculateSafeUnitCost(
-              vaccination.batches.purchase_price,
-              vaccination.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              vaccination.batches.purchase_price_net,
+              vaccination.batches.purchase_price_gross,
+              vaccination.batches.qty_received,
+              clientVatInfo
             );
             vaccinationCosts += vaccination.dose_amount * unitCost;
           }
@@ -250,6 +258,19 @@ export function TreatmentCostAnalysis() {
       if (!selectedFarm) {
         setLoading(false);
         return;
+      }
+
+      // Load client VAT info
+      if (user?.client_id) {
+        const { data: clientData, error: clientError } = await supabase
+          .from('clients')
+          .select('vat_code, vat_rate, vat_registered')
+          .eq('id', user.client_id)
+          .single();
+        
+        if (!clientError && clientData) {
+          setClientVatInfo(clientData);
+        }
       }
 
       // Get all animals using pagination helper
@@ -392,9 +413,11 @@ export function TreatmentCostAnalysis() {
           const treatmentUsage = (usageItems || []).filter(ui => ui.treatment_id === treatment.id);
           for (const usage of treatmentUsage) {
             if (usage.batches && usage.quantity) {
-              const unitCost = calculateSafeUnitCost(
-                usage.batches.purchase_price,
-                usage.batches.qty_received
+              const unitCost = calculateVatAwareSafeUnitCost(
+                usage.batches.purchase_price_net,
+                usage.batches.purchase_price_gross,
+                usage.batches.qty_received,
+                clientVatInfo
               );
               medicationCostsFromUsageItems += usage.quantity * unitCost;
             }
@@ -422,9 +445,11 @@ export function TreatmentCostAnalysis() {
         // In SaaS schema, vaccination usage has vaccination_id set (no purpose field)
         for (const item of animalUsageItems) {
           if (item.batches && item.quantity && item.vaccination_id) {
-            const unitCost = calculateSafeUnitCost(
-              item.batches.purchase_price,
-              item.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              item.batches.purchase_price_net,
+              item.batches.purchase_price_gross,
+              item.batches.qty_received,
+              clientVatInfo
             );
             vaccinationCosts += item.quantity * unitCost;
           }
@@ -437,9 +462,11 @@ export function TreatmentCostAnalysis() {
           if (hasUsageItem) continue;
           
           if (vaccination.batches && vaccination.dose_amount) {
-            const unitCost = calculateSafeUnitCost(
-              vaccination.batches.purchase_price,
-              vaccination.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              vaccination.batches.purchase_price_net,
+              vaccination.batches.purchase_price_gross,
+              vaccination.batches.qty_received,
+              clientVatInfo
             );
             vaccinationCosts += vaccination.dose_amount * unitCost;
           }
@@ -550,9 +577,11 @@ export function TreatmentCostAnalysis() {
 
           for (const usage of usageItems || []) {
             if (usage.batches && usage.quantity) {
-              const unitCost = calculateSafeUnitCost(
-                usage.batches.purchase_price,
-                usage.batches.qty_received
+              const unitCost = calculateVatAwareSafeUnitCost(
+                usage.batches.purchase_price_net,
+                usage.batches.purchase_price_gross,
+                usage.batches.qty_received,
+                clientVatInfo
               );
               const itemCost = usage.quantity * unitCost;
 
@@ -606,9 +635,11 @@ export function TreatmentCostAnalysis() {
 
         for (const vacc of vaccinations || []) {
           if (vacc.batches && vacc.dose_amount) {
-            const unitCost = calculateSafeUnitCost(
-              vacc.batches.purchase_price,
-              vacc.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              vacc.batches.purchase_price_net,
+              vacc.batches.purchase_price_gross,
+              vacc.batches.qty_received,
+              clientVatInfo
             );
             const itemCost = vacc.dose_amount * unitCost;
 
@@ -642,9 +673,11 @@ export function TreatmentCostAnalysis() {
               .maybeSingle();
 
             if (batch && med.quantity) {
-              const unitCost = calculateSafeUnitCost(
-                batch.purchase_price,
-                batch.qty_received
+              const unitCost = calculateVatAwareSafeUnitCost(
+                batch.purchase_price_net,
+                batch.purchase_price_gross,
+                batch.qty_received,
+                clientVatInfo
               );
               const itemCost = med.quantity * unitCost;
 
@@ -745,9 +778,11 @@ export function TreatmentCostAnalysis() {
 
         for (const vacc of vaccs) {
           if (vacc.batches && vacc.dose_amount) {
-            const unitCost = calculateSafeUnitCost(
-              vacc.batches.purchase_price,
-              vacc.batches.qty_received
+            const unitCost = calculateVatAwareSafeUnitCost(
+              vacc.batches.purchase_price_net,
+              vacc.batches.purchase_price_gross,
+              vacc.batches.qty_received,
+              clientVatInfo
             );
             const itemCost = vacc.dose_amount * unitCost;
 

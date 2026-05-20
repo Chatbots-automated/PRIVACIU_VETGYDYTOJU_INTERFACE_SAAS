@@ -287,6 +287,7 @@ export function ClientRegistration() {
           name: clientFormData.name,
           company_code: clientFormData.company_code || null,
           vat_code: clientFormData.vat_code || null,
+          vat_rate: 21.00, // Default Lithuanian VAT rate
           contact_email: clientFormData.contact_email,
           address: clientFormData.address || null,
           city: clientFormData.city || null,

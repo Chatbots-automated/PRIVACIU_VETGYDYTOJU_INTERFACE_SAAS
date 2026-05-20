@@ -21,6 +21,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<string | null>(null);
+  const [editingFarmId, setEditingFarmId] = useState<string | null>(null);
   const [showAdd, setShowAdd] = useState(false);
 
   const emptyProduct = {
@@ -86,7 +87,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         
         const { data: farmProducts, error: farmError } = await supabase
           .from('products')
-          .select('*, farm:farms(name, code)')
+          .select('*')
           .eq('client_id', clientId)
           .or(`farm_id.eq.${selectedFarm.id},farm_id.is.null`);
         
@@ -108,7 +109,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
           if (additionalProductIds.length > 0) {
             const { data: additionalProducts, error: additionalError } = await supabase
               .from('products')
-              .select('*, farm:farms(name, code)')
+              .select('*')
               .eq('client_id', clientId)
               .in('id', additionalProductIds);
             
@@ -138,7 +139,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         
         const { data, error } = await supabase
           .from('products')
-          .select('*, farm:farms(name, code)')
+          .select('*')
           .eq('client_id', clientId);
         
         if (error) throw error;
@@ -165,11 +166,11 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
 
   const handleSave = async () => {
     try {
-      // When editing, use the product's existing farm_id
+      // When editing, use the stored editingFarmId
       // When creating new, require selectedFarm
-      const farmId = editing 
-        ? products.find(p => p.id === editing)?.farm_id 
-        : selectedFarm?.id;
+      const farmId = editing ? editingFarmId : selectedFarm?.id;
+
+      console.log('handleSave - editing:', editing, 'editingFarmId:', editingFarmId, 'selectedFarm:', selectedFarm?.id, 'finalFarmId:', farmId);
 
       if (!farmId) {
         alert('Pasirinkite ūkį');
@@ -225,6 +226,7 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
         );
 
         setEditing(null);
+        setEditingFarmId(null);
       } else {
         const { data, error } = await supabase
           .from('products')
@@ -254,7 +256,9 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
   };
 
   const handleEdit = (product: Product) => {
+    console.log('Editing product:', product.id, 'farm_id:', product.farm_id);
     setEditing(product.id);
+    setEditingFarmId(product.farm_id || null);
     setFormData({
       name: product.name,
       category: product.category,
@@ -277,11 +281,14 @@ export function Products({ showAllFarms = false }: ProductsProps = {}) {
       withdrawal_pos_meat: product.withdrawal_pos_meat?.toString() || '',
       withdrawal_pos_milk: product.withdrawal_pos_milk?.toString() || '',
       dosage_notes: product.dosage_notes || '',
+      subcategory: product.subcategory || '',
+      subcategory_2: product.subcategory_2 || '',
     });
   };
 
   const handleCancel = () => {
     setEditing(null);
+    setEditingFarmId(null);
     setShowAdd(false);
     setFormData(emptyProduct);
   };

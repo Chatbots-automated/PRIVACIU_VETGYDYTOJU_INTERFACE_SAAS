@@ -90,6 +90,7 @@ export function AdminDashboard() {
     max_farms: number;
     max_users: number;
     vat_registered: boolean;
+    vat_rate: number;
   }>({
     name: '',
     company_code: '',
@@ -102,6 +103,7 @@ export function AdminDashboard() {
     max_farms: 3,
     max_users: 999,
     vat_registered: false,
+    vat_rate: 21.00,
   });
 
   const [registrationCode, setRegistrationCode] = useState<string | null>(null);
@@ -301,6 +303,7 @@ export function AdminDashboard() {
           name: formData.name,
           company_code: formData.company_code || null,
           vat_code: formData.vat_code || null,
+          vat_rate: formData.vat_rate,
           contact_email: formData.contact_email,
           contact_phone: formData.contact_phone || null,
           address: formData.address || null,
@@ -382,6 +385,7 @@ export function AdminDashboard() {
       max_farms: 1,
       max_users: 2,
       vat_registered: false,
+      vat_rate: 21.00,
     });
   };
 
