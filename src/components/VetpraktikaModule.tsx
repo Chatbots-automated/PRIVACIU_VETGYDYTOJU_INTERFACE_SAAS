@@ -36,6 +36,7 @@ const menuItems = [
 export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
   const [currentView, setCurrentView] = useState('warehouse-inventory');
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [selectedFarmForInvoice, setSelectedFarmForInvoice] = useState<{ id: string; name: string; code: string } | null>(null);
   const { user, signOut } = useAuth();
 
   const handleSignOut = async () => {
@@ -44,6 +45,11 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
     } catch (error) {
       console.error('Sign out error:', error);
     }
+  };
+
+  const navigateToFinancesWithFarm = (farm: { id: string; name: string; code: string }) => {
+    setSelectedFarmForInvoice(farm);
+    setCurrentView('finances');
   };
 
   const renderView = () => {
@@ -55,11 +61,11 @@ export function VetpraktikaModule({ onBackToModules }: VetpraktikaModuleProps) {
       case 'products':
         return <Products showAllFarms={true} />;
       case 'finances':
-        return <FinancesModule />;
+        return <FinancesModule preselectedFarm={selectedFarmForInvoice} />;
       case 'reports':
         return <AllFarmsReports />;
       case 'analytics':
-        return <AllocationAnalytics />;
+        return <AllocationAnalytics onNavigateToFinances={navigateToFinancesWithFarm} />;
       default:
         return <WarehouseInventory />;
     }

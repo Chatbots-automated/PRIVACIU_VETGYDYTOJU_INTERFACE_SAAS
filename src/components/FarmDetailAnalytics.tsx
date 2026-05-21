@@ -90,6 +90,8 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
     try {
       setLoading(true);
 
+      console.log('Loading data for farm:', farmId);
+
       // Load allocated stock with warehouse batch prices and invoice items for discount info
       let query = supabase
         .from('farm_stock_allocations')
@@ -116,6 +118,8 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       if (dateTo) query = query.lte('created_at', dateTo + 'T23:59:59');
 
       const { data: allocationsData, error: allocError } = await query;
+      
+      console.log('Allocations data:', allocationsData, 'Error:', allocError);
       
       if (allocError) {
         console.error('Error loading allocations:', allocError);
@@ -432,7 +436,9 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           row.remaining_value_before_discount = row.remaining_qty * row.avg_price_before_discount;
         });
 
-        setAllocatedStock(Array.from(productMap.values()).sort((a, b) => b.total_value - a.total_value));
+        const finalData = Array.from(productMap.values()).sort((a, b) => b.total_value - a.total_value);
+        console.log('Final allocated stock data:', finalData);
+        setAllocatedStock(finalData);
       }
     } catch (error) {
       console.error('Error loading farm data:', error);

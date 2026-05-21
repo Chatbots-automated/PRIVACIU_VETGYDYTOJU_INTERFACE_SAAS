@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { BarChart3, TrendingUp, Building2, Package, Euro, Download, ChevronRight } from 'lucide-react';
+import { BarChart3, TrendingUp, Building2, Package, Euro, Download, ChevronRight, Receipt } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { FarmDetailAnalytics } from './FarmDetailAnalytics';
 import { useAuth } from '../contexts/AuthContext';
@@ -66,7 +66,7 @@ interface AllocationHistory {
   notes: string | null;
 }
 
-export function AllocationAnalytics() {
+export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFinances?: (farm: { id: string; name: string; code: string }) => void }) {
   const { user } = useAuth();
   const [farmAnalytics, setFarmAnalytics] = useState<FarmAnalytics[]>([]);
   const [productAnalytics, setProductAnalytics] = useState<ProductAnalytics[]>([]);
@@ -112,6 +112,8 @@ export function AllocationAnalytics() {
     try {
       const clientId = requireClientId(user);
       
+      console.log('Loading analytics for client:', clientId);
+      
       // Build query for history with filters
       let historyQuery = supabase
         .from('vw_stock_allocation_history')
@@ -135,6 +137,30 @@ export function AllocationAnalytics() {
         supabase.from('vw_allocation_analytics_by_product').select('*').eq('client_id', clientId).order('total_qty_allocated', { ascending: false, nullsFirst: false }),
         historyQuery,
       ]);
+
+      console.log('Farms analytics response:', farmsRes);
+      console.log('Products analytics response:', productsRes);
+      console.log('History response:', historyRes);
+
+      // If the view returns errors or empty, let's also check the raw tables
+      if (!farmsRes.data || farmsRes.data.length === 0 || farmsRes.data.every(f => f.total_allocations === 0)) {
+        console.log('View returned zeros or empty, checking raw tables...');
+        
+        const { data: rawAllocations, error: rawError } = await supabase
+          .from('farm_stock_allocations')
+          .select('farm_id')
+          .limit(5);
+        
+        console.log('Raw farm_stock_allocations sample:', rawAllocations, rawError);
+        
+        const { data: rawBatches, error: batchError } = await supabase
+          .from('batches')
+          .select('farm_id, invoice_id')
+          .not('invoice_id', 'is', null)
+          .limit(5);
+        
+        console.log('Raw batches with invoices sample:', rawBatches, batchError);
+      }
 
       if (farmsRes.data) setFarmAnalytics(farmsRes.data);
       if (productsRes.data) setProductAnalytics(productsRes.data);
@@ -233,6 +259,9 @@ export function AllocationAnalytics() {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG marker */}
+      <div className="hidden">analytics-v2-with-logs</div>
+      
       <div className="bg-gradient-to-r from-slate-700 to-gray-800 rounded-xl p-6 text-white shadow-lg">
         <div className="flex items-center gap-4">
           <div className="p-3 bg-white/20 rounded-lg">
@@ -369,16 +398,21 @@ export function AllocationAnalytics() {
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Paskutinis paskirstymas
                   </th>
+                  <th className="px-6 py-3 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Veiksmai
+                  </th>
                 </tr>
               </thead>
               <tbody className="bg-white divide-y divide-gray-200">
                 {filteredFarmAnalytics.map((farm) => (
                   <tr 
                     key={farm.farm_id} 
-                    onClick={() => setSelectedFarm({ id: farm.farm_id, name: farm.farm_name, code: farm.farm_code })}
-                    className="hover:bg-blue-50 cursor-pointer transition-colors group"
+                    className="hover:bg-blue-50 transition-colors group"
                   >
-                    <td className="px-6 py-4">
+                    <td 
+                      className="px-6 py-4 cursor-pointer"
+                      onClick={() => setSelectedFarm({ id: farm.farm_id, name: farm.farm_name, code: farm.farm_code })}
+                    >
                       <div className="flex items-center justify-between">
                         <div>
                           <div className="font-medium text-gray-900 group-hover:text-blue-600 transition-colors">
@@ -413,6 +447,21 @@ export function AllocationAnalytics() {
                       <span className="text-sm text-gray-600">
                         {farm.last_allocation_date ? new Date(farm.last_allocation_date).toLocaleDateString('lt-LT') : '-'}
                       </span>
+                    </td>
+                    <td className="px-6 py-4 text-center">
+                      {onNavigateToFinances && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onNavigateToFinances({ id: farm.farm_id, name: farm.farm_name, code: farm.farm_code });
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white text-sm rounded-lg hover:bg-blue-700 transition-colors"
+                          title="Sukurti sąskaitą"
+                        >
+                          <Receipt className="w-4 h-4" />
+                          Sąskaita
+                        </button>
+                      )}
                     </td>
                   </tr>
                 ))}

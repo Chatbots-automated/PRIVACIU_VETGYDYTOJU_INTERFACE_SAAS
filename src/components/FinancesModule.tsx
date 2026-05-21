@@ -16,13 +16,16 @@ import {
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
 import { requireClientId } from '../lib/clientHelpers';
+import { getClientVatRate } from '../lib/vatHelpers';
+import { InvoiceDetailModal } from './InvoiceDetailModal';
+import { allocationUnitPricesFromBatchAndInvoice } from '../lib/invoicePricing';
 
 type ViewTab = 'unpaid' | 'invoices' | 'pricing' | 'analytics';
 
 interface UnpaidCharge {
   id: string;
-  visit_id: string;
-  animal_id: string;
+  visit_id?: string;
+  animal_id?: string;
   charge_type: string;
   procedure_type?: string;
   product_name?: string;
@@ -30,8 +33,10 @@ interface UnpaidCharge {
   quantity: number;
   unit_price: number;
   total_price: number;
-  visit_datetime: string;
+  visit_datetime?: string;
   animal_name?: string;
+  allocation_id?: string;
+  product_id?: string;
 }
 
 interface Invoice {
@@ -55,7 +60,11 @@ interface ServicePrice {
   active: boolean;
 }
 
-export function FinancesModule() {
+interface FinancesModuleProps {
+  preselectedFarm?: { id: string; name: string; code: string } | null;
+}
+
+export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
   const { user } = useAuth();
   const [currentTab, setCurrentTab] = useState<ViewTab>('unpaid');
   const [selectedFarmId, setSelectedFarmId] = useState<string | null>(null);
@@ -64,15 +73,26 @@ export function FinancesModule() {
   const [invoices, setInvoices] = useState<Invoice[]>([]);
   const [servicePrices, setServicePrices] = useState<ServicePrice[]>([]);
   const [loading, setLoading] = useState(false);
+  const [clientInfo, setClientInfo] = useState<any>(null);
   
   // Invoice generator state
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
   const [selectedCharges, setSelectedCharges] = useState<Set<string>>(new Set());
   
+  // Modal state
+  const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  
   useEffect(() => {
     loadFarms();
+    loadClientInfo();
   }, []);
+
+  useEffect(() => {
+    if (preselectedFarm && farms.length > 0) {
+      setSelectedFarmId(preselectedFarm.id);
+    }
+  }, [preselectedFarm, farms]);
 
   useEffect(() => {
     if (selectedFarmId) {
@@ -109,79 +129,268 @@ export function FinancesModule() {
     }
   };
 
+  const loadClientInfo = async () => {
+    if (!user) return;
+    const clientId = requireClientId(user);
+
+    try {
+      const { data, error } = await supabase
+        .from('clients')
+        .select('name, company_code, vat_code, vat_rate, address, contact_email, contact_phone')
+        .eq('id', clientId)
+        .single();
+
+      if (error) throw error;
+      setClientInfo(data);
+    } catch (error) {
+      console.error('Error loading client info:', error);
+    }
+  };
+
   const loadUnpaidCharges = async () => {
     if (!user || !selectedFarmId) return;
     const clientId = requireClientId(user);
     setLoading(true);
 
     try {
-      // Load all uninvoiced visits for the farm
-      const { data: visitsData, error: visitsError } = await supabase
-        .from('animal_visits')
+      const charges: UnpaidCharge[] = [];
+
+      console.log('Loading unpaid charges for farm:', selectedFarmId);
+
+      // 1. Load uninvoiced SERVICE charges from visit_charges table (same as analytics)
+      const { data: visitChargesData, error: chargesError } = await supabase
+        .from('visit_charges')
         .select(`
           id,
-          visit_datetime,
-          procedures,
+          visit_id,
           animal_id,
-          animals(tag_no)
+          procedure_type,
+          quantity,
+          unit_price,
+          total_price,
+          charge_type,
+          created_at,
+          animal_visits!inner (
+            id,
+            visit_datetime,
+            procedures,
+            farm_id
+          ),
+          animals (
+            tag_no
+          )
         `)
-        .eq('farm_id', selectedFarmId)
-        .eq('status', 'Baigtas')
-        .order('visit_datetime', { ascending: false });
-
-      if (visitsError) throw visitsError;
-
-      // Check which visits have already been invoiced via visit_charges
-      const visitIds = visitsData?.map(v => v.id) || [];
-      const { data: invoicedCharges } = await supabase
-        .from('visit_charges')
-        .select('visit_id')
-        .in('visit_id', visitIds)
+        .eq('animal_visits.farm_id', selectedFarmId)
         .eq('charge_type', 'paslauga')
-        .eq('invoiced', true);
+        .eq('invoiced', false)
+        .order('created_at', { ascending: false });
 
-      const invoicedVisitIds = new Set(invoicedCharges?.map(c => c.visit_id) || []);
+      if (chargesError) {
+        console.error('Error loading visit charges:', chargesError);
+      }
 
-      // Filter out visits that are already invoiced
-      const uninvoicedVisits = visitsData?.filter(v => !invoicedVisitIds.has(v.id)) || [];
-
-      // Load service prices to calculate costs
-      const { data: servicePricesData } = await supabase
-        .from('service_prices')
-        .select('procedure_type, base_price')
-        .eq('client_id', clientId)
-        .eq('active', true);
-
-      const servicePrices = new Map<string, number>();
-      (servicePricesData || []).forEach(sp => {
-        servicePrices.set(sp.procedure_type, sp.base_price);
+      // Add service charges from visit_charges table
+      (visitChargesData || []).forEach(charge => {
+        charges.push({
+          id: `service-${charge.id}`,
+          visit_id: charge.visit_id,
+          animal_id: charge.animal_id,
+          charge_type: 'paslauga',
+          procedure_type: charge.procedure_type,
+          description: charge.procedure_type || 'Paslauga',
+          quantity: Number(charge.quantity) || 1,
+          unit_price: Number(charge.unit_price) || 0,
+          total_price: Number(charge.total_price) || 0,
+          visit_datetime: charge.animal_visits?.visit_datetime,
+          animal_name: charge.animals?.tag_no
+        });
       });
 
-      // Calculate service costs for each visit and expand by procedure
-      const charges: UnpaidCharge[] = [];
-      for (const visit of uninvoicedVisits) {
-        const procedures = Array.isArray(visit.procedures) ? visit.procedures : [];
+      console.log('Service charges from visit_charges:', visitChargesData?.length || 0);
+
+      // 2. Load PRODUCT allocations (from warehouse) - SAME AS ANALYTICS
+      // But EXCLUDE allocations that have already been invoiced and paid
+      
+      // First, get all paid invoice IDs for this farm
+      const { data: paidInvoices } = await supabase
+        .from('service_invoices')
+        .select('id')
+        .eq('farm_id', selectedFarmId)
+        .eq('status', 'apmokėta');
+
+      const paidInvoiceIds = new Set(paidInvoices?.map(inv => inv.id) || []);
+
+      // Get all visit_charges that are already invoiced and paid
+      const { data: paidChargesData } = await supabase
+        .from('visit_charges')
+        .select('allocation_id, product_id')
+        .eq('farm_id', selectedFarmId)
+        .eq('charge_type', 'produktas')
+        .eq('invoiced', true)
+        .not('invoice_id', 'is', null);
+
+      // Filter out charges from paid invoices
+      const paidAllocationIds = new Set();
+      const paidProductIds = new Set();
+      
+      for (const charge of (paidChargesData || [])) {
+        // Check if the invoice for this charge is paid
+        const { data: invoiceCheck } = await supabase
+          .from('service_invoices')
+          .select('status')
+          .eq('id', charge.invoice_id)
+          .single();
         
-        for (const procedure of procedures) {
-          const price = servicePrices.get(procedure) || 0;
-          charges.push({
-            id: `${visit.id}-${procedure}`,
-            visit_id: visit.id,
-            animal_id: visit.animal_id,
-            charge_type: 'paslauga',
-            procedure_type: procedure,
-            description: procedure,
-            quantity: 1,
-            unit_price: price,
-            total_price: price,
-            visit_datetime: visit.visit_datetime,
-            animal_name: visit.animals?.tag_no
-          });
+        if (invoiceCheck?.status === 'apmokėta') {
+          if (charge.allocation_id) paidAllocationIds.add(charge.allocation_id);
+          if (charge.product_id) paidProductIds.add(charge.product_id);
         }
       }
 
-      console.log('Uninvoiced service charges:', charges);
-      console.log('Total service charges:', charges.reduce((sum, c) => sum + c.total_price, 0));
+      console.log('Paid allocations to exclude:', paidAllocationIds.size);
+
+      const { data: allocationsData } = await supabase
+        .from('farm_stock_allocations')
+        .select(`
+          id,
+          product_id,
+          allocated_qty,
+          allocation_date,
+          warehouse_batch_id,
+          warehouse_batches (
+            purchase_price,
+            received_qty,
+            invoice_id
+          ),
+          products (
+            name,
+            category,
+            primary_pack_unit
+          )
+        `)
+        .eq('farm_id', selectedFarmId)
+        .order('allocation_date', { ascending: false });
+
+      console.log('Product allocations (before filtering):', allocationsData?.length || 0);
+
+      // Get invoice items for pricing (with discounts)
+      const warehouseBatchIds = [...new Set(allocationsData?.map(a => a.warehouse_batch_id).filter(Boolean))];
+      let invoiceItemsData: any[] = [];
+      
+      if (warehouseBatchIds.length > 0) {
+        const { data } = await supabase
+          .from('invoice_items')
+          .select('warehouse_batch_id, product_id, discount_percent, unit_price, quantity, total_price')
+          .in('warehouse_batch_id', warehouseBatchIds);
+        invoiceItemsData = data || [];
+      }
+
+      // Add product allocation charges (but skip already paid ones)
+      (allocationsData || []).forEach(allocation => {
+        // Skip if this allocation has been invoiced and paid
+        if (paidAllocationIds.has(allocation.id)) {
+          return;
+        }
+
+        const product = allocation.products as any;
+        const warehouseBatch = allocation.warehouse_batches as any;
+        if (!product || !warehouseBatch) return;
+
+        const allocatedQty = parseFloat(allocation.allocated_qty) || 0;
+        const purchasePrice = parseFloat(warehouseBatch.purchase_price) || 0;
+        const warehouseReceivedQty = parseFloat(warehouseBatch.received_qty) || 1;
+
+        const invoiceItem = invoiceItemsData?.find(
+          (ii) => ii.warehouse_batch_id === allocation.warehouse_batch_id &&
+          (ii.product_id === allocation.product_id || !ii.product_id)
+        );
+
+        const { unitAfterDiscount, unitBeforeDiscount } = allocationUnitPricesFromBatchAndInvoice({
+          purchasePrice,
+          receivedQty: warehouseReceivedQty,
+          invoiceItem,
+        });
+
+        charges.push({
+          id: `product-${allocation.id}`,
+          allocation_id: allocation.id,
+          product_id: allocation.product_id,
+          charge_type: 'produktas',
+          product_name: product.name,
+          description: `${product.name} (paskirstyta)`,
+          quantity: allocatedQty,
+          unit_price: unitBeforeDiscount, // Use before-discount price for invoicing
+          total_price: allocatedQty * unitBeforeDiscount,
+          visit_datetime: allocation.allocation_date
+        });
+      });
+
+      // 3. Load direct batches (invoices assigned directly to farm)
+      const { data: directBatchesData } = await supabase
+        .from('batches')
+        .select(`
+          id,
+          product_id,
+          qty_received,
+          purchase_price,
+          invoice_id,
+          created_at,
+          products (
+            name,
+            category,
+            primary_pack_unit
+          )
+        `)
+        .eq('farm_id', selectedFarmId)
+        .not('invoice_id', 'is', null)
+        .order('created_at', { ascending: false });
+
+      console.log('Direct batches:', directBatchesData?.length || 0);
+
+      const directBatchIds = [...new Set(directBatchesData?.map(b => b.id).filter(Boolean))];
+      let directInvoiceItemsData: any[] = [];
+      
+      if (directBatchIds.length > 0) {
+        const { data } = await supabase
+          .from('invoice_items')
+          .select('batch_id, product_id, discount_percent, unit_price, quantity, total_price')
+          .in('batch_id', directBatchIds);
+        directInvoiceItemsData = data || [];
+      }
+
+      // Add direct batch charges (but check if already invoiced and paid)
+      (directBatchesData || []).forEach(batch => {
+        const product = batch.products as any;
+        if (!product) return;
+
+        const receivedQty = parseFloat(batch.qty_received) || 0;
+        const purchasePrice = parseFloat(batch.purchase_price) || 0;
+
+        const invoiceItem = directInvoiceItemsData?.find(
+          (ii) => ii.batch_id === batch.id && ii.product_id === batch.product_id
+        );
+
+        const { unitAfterDiscount, unitBeforeDiscount } = allocationUnitPricesFromBatchAndInvoice({
+          purchasePrice,
+          receivedQty,
+          invoiceItem,
+        });
+
+        charges.push({
+          id: `batch-${batch.id}`,
+          product_id: batch.product_id,
+          charge_type: 'produktas',
+          product_name: product.name,
+          description: `${product.name} (tiesioginis pirkimas)`,
+          quantity: receivedQty,
+          unit_price: unitBeforeDiscount,
+          total_price: receivedQty * unitBeforeDiscount,
+          visit_datetime: batch.created_at
+        });
+      });
+
+      console.log('All unpaid charges (services + products, excluding paid):', charges);
+      console.log('Total charges value:', charges.reduce((sum, c) => sum + c.total_price, 0));
       setUnpaidCharges(charges);
     } catch (error) {
       console.error('Error loading unpaid charges:', error);
@@ -244,10 +453,10 @@ export function FinancesModule() {
     setLoading(true);
 
     try {
-      // Calculate totals
+      // Calculate totals using client's VAT rate
       const chargesToInvoice = unpaidCharges.filter(c => selectedCharges.has(c.id));
       const subtotal = chargesToInvoice.reduce((sum, c) => sum + c.total_price, 0);
-      const vatRate = 21.0;
+      const vatRate = getClientVatRate(clientInfo);
       const vatAmount = subtotal * (vatRate / 100);
       const totalAmount = subtotal + vatAmount;
 
@@ -280,23 +489,15 @@ export function FinancesModule() {
       if (invoiceError) throw invoiceError;
 
       // Create or update visit_charges records
-      // Group charges by visit_id to avoid duplicates
-      const visitChargesMap = new Map<string, any[]>();
-      for (const charge of chargesToInvoice) {
-        if (!visitChargesMap.has(charge.visit_id)) {
-          visitChargesMap.set(charge.visit_id, []);
-        }
-        visitChargesMap.get(charge.visit_id)!.push(charge);
-      }
-
-      // Create visit_charges for each visit+procedure combination
       const chargeRecords = [];
-      for (const [visitId, charges] of visitChargesMap.entries()) {
-        for (const charge of charges) {
+      
+      for (const charge of chargesToInvoice) {
+        if (charge.charge_type === 'paslauga' && charge.visit_id) {
+          // Service charge
           chargeRecords.push({
             client_id: clientId,
             farm_id: selectedFarmId,
-            visit_id: visitId,
+            visit_id: charge.visit_id,
             animal_id: charge.animal_id,
             charge_type: 'paslauga',
             procedure_type: charge.procedure_type,
@@ -306,26 +507,36 @@ export function FinancesModule() {
             invoiced: true,
             invoice_id: invoice.id
           });
+        } else if (charge.charge_type === 'produktas') {
+          // Product charge - store allocation_id for tracking
+          chargeRecords.push({
+            client_id: clientId,
+            farm_id: selectedFarmId,
+            visit_id: null,
+            animal_id: null,
+            charge_type: 'produktas',
+            product_id: charge.product_id,
+            product_name: charge.product_name,
+            description: charge.description,
+            quantity: charge.quantity,
+            unit_price: charge.unit_price,
+            total_price: charge.total_price,
+            invoiced: true,
+            invoice_id: invoice.id,
+            allocation_id: charge.allocation_id // Store for exclusion tracking
+          });
         }
       }
 
-      // Insert visit_charges (or update if they already exist)
+      // Insert visit_charges
       if (chargeRecords.length > 0) {
         const { error: chargesError } = await supabase
           .from('visit_charges')
-          .upsert(chargeRecords, {
-            onConflict: 'visit_id,procedure_type',
-            ignoreDuplicates: false
-          });
+          .insert(chargeRecords);
 
         if (chargesError) {
-          console.warn('Error upserting visit charges:', chargesError);
-          // Try inserting instead
-          const { error: insertError } = await supabase
-            .from('visit_charges')
-            .insert(chargeRecords);
-          
-          if (insertError) throw insertError;
+          console.error('Error inserting visit charges:', chargesError);
+          throw chargesError;
         }
       }
 
@@ -455,6 +666,11 @@ export function FinancesModule() {
               </option>
             ))}
           </select>
+          {preselectedFarm && (
+            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+              ℹ️ Ūkis pasirinktas iš analitikos. Galite generuoti sąskaitą už paslaugas.
+            </div>
+          )}
         </div>
 
         {/* Tabs */}
@@ -563,7 +779,7 @@ export function FinancesModule() {
                     {/* Info Note */}
                     <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                       <p className="text-sm text-blue-800">
-                        💡 <strong>Pastaba:</strong> Čia rodomi tik paslaugų mokesčiai. Produktų kainos jau įtrauktos paskirstant atsargas iš sandėlio.
+                        💡 <strong>Pastaba:</strong> Rodomi ir paslaugų mokesčiai, ir produktų paskirstymai. Kainos apskaičiuotos pagal faktines pirkimo kainas.
                       </p>
                     </div>
 
@@ -627,11 +843,15 @@ export function FinancesModule() {
                               <td className="px-4 py-3 text-sm text-gray-900">
                                 {charge.animal_name || '-'}
                               </td>
-                              <td className="px-4 py-3 text-sm">
-                                <span className="inline-flex px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
-                                  Paslauga
-                                </span>
-                              </td>
+                            <td className="px-4 py-3 text-sm">
+                              <span className={`inline-flex px-2 py-1 rounded-full text-xs font-medium ${
+                                charge.charge_type === 'paslauga' 
+                                  ? 'bg-blue-100 text-blue-800' 
+                                  : 'bg-green-100 text-green-800'
+                              }`}>
+                                {charge.charge_type === 'paslauga' ? 'Paslauga' : 'Produktas'}
+                              </span>
+                            </td>
                               <td className="px-4 py-3 text-sm text-gray-900">
                                 {charge.description}
                               </td>
@@ -721,6 +941,7 @@ export function FinancesModule() {
                             </td>
                             <td className="px-4 py-3 text-center">
                               <button
+                                onClick={() => setSelectedInvoiceId(invoice.id)}
                                 className="text-blue-600 hover:text-blue-700 p-1"
                                 title="Peržiūrėti"
                               >
@@ -820,6 +1041,18 @@ export function FinancesModule() {
           </div>
         </div>
       </div>
+
+      {/* Invoice Detail Modal */}
+      {selectedInvoiceId && (
+        <InvoiceDetailModal
+          invoiceId={selectedInvoiceId}
+          onClose={() => setSelectedInvoiceId(null)}
+          onStatusChange={() => {
+            loadInvoices();
+            setSelectedInvoiceId(null);
+          }}
+        />
+      )}
     </div>
   );
 }

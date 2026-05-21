@@ -25,16 +25,32 @@ interface WarehouseStock {
   batch_count?: number;
 }
 
+interface FarmStock {
+  farm_id: string;
+  farm_name: string;
+  product_id: string;
+  product_name: string;
+  category: string;
+  unit: string;
+  total_qty_received: number;
+  total_qty_left: number;
+  batch_count: number;
+  earliest_expiry: string | null;
+}
+
 export function WarehouseInventory() {
   const { logAction, user } = useAuth();
   const [inventory, setInventory] = useState<WarehouseStock[]>([]);
+  const [farmStock, setFarmStock] = useState<FarmStock[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [filterCategory, setFilterCategory] = useState('all');
   const [filterStatus, setFilterStatus] = useState('all');
+  const [activeSection, setActiveSection] = useState<'warehouse' | 'farms'>('warehouse');
 
   useEffect(() => {
     loadInventory();
+    loadFarmStock();
   }, []);
 
   const loadInventory = async () => {
@@ -86,6 +102,85 @@ export function WarehouseInventory() {
     }
   };
 
+  const loadFarmStock = async () => {
+    try {
+      const clientId = requireClientId(user);
+      
+      // Load all batches from all farms with remaining stock
+      const { data, error } = await supabase
+        .from('batches')
+        .select(`
+          id,
+          farm_id,
+          product_id,
+          qty_received,
+          qty_left,
+          expiry_date,
+          farms!inner (
+            name,
+            client_id
+          ),
+          products (
+            name,
+            category,
+            primary_pack_unit
+          )
+        `)
+        .eq('farms.client_id', clientId)
+        .gt('qty_left', 0)
+        .order('expiry_date', { ascending: true, nullsFirst: false });
+
+      console.log('🏠 Farm stock raw data:', data?.length || 0);
+
+      if (error) {
+        console.error('Error loading farm stock:', error);
+        return;
+      }
+
+      // Group by farm and product
+      const farmStockMap = new Map<string, FarmStock>();
+      
+      (data || []).forEach((batch: any) => {
+        if (!batch.products || !batch.farms) return;
+        
+        const key = `${batch.farm_id}-${batch.product_id}`;
+        const existing = farmStockMap.get(key);
+        
+        if (existing) {
+          existing.total_qty_received += Number(batch.qty_received || 0);
+          existing.total_qty_left += Number(batch.qty_left || 0);
+          existing.batch_count += 1;
+          // Keep earliest expiry
+          if (batch.expiry_date && (!existing.earliest_expiry || batch.expiry_date < existing.earliest_expiry)) {
+            existing.earliest_expiry = batch.expiry_date;
+          }
+        } else {
+          farmStockMap.set(key, {
+            farm_id: batch.farm_id,
+            farm_name: batch.farms.name,
+            product_id: batch.product_id,
+            product_name: batch.products.name,
+            category: batch.products.category || 'N/A',
+            unit: batch.products.primary_pack_unit || 'ml',
+            total_qty_received: Number(batch.qty_received || 0),
+            total_qty_left: Number(batch.qty_left || 0),
+            batch_count: 1,
+            earliest_expiry: batch.expiry_date
+          });
+        }
+      });
+
+      const farmStockArray = Array.from(farmStockMap.values()).sort((a, b) => 
+        a.farm_name.localeCompare(b.farm_name) || a.product_name.localeCompare(b.product_name)
+      );
+
+      console.log('🏠 Grouped farm stock:', farmStockArray.length);
+      setFarmStock(farmStockArray);
+    } catch (error) {
+      console.error('Error loading farm stock:', error);
+    }
+  };
+
   const filteredInventory = inventory.filter(item => {
     const matchesSearch = !searchTerm ||
       item.product_name?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -94,6 +189,16 @@ export function WarehouseInventory() {
     const matchesStatus = filterStatus === 'all' || item.status === filterStatus;
 
     return matchesSearch && matchesCategory && matchesStatus;
+  });
+
+  const filteredFarmStock = farmStock.filter(item => {
+    const matchesSearch = !searchTerm ||
+      item.product_name?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      item.farm_name?.toLowerCase().includes(searchTerm.toLowerCase());
+
+    const matchesCategory = filterCategory === 'all' || item.category === filterCategory;
+
+    return matchesSearch && matchesCategory;
   });
 
   const isExpiringSoon = (expiryDate: string | null) => {
@@ -110,42 +215,69 @@ export function WarehouseInventory() {
   };
 
   const exportToExcel = () => {
-    const exportData = filteredInventory.map(item => ({
-      'Produktas': item.product_name || '',
-      'Kategorija': translateCategory(item.category || ''),
-      'Partijų sk.': item.batch_count || 1,
-      'Priimta': item.received_qty,
-      'Paskirstyta': item.qty_allocated,
-      'Likutis': item.qty_left,
-      'Vienetas': item.unit || '',
-      'Būsena': item.status,
-      'Galioja iki': item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('lt-LT') : '',
-    }));
+    const isWarehouse = activeSection === 'warehouse';
+    const dataToExport = isWarehouse ? filteredInventory : filteredFarmStock;
+    
+    const exportData = isWarehouse 
+      ? filteredInventory.map(item => ({
+          'Produktas': item.product_name || '',
+          'Kategorija': translateCategory(item.category || ''),
+          'Partijų sk.': item.batch_count || 1,
+          'Priimta': item.received_qty,
+          'Paskirstyta': item.qty_allocated,
+          'Likutis': item.qty_left,
+          'Vienetas': item.unit || '',
+          'Būsena': item.status,
+          'Galioja iki': item.expiry_date ? new Date(item.expiry_date).toLocaleDateString('lt-LT') : '',
+        }))
+      : filteredFarmStock.map(item => ({
+          'Ūkis': item.farm_name || '',
+          'Produktas': item.product_name || '',
+          'Kategorija': translateCategory(item.category || ''),
+          'Partijų sk.': item.batch_count,
+          'Priimta': item.total_qty_received,
+          'Likutis': item.total_qty_left,
+          'Vienetas': item.unit || '',
+          'Galioja iki': item.earliest_expiry ? new Date(item.earliest_expiry).toLocaleDateString('lt-LT') : '',
+        }));
 
     const worksheet = XLSX.utils.json_to_sheet(exportData);
     const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, 'Sandėlio Atsargos');
+    const sheetName = isWarehouse ? 'Sandėlio Atsargos' : 'Ūkių Atsargos';
+    XLSX.utils.book_append_sheet(workbook, worksheet, sheetName);
 
-    const columnWidths = [
-      { wch: 30 }, // Produktas
-      { wch: 20 }, // Kategorija
-      { wch: 12 }, // Partijų sk.
-      { wch: 12 }, // Priimta
-      { wch: 12 }, // Paskirstyta
-      { wch: 12 }, // Likutis
-      { wch: 10 }, // Vienetas
-      { wch: 15 }, // Būsena
-      { wch: 15 }, // Galioja iki
-    ];
+    const columnWidths = isWarehouse 
+      ? [
+          { wch: 30 }, // Produktas
+          { wch: 20 }, // Kategorija
+          { wch: 12 }, // Partijų sk.
+          { wch: 12 }, // Priimta
+          { wch: 12 }, // Paskirstyta
+          { wch: 12 }, // Likutis
+          { wch: 10 }, // Vienetas
+          { wch: 15 }, // Būsena
+          { wch: 15 }, // Galioja iki
+        ]
+      : [
+          { wch: 25 }, // Ūkis
+          { wch: 30 }, // Produktas
+          { wch: 20 }, // Kategorija
+          { wch: 12 }, // Partijų sk.
+          { wch: 12 }, // Priimta
+          { wch: 12 }, // Likutis
+          { wch: 10 }, // Vienetas
+          { wch: 15 }, // Galioja iki
+        ];
     worksheet['!cols'] = columnWidths;
 
     const timestamp = new Date().toISOString().split('T')[0];
-    XLSX.writeFile(workbook, `sandelio_atsargos_${timestamp}.xlsx`);
+    const filename = isWarehouse ? `sandelio_atsargos_${timestamp}.xlsx` : `ukiu_atsargos_${timestamp}.xlsx`;
+    XLSX.writeFile(workbook, filename);
 
-    logAction('export_warehouse_inventory', null, null, null, {
+    logAction(isWarehouse ? 'export_warehouse_inventory' : 'export_farm_inventory', null, null, null, {
       items_count: exportData.length,
       filter_category: filterCategory,
-      filter_status: filterStatus,
+      filter_status: isWarehouse ? filterStatus : undefined,
     });
   };
 
@@ -159,12 +291,53 @@ export function WarehouseInventory() {
 
   return (
     <div className="space-y-6">
+      {/* DEBUG: Version marker */}
+      <div className="hidden">v2.0-with-tabs</div>
+      
+      {/* Section Tabs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-2">
+        <div className="flex gap-2">
+          <button
+            onClick={() => setActiveSection('warehouse')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeSection === 'warehouse'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Package className="w-4 h-4 inline mr-2" />
+            Sandėlio Atsargos
+            {inventory.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {inventory.length}
+              </span>
+            )}
+          </button>
+          <button
+            onClick={() => setActiveSection('farms')}
+            className={`flex-1 px-4 py-2 rounded-lg font-medium transition-colors ${
+              activeSection === 'farms'
+                ? 'bg-blue-600 text-white'
+                : 'text-gray-600 hover:bg-gray-100'
+            }`}
+          >
+            <Package className="w-4 h-4 inline mr-2" />
+            Ūkių Atsargos
+            {farmStock.length > 0 && (
+              <span className="ml-2 px-2 py-0.5 bg-white/20 rounded-full text-xs">
+                {farmStock.length}
+              </span>
+            )}
+          </button>
+        </div>
+      </div>
+
       <div className="flex flex-col sm:flex-row gap-4">
         <div className="flex-1 relative">
           <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-5 h-5" />
           <input
             type="text"
-            placeholder="Ieškoti pagal produkto pavadinimą arba LOT..."
+            placeholder={activeSection === 'warehouse' ? "Ieškoti pagal produkto pavadinimą..." : "Ieškoti pagal produkto ar ūkio pavadinimą..."}
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             className="w-full pl-10 pr-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -188,19 +361,21 @@ export function WarehouseInventory() {
           <option value="treatment_materials">Gydymo medžiagos</option>
           <option value="reproduction">Reprodukcija</option>
         </select>
-        <select
-          value={filterStatus}
-          onChange={(e) => setFilterStatus(e.target.value)}
-          className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-        >
-          <option value="all">Visos būsenos</option>
-          <option value="active">Aktyvi</option>
-          <option value="fully_allocated">Pilnai paskirstyta</option>
-          <option value="expired">Pasibaigusi</option>
-        </select>
+        {activeSection === 'warehouse' && (
+          <select
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            className="px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+          >
+            <option value="all">Visos būsenos</option>
+            <option value="active">Aktyvi</option>
+            <option value="fully_allocated">Pilnai paskirstyta</option>
+            <option value="expired">Pasibaigusi</option>
+          </select>
+        )}
         <button
           onClick={exportToExcel}
-          disabled={filteredInventory.length === 0}
+          disabled={(activeSection === 'warehouse' ? filteredInventory : filteredFarmStock).length === 0}
           className="px-4 py-2.5 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
         >
           <Download className="w-5 h-5" />
@@ -208,7 +383,8 @@ export function WarehouseInventory() {
         </button>
       </div>
 
-      {filteredInventory.length === 0 ? (
+      {activeSection === 'warehouse' ? (
+        filteredInventory.length === 0 ? (
         <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
           <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
           <p className="text-gray-600">Sandėlio atsargų nerasta</p>
@@ -311,6 +487,90 @@ export function WarehouseInventory() {
             </table>
           </div>
         </div>
+      )
+      ) : (
+        filteredFarmStock.length === 0 ? (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-12 text-center">
+            <Package className="w-12 h-12 text-gray-400 mx-auto mb-4" />
+            <p className="text-gray-600">Ūkių atsargų nerasta</p>
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead className="bg-gray-50 border-b border-gray-200">
+                  <tr>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Ūkis
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Produktas
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Partijų sk.
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Priimta
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Likutis
+                    </th>
+                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                      Galiojimas
+                    </th>
+                  </tr>
+                </thead>
+                <tbody className="bg-white divide-y divide-gray-200">
+                  {filteredFarmStock.map((item, index) => (
+                    <tr key={`${item.farm_id}-${item.product_id}-${index}`} className="hover:bg-gray-50 transition-colors">
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-gray-900">{item.farm_name}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <div className="font-medium text-gray-900">{item.product_name}</div>
+                        <div className="text-sm text-gray-500">{translateCategory(item.category)}</div>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="text-sm font-medium text-gray-900">{item.batch_count}</span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className="font-medium text-gray-900">
+                          {item.total_qty_received.toFixed(2)} {item.unit}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        <span className={`font-medium ${
+                          item.total_qty_left <= 0 ? 'text-gray-400' :
+                          item.total_qty_left < 10 ? 'text-orange-600' :
+                          'text-green-600'
+                        }`}>
+                          {item.total_qty_left.toFixed(2)} {item.unit}
+                        </span>
+                      </td>
+                      <td className="px-6 py-4">
+                        {item.earliest_expiry ? (
+                          <div>
+                            <span className="text-sm text-gray-600">
+                              {new Date(item.earliest_expiry).toLocaleDateString('lt-LT')}
+                            </span>
+                            {isExpired(item.earliest_expiry) && (
+                              <div className="text-xs text-red-600 font-medium mt-1">Pasibaigusi</div>
+                            )}
+                            {!isExpired(item.earliest_expiry) && isExpiringSoon(item.earliest_expiry) && (
+                              <div className="text-xs text-orange-600 font-medium mt-1">Greitai pasibaigs</div>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-sm text-gray-400">N/A</span>
+                        )}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )
       )}
     </div>
   );

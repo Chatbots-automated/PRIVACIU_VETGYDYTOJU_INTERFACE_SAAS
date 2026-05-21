@@ -308,12 +308,30 @@ export function transformToVeterinaryWorkCompletionAct(
     const income = parseFloat(record.income || record.charge_amount || '0');
     totalIncome += income;
 
+    // Simplify date format - just show date without time
+    let simpleDate = record.date || record.service_date || '';
+    if (simpleDate) {
+      try {
+        const date = new Date(simpleDate);
+        simpleDate = date.toLocaleDateString('lt-LT'); // Just DD/MM/YYYY
+      } catch {
+        // Keep original if parsing fails
+      }
+    }
+
+    // Simplify document number - take last 8 characters of UUID or show short ID
+    let simpleDocNo = record.document_no || record.invoice_no || '';
+    if (simpleDocNo && simpleDocNo.length > 12) {
+      // If it's a UUID, take last 8 characters
+      simpleDocNo = simpleDocNo.slice(-8).toUpperCase();
+    }
+
     return {
       rowNo: rowNumber++,
-      date: record.date || record.service_date || '',
+      date: simpleDate,
       workName: record.work_name || record.service_name || record.description || '',
-      documentNo: record.document_no || record.invoice_no || '',
-      income: income.toString()
+      documentNo: simpleDocNo || rowNumber.toString(),
+      income: income.toFixed(2)
     };
   });
 
@@ -323,7 +341,7 @@ export function transformToVeterinaryWorkCompletionAct(
     farmOwnerAddress,
     documentDate,
     documentNumber: '',
-    totalIncome: totalIncome.toString(),
+    totalIncome: totalIncome.toFixed(2),
     acceptedByName: farmOwnerName,
     performedByName,
     rows
