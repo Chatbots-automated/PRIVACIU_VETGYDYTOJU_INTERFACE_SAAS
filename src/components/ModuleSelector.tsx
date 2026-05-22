@@ -27,11 +27,18 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
     <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-6xl">
         <div className="text-center mb-12">
+          <div className="flex justify-center mb-6">
+            <img 
+              src="/assets/gvet-logo.png" 
+              alt="GVET Logo" 
+              className="h-24 w-auto"
+            />
+          </div>
           <h1 className="text-4xl lg:text-5xl font-bold text-white mb-3">
-            Veterinarinė apskaita
+            GVET
           </h1>
-          <p className="text-blue-200 text-base mb-2">
-            Valdymo sistema
+          <p className="text-green-200 text-lg mb-2">
+            Moderni veterinarinės apskaitos sistema ūkių veterinarams
           </p>
           <p className="text-blue-300 text-sm mt-4">
             Pasirinkite modulį
@@ -170,7 +177,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
                 <Warehouse className="w-12 h-12 text-slate-700" />
               </div>
               <h2 className="text-3xl font-bold text-white mb-2">
-                Veterinarinė apskaitos sistema
+                Apskaita
               </h2>
               <p className="text-base text-gray-300">
                 Bendras sandėlis

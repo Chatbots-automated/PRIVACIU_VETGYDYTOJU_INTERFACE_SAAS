@@ -33,7 +33,7 @@ interface Client {
   vat_code: string | null;
   contact_email: string;
   contact_phone: string | null;
-  subscription_plan: 'trial' | 'starter' | 'professional' | 'enterprise' | 'komanda';
+  subscription_plan: string;
   subscription_status: 'active' | 'inactive' | 'suspended' | 'cancelled';
   max_farms: number;
   max_users: number;
@@ -76,6 +76,13 @@ export function AdminDashboard() {
   const [showAddModal, setShowAddModal] = useState(false);
   const [selectedClient, setSelectedClient] = useState<Client | null>(null);
   const [showDetailsModal, setShowDetailsModal] = useState(false);
+  const [clientPayments, setClientPayments] = useState<any[]>([]);
+  const [showAddPaymentForm, setShowAddPaymentForm] = useState(false);
+  const [paymentFormData, setPaymentFormData] = useState({
+    days: 30,
+    amount: 30,
+    notes: '',
+  });
 
   // Form state for add/edit client
   const [formData, setFormData] = useState<{
@@ -86,9 +93,8 @@ export function AdminDashboard() {
     contact_phone: string;
     address: string;
     city: string;
-    subscription_plan: 'trial' | 'starter' | 'professional' | 'enterprise' | 'komanda';
-    max_farms: number;
-    max_users: number;
+    subscription_days: number;
+    subscription_amount: number;
     vat_registered: boolean;
     vat_rate: number;
   }>({
@@ -99,69 +105,14 @@ export function AdminDashboard() {
     contact_phone: '',
     address: '',
     city: '',
-    subscription_plan: 'trial',
-    max_farms: 3,
-    max_users: 999,
+    subscription_days: 30,
+    subscription_amount: 30,
     vat_registered: false,
     vat_rate: 21.00,
   });
 
   const [registrationCode, setRegistrationCode] = useState<string | null>(null);
   const [showRegistrationModal, setShowRegistrationModal] = useState(false);
-
-  // Pricing tiers configuration (WEEKLY BILLING)
-  const pricingTiers = {
-    trial: {
-      name: 'Trial (7 Days)',
-      description: 'Test the platform for free',
-      duration: '7 days',
-      max_farms: 3,
-      max_users: 999,
-      price: '€0',
-      weeklyPrice: 0,
-      features: ['Up to 3 Farms', 'Unlimited Users', 'All 3 Modules', '7 Day Trial']
-    },
-    starter: {
-      name: 'Startas',
-      description: 'For solo vets (1-5 farms)',
-      duration: 'weekly',
-      max_farms: 5,
-      max_users: 999,
-      price: '€19/week',
-      weeklyPrice: 19,
-      features: ['Up to 5 Farms', 'Unlimited Users', 'All 3 Modules', 'Email Support']
-    },
-    professional: {
-      name: 'Praktika',
-      description: 'For small practices (6-15 farms)',
-      duration: 'weekly',
-      max_farms: 15,
-      max_users: 999,
-      price: '€39/week',
-      weeklyPrice: 39,
-      features: ['Up to 15 Farms', 'Unlimited Users', 'All 3 Modules', 'Priority Support']
-    },
-    enterprise: {
-      name: 'Augimas',
-      description: 'For growing practices (16-35 farms)',
-      duration: 'weekly',
-      max_farms: 35,
-      max_users: 999,
-      price: '€69/week',
-      weeklyPrice: 69,
-      features: ['Up to 35 Farms', 'Unlimited Users', 'All Features', 'Advanced Analytics']
-    },
-    komanda: {
-      name: 'Komanda',
-      description: 'For large practices (36+ farms)',
-      duration: 'weekly',
-      max_farms: 999,
-      max_users: 999,
-      price: '€119/week',
-      weeklyPrice: 119,
-      features: ['Unlimited Farms', 'Unlimited Users', 'All Features', 'API Access', 'Dedicated Support']
-    }
-  };
 
   // Generate registration code
   const generateRegistrationCode = () => {
@@ -293,11 +244,11 @@ export function AdminDashboard() {
   const handleAddClient = async () => {
     try {
       const regCode = generateRegistrationCode();
-      const subscriptionEndDate = formData.subscription_plan === 'trial' 
-        ? new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0] // 7 days from now
-        : null;
+      const subscriptionEndDate = new Date(Date.now() + formData.subscription_days * 24 * 60 * 60 * 1000)
+        .toISOString().split('T')[0];
 
-      const { data, error } = await supabase
+      // Create client
+      const { data: clientData, error: clientError } = await supabase
         .from('clients')
         .insert({
           name: formData.name,
@@ -308,10 +259,10 @@ export function AdminDashboard() {
           contact_phone: formData.contact_phone || null,
           address: formData.address || null,
           city: formData.city || null,
-          subscription_plan: formData.subscription_plan,
+          subscription_plan: `custom_${formData.subscription_days}d`,
           subscription_status: 'active',
-          max_farms: formData.max_farms,
-          max_users: formData.max_users,
+          max_farms: 999999, // unlimited
+          max_users: 999999, // unlimited
           is_active: true,
           vat_registered: formData.vat_registered,
           subscription_start_date: new Date().toISOString().split('T')[0],
@@ -321,7 +272,21 @@ export function AdminDashboard() {
         .select()
         .single();
 
-      if (error) throw error;
+      if (clientError) throw clientError;
+
+      // Create payment record
+      const { error: paymentError } = await supabase
+        .from('client_payments')
+        .insert({
+          client_id: clientData.id,
+          amount: formData.subscription_amount,
+          days_purchased: formData.subscription_days,
+          payment_date: new Date().toISOString(),
+          notes: 'Initial subscription payment',
+          created_by: user?.id || null,
+        });
+
+      if (paymentError) throw paymentError;
 
       setRegistrationCode(regCode);
       setShowRegistrationModal(true);
@@ -372,6 +337,77 @@ export function AdminDashboard() {
     }
   };
 
+  const loadClientPayments = async (clientId: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('client_payments')
+        .select('*')
+        .eq('client_id', clientId)
+        .order('payment_date', { ascending: false });
+
+      if (error) throw error;
+      setClientPayments(data || []);
+    } catch (error: any) {
+      console.error('Error loading payments:', error);
+    }
+  };
+
+  const handleAddPayment = async () => {
+    if (!selectedClient) return;
+
+    try {
+      // Calculate new end date
+      const currentEnd = selectedClient.subscription_end_date 
+        ? new Date(selectedClient.subscription_end_date) 
+        : new Date();
+      const newEnd = new Date(currentEnd.getTime() + paymentFormData.days * 24 * 60 * 60 * 1000);
+
+      // Create payment record
+      const { error: paymentError } = await supabase
+        .from('client_payments')
+        .insert({
+          client_id: selectedClient.id,
+          amount: paymentFormData.amount,
+          days_purchased: paymentFormData.days,
+          payment_date: new Date().toISOString(),
+          notes: paymentFormData.notes || null,
+          created_by: user?.id || null,
+        });
+
+      if (paymentError) throw paymentError;
+
+      // Update client subscription end date
+      const { error: updateError } = await supabase
+        .from('clients')
+        .update({
+          subscription_end_date: newEnd.toISOString().split('T')[0],
+          subscription_status: 'active',
+        })
+        .eq('id', selectedClient.id);
+
+      if (updateError) throw updateError;
+
+      alert('Payment added successfully!');
+      setShowAddPaymentForm(false);
+      setPaymentFormData({ days: 30, amount: 30, notes: '' });
+      
+      // Reload data
+      await loadData();
+      await loadClientPayments(selectedClient.id);
+      
+      // Update selected client
+      const { data: updated } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('id', selectedClient.id)
+        .single();
+      if (updated) setSelectedClient(updated);
+    } catch (error: any) {
+      console.error('Error adding payment:', error);
+      alert(`Error: ${error.message}`);
+    }
+  };
+
   const resetForm = () => {
     setFormData({
       name: '',
@@ -381,21 +417,10 @@ export function AdminDashboard() {
       contact_phone: '',
       address: '',
       city: '',
-      subscription_plan: 'trial',
-      max_farms: 1,
-      max_users: 2,
+      subscription_days: 30,
+      subscription_amount: 30,
       vat_registered: false,
       vat_rate: 21.00,
-    });
-  };
-
-  const handlePlanChange = (plan: 'trial' | 'starter' | 'professional' | 'enterprise' | 'komanda') => {
-    const tier = pricingTiers[plan];
-    setFormData({
-      ...formData,
-      subscription_plan: plan,
-      max_farms: tier.max_farms,
-      max_users: tier.max_users,
     });
   };
 
@@ -406,6 +431,21 @@ export function AdminDashboard() {
 
   const getRegistrationUrl = (code: string) => {
     return `${window.location.origin}/register?code=${code}`;
+  };
+
+  const calculateDaysRemaining = (endDate: string | null): number => {
+    if (!endDate) return 0;
+    const end = new Date(endDate);
+    const now = new Date();
+    const diff = end.getTime() - now.getTime();
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  const getDaysRemainingColor = (days: number): string => {
+    if (days <= 0) return 'text-red-600 bg-red-50';
+    if (days <= 7) return 'text-amber-600 bg-amber-50';
+    if (days <= 30) return 'text-blue-600 bg-blue-50';
+    return 'text-green-600 bg-green-50';
   };
 
   const filteredClients = clients.filter(client => {
@@ -581,7 +621,7 @@ export function AdminDashboard() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Client</th>
-                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Plan</th>
+                  <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Subscription</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Status</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Usage</th>
                   <th className="px-6 py-4 text-left text-xs font-semibold text-gray-700 uppercase tracking-wider">Created</th>
@@ -591,6 +631,10 @@ export function AdminDashboard() {
               <tbody className="divide-y divide-gray-200">
                 {filteredClients.map((client) => {
                   const stats = clientStats.get(client.id);
+                  const daysRemaining = calculateDaysRemaining(client.subscription_end_date);
+                  const isExpired = daysRemaining <= 0;
+                  const isExpiringSoon = daysRemaining > 0 && daysRemaining <= 7;
+                  
                   return (
                     <tr key={client.id} className="hover:bg-gray-50 transition-colors">
                       <td className="px-6 py-4">
@@ -603,12 +647,31 @@ export function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getSubscriptionBadgeColor(client.subscription_plan)}`}>
-                          {client.subscription_plan}
-                        </span>
-                        <p className="text-xs text-gray-500 mt-1">
-                          {client.max_farms} farms / {client.max_users} users
-                        </p>
+                        <div className="space-y-2">
+                          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getSubscriptionBadgeColor(client.subscription_plan)}`}>
+                            {client.subscription_plan}
+                          </span>
+                          {client.subscription_end_date && (
+                            <div>
+                              <div className={`inline-flex items-center px-2 py-1 rounded text-xs font-bold ${getDaysRemainingColor(daysRemaining)}`}>
+                                {isExpired ? (
+                                  <>
+                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                    Expired {Math.abs(daysRemaining)} days ago
+                                  </>
+                                ) : (
+                                  <>
+                                    <Calendar className="w-3 h-3 mr-1" />
+                                    {daysRemaining} {daysRemaining === 1 ? 'day' : 'days'} left
+                                  </>
+                                )}
+                              </div>
+                              <p className="text-xs text-gray-500 mt-1">
+                                Expires: {new Date(client.subscription_end_date).toLocaleDateString('lt-LT')}
+                              </p>
+                            </div>
+                          )}
+                        </div>
                       </td>
                       <td className="px-6 py-4">
                         <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getStatusBadgeColor(client.subscription_status)}`}>
@@ -641,6 +704,7 @@ export function AdminDashboard() {
                             onClick={() => {
                               setSelectedClient(client);
                               setShowDetailsModal(true);
+                              loadClientPayments(client.id);
                             }}
                             className="p-2 hover:bg-blue-50 rounded-lg transition-colors"
                             title="View Details"
@@ -785,71 +849,90 @@ export function AdminDashboard() {
                 </div>
               </div>
 
-              {/* Subscription Plans - Visual Cards */}
+              {/* Subscription Plan - Custom Days and Amount */}
               <div>
-                <h4 className="text-sm font-semibold text-gray-700 mb-4">Choose Subscription Plan *</h4>
-                <div className="grid grid-cols-2 gap-3">
-                  {Object.entries(pricingTiers).map(([key, tier]) => (
-                    <button
-                      key={key}
-                      type="button"
-                      onClick={() => handlePlanChange(key as any)}
-                      className={`relative p-4 rounded-lg border-2 text-left transition-all ${
-                        formData.subscription_plan === key
-                          ? 'border-blue-500 bg-blue-50 shadow-md'
-                          : 'border-gray-200 bg-white hover:border-gray-300'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between mb-2">
-                        <div>
-                          <h5 className="font-bold text-gray-900">{tier.name}</h5>
-                          <p className="text-xs text-gray-500">{tier.description}</p>
-                        </div>
-                        {formData.subscription_plan === key && (
-                          <Check className="w-5 h-5 text-blue-600 flex-shrink-0" />
-                        )}
-                      </div>
-                      <div className="mb-3">
-                        <p className="text-lg font-bold text-blue-600">{tier.price}</p>
-                        {key === 'trial' && (
-                          <p className="text-xs text-amber-600 font-medium">Expires in 7 days</p>
-                        )}
-                      </div>
-                      <div className="space-y-1">
-                        {tier.features.slice(0, 3).map((feature, idx) => (
-                          <div key={idx} className="flex items-center gap-1.5 text-xs text-gray-600">
-                            <Check className="w-3 h-3 text-green-500 flex-shrink-0" />
-                            <span>{feature}</span>
-                          </div>
-                        ))}
-                      </div>
-                    </button>
-                  ))}
+                <h4 className="text-sm font-semibold text-gray-700 mb-4">Subscription Details</h4>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Number of Days *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.subscription_days}
+                      onChange={(e) => setFormData({ ...formData, subscription_days: parseInt(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., 30 or 180"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Enter 7 for trial, 30 for monthly, 180 for 6 months</p>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">
+                      Payment Amount (€) *
+                    </label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={formData.subscription_amount}
+                      onChange={(e) => setFormData({ ...formData, subscription_amount: parseFloat(e.target.value) || 0 })}
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                      placeholder="e.g., 0 or 30 or 150"
+                      required
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Enter 0 for free trial</p>
+                  </div>
+                </div>
+                
+                {/* Quick Presets */}
+                <div className="mt-3 flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, subscription_days: 7, subscription_amount: 0 })}
+                    className="px-3 py-1.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-xs font-medium text-gray-700 transition-colors"
+                  >
+                    7d Trial (€0)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, subscription_days: 30, subscription_amount: 30 })}
+                    className="px-3 py-1.5 bg-blue-100 hover:bg-blue-200 rounded-lg text-xs font-medium text-blue-700 transition-colors"
+                  >
+                    30d (€30)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData({ ...formData, subscription_days: 180, subscription_amount: 150 })}
+                    className="px-3 py-1.5 bg-purple-100 hover:bg-purple-200 rounded-lg text-xs font-medium text-purple-700 transition-colors"
+                  >
+                    180d (€150)
+                  </button>
                 </div>
               </div>
 
-              {/* Plan Details */}
-              <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                <h5 className="text-sm font-semibold text-gray-700 mb-3">Plan Includes:</h5>
-                <div className="grid grid-cols-2 gap-3">
-                  <div className="flex items-center gap-2">
-                    <Building2 className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm text-gray-700">
-                      <span className="font-bold">{formData.max_farms}</span> {formData.max_farms === 1 ? 'Farm' : 'Farms'}
+              {/* Plan Summary */}
+              <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
+                <h5 className="text-sm font-semibold text-blue-900 mb-3">Subscription Summary:</h5>
+                <div className="space-y-2 text-sm text-blue-800">
+                  <div className="flex justify-between">
+                    <span>Duration:</span>
+                    <span className="font-bold">{formData.subscription_days} days</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Amount:</span>
+                    <span className="font-bold">€{formData.subscription_amount.toFixed(2)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Expires:</span>
+                    <span className="font-bold">
+                      {new Date(Date.now() + formData.subscription_days * 24 * 60 * 60 * 1000).toLocaleDateString('lt-LT')}
                     </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <Users className="w-4 h-4 text-blue-600" />
-                    <span className="text-sm text-gray-700">
-                      <span className="font-bold">{formData.max_users}</span> {formData.max_users === 1 ? 'User' : 'Users'}
-                    </span>
+                  <div className="pt-2 border-t border-blue-300 text-green-700">
+                    <p className="text-xs">✓ Unlimited farms and users</p>
                   </div>
-                  {formData.subscription_plan === 'trial' && (
-                    <div className="col-span-2 flex items-center gap-2 text-amber-700 bg-amber-50 px-3 py-2 rounded-lg">
-                      <AlertTriangle className="w-4 h-4" />
-                      <span className="text-xs font-medium">Trial expires after 7 days</span>
-                    </div>
-                  )}
                 </div>
               </div>
 
@@ -1107,6 +1190,113 @@ export function AdminDashboard() {
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Payment History */}
+              <div className="border-t pt-6">
+                <div className="flex items-center justify-between mb-4">
+                  <h4 className="text-sm font-semibold text-gray-700">Payment History</h4>
+                  <button
+                    onClick={() => setShowAddPaymentForm(!showAddPaymentForm)}
+                    className="flex items-center gap-2 px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium transition-colors"
+                  >
+                    <Plus className="w-4 h-4" />
+                    Add Payment
+                  </button>
+                </div>
+
+                {/* Add Payment Form */}
+                {showAddPaymentForm && (
+                  <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 mb-4">
+                    <h5 className="text-sm font-semibold text-blue-900 mb-3">Extend Subscription</h5>
+                    <div className="grid grid-cols-2 gap-3 mb-3">
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Days to Add</label>
+                        <input
+                          type="number"
+                          min="0"
+                          value={paymentFormData.days}
+                          onChange={(e) => setPaymentFormData({ ...paymentFormData, days: parseInt(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Amount (€)</label>
+                        <input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          value={paymentFormData.amount}
+                          onChange={(e) => setPaymentFormData({ ...paymentFormData, amount: parseFloat(e.target.value) || 0 })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                        />
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-xs font-medium text-gray-700 mb-1">Notes (Optional)</label>
+                        <input
+                          type="text"
+                          value={paymentFormData.notes}
+                          onChange={(e) => setPaymentFormData({ ...paymentFormData, notes: e.target.value })}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 text-sm"
+                          placeholder="e.g., Bank transfer, Cash payment"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleAddPayment}
+                        className="px-4 py-2 bg-green-600 hover:bg-green-700 text-white rounded-lg text-sm font-medium"
+                      >
+                        Confirm Payment
+                      </button>
+                      <button
+                        onClick={() => {
+                          setShowAddPaymentForm(false);
+                          setPaymentFormData({ days: 30, amount: 30, notes: '' });
+                        }}
+                        className="px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 rounded-lg text-sm font-medium"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                    <p className="text-xs text-blue-700 mt-2">
+                      New expiration: {new Date(new Date(selectedClient.subscription_end_date || new Date()).getTime() + paymentFormData.days * 24 * 60 * 60 * 1000).toLocaleDateString('lt-LT')}
+                    </p>
+                  </div>
+                )}
+
+                {/* Payments List */}
+                {clientPayments.length > 0 ? (
+                  <div className="space-y-2">
+                    {clientPayments.map((payment) => (
+                      <div key={payment.id} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                        <div className="flex items-center justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-3 mb-2">
+                              <span className="text-lg font-bold text-green-600">€{payment.amount.toFixed(2)}</span>
+                              <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">
+                                {payment.days_purchased} days
+                              </span>
+                            </div>
+                            <p className="text-xs text-gray-600">
+                              <Calendar className="w-3 h-3 inline mr-1" />
+                              {new Date(payment.payment_date).toLocaleDateString('lt-LT')} at {new Date(payment.payment_date).toLocaleTimeString('lt-LT', { hour: '2-digit', minute: '2-digit' })}
+                            </p>
+                            {payment.notes && (
+                              <p className="text-xs text-gray-500 mt-1">{payment.notes}</p>
+                            )}
+                          </div>
+                          <CreditCard className="w-5 h-5 text-gray-400" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-gray-500">
+                    <DollarSign className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+                    <p className="text-sm">No payment history yet</p>
+                  </div>
+                )}
               </div>
             </div>
           </div>

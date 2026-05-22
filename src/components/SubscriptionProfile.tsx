@@ -77,40 +77,19 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
   const [vicFarmId, setVicFarmId] = useState<string | null>(null);
 
   const pricingPlans = {
-    trial: {
-      name: 'Trial',
-      price: '€0',
-      duration: '7 dienų',
-      color: 'gray',
-      maxFarms: 3,
-    },
-    starter: {
-      name: 'Startas',
-      price: '€19/sav',
-      duration: 'Savaitinis',
+    plan_30d: {
+      name: '30 dienų',
+      price: '€30',
+      duration: '30 dienų',
       color: 'blue',
-      maxFarms: 5,
+      days: 30,
     },
-    professional: {
-      name: 'Praktika',
-      price: '€39/sav',
-      duration: 'Savaitinis',
+    plan_180d: {
+      name: '180 dienų',
+      price: '€150',
+      duration: '180 dienų',
       color: 'purple',
-      maxFarms: 15,
-    },
-    enterprise: {
-      name: 'Augimas',
-      price: '€69/sav',
-      duration: 'Savaitinis',
-      color: 'amber',
-      maxFarms: 35,
-    },
-    komanda: {
-      name: 'Komanda',
-      price: '€119/sav',
-      duration: 'Savaitinis',
-      color: 'indigo',
-      maxFarms: 999,
+      days: 180,
     },
   };
 
@@ -230,8 +209,8 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
   if (!isOpen) return null;
 
   const currentPlan = clientInfo?.subscription_plan ? pricingPlans[clientInfo.subscription_plan as keyof typeof pricingPlans] : null;
-  const isTrialExpiringSoon = clientInfo?.subscription_plan === 'trial' && clientInfo?.subscription_end_date;
-  const daysUntilExpiry = isTrialExpiringSoon 
+  const isExpiringSoon = clientInfo?.subscription_end_date;
+  const daysUntilExpiry = isExpiringSoon 
     ? Math.ceil((new Date(clientInfo.subscription_end_date!).getTime() - new Date().getTime()) / (1000 * 60 * 60 * 24))
     : null;
 
@@ -264,17 +243,17 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
           </div>
         ) : clientInfo ? (
           <div className="p-6 space-y-6">
-            {/* Trial Warning */}
-            {isTrialExpiringSoon && daysUntilExpiry !== null && daysUntilExpiry <= 7 && (
+            {/* Expiry Warning */}
+            {isExpiringSoon && daysUntilExpiry !== null && daysUntilExpiry <= 7 && (
               <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-6 h-6 text-amber-600 flex-shrink-0" />
                   <div>
                     <h4 className="font-semibold text-amber-900 mb-1">
-                      Trial baigiasi po {daysUntilExpiry} {daysUntilExpiry === 1 ? 'dienos' : 'dienų'}!
+                      Planas baigiasi po {daysUntilExpiry} {daysUntilExpiry === 1 ? 'dienos' : 'dienų'}!
                     </h4>
                     <p className="text-sm text-amber-800">
-                      Pasirinkite prenumeratos planą, kad tęstumėte naudojimą po {new Date(clientInfo.subscription_end_date!).toLocaleDateString('lt-LT')}.
+                      Pratęskite prenumeratą, kad tęstumėte naudojimą po {new Date(clientInfo.subscription_end_date!).toLocaleDateString('lt-LT')}.
                     </p>
                   </div>
                 </div>
@@ -564,7 +543,7 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                   <div>
                     <div className="flex items-center gap-2 mb-2">
                       <Crown className="w-5 h-5 text-blue-600" />
-                      <h5 className="text-2xl font-bold text-gray-900">{currentPlan?.name || 'Unknown'}</h5>
+                      <h5 className="text-2xl font-bold text-gray-900">{currentPlan?.name || 'Nėra plano'}</h5>
                     </div>
                     <p className="text-3xl font-bold text-blue-600 mb-1">{currentPlan?.price || '-'}</p>
                     <p className="text-sm text-gray-600">{currentPlan?.duration || '-'}</p>
@@ -578,19 +557,10 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                   </span>
                 </div>
 
-                <div className="grid grid-cols-3 gap-4">
-                  <div className="bg-white/80 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Maksimaliai ūkių</p>
-                    <p className="text-xl font-bold text-gray-900">{clientInfo.max_farms}</p>
-                  </div>
-                  <div className="bg-white/80 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">Maksimaliai vartotojų</p>
-                    <p className="text-xl font-bold text-gray-900">{clientInfo.max_users === 999 ? '∞' : clientInfo.max_users}</p>
-                  </div>
-                  <div className="bg-white/80 rounded-lg p-3">
-                    <p className="text-xs text-gray-500 mb-1">VAT</p>
-                    <p className="text-xl font-bold text-gray-900">{clientInfo.vat_registered ? 'Taip' : 'Ne'}</p>
-                  </div>
+                <div className="bg-white/80 rounded-lg p-4">
+                  <p className="text-sm text-gray-700 mb-2">✓ Neribotas ūkių skaičius</p>
+                  <p className="text-sm text-gray-700 mb-2">✓ Neribotas vartotojų skaičius</p>
+                  <p className="text-sm text-gray-700">✓ Visos sistemos funkcijos</p>
                 </div>
               </div>
             </div>
@@ -603,13 +573,6 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                   <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
                     <div className="flex items-center justify-between mb-2">
                       <Building2 className="w-5 h-5 text-blue-600" />
-                      <span className={`text-xs font-bold ${
-                        usageStats.farms_count >= clientInfo.max_farms 
-                          ? 'text-red-600' 
-                          : 'text-green-600'
-                      }`}>
-                        {usageStats.farms_count}/{clientInfo.max_farms}
-                      </span>
                     </div>
                     <p className="text-xs text-blue-600 mb-1">Aktyvūs ūkiai</p>
                     <p className="text-2xl font-bold text-blue-900">{usageStats.farms_count}</p>
@@ -618,13 +581,6 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                   <div className="bg-purple-50 rounded-lg p-4 border border-purple-200">
                     <div className="flex items-center justify-between mb-2">
                       <Users className="w-5 h-5 text-purple-600" />
-                      <span className={`text-xs font-bold ${
-                        usageStats.users_count >= clientInfo.max_users 
-                          ? 'text-red-600' 
-                          : 'text-green-600'
-                      }`}>
-                        {usageStats.users_count}/{clientInfo.max_users === 999 ? '∞' : clientInfo.max_users}
-                      </span>
                     </div>
                     <p className="text-xs text-purple-600 mb-1">Vartotojai</p>
                     <p className="text-2xl font-bold text-purple-900">{usageStats.users_count}</p>
@@ -638,21 +594,6 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                     <p className="text-2xl font-bold text-green-900">{usageStats.animals_count}</p>
                   </div>
                 </div>
-
-                {/* Usage Warnings */}
-                {usageStats.farms_count >= clientInfo.max_farms && (
-                  <div className="mt-4 bg-red-50 border border-red-200 rounded-lg p-3">
-                    <div className="flex items-start gap-2">
-                      <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-                      <div>
-                        <p className="text-sm font-semibold text-red-900">Pasiektas ūkių limitas</p>
-                        <p className="text-xs text-red-700 mt-1">
-                          Jūs pasiekėte maksimalų ūkių skaičių. Norėdami pridėti daugiau ūkių, atnaujinkite prenumeratos planą.
-                        </p>
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -682,11 +623,10 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                             )}
                           </div>
                           <p className="text-lg font-bold text-blue-600 mb-1">{plan.price}</p>
-                          <p className="text-xs text-gray-600">
-                            Iki {plan.maxFarms === 999 ? 'neribotai' : plan.maxFarms} ūkių
-                          </p>
+                          <p className="text-xs text-gray-600">{plan.duration}</p>
+                          <p className="text-xs text-green-600 mt-2">✓ Neribotas ūkių ir vartotojų skaičius</p>
                         </div>
-                        {!isCurrent && clientInfo.subscription_plan !== 'trial' && (
+                        {!isCurrent && (
                           <button
                             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm font-medium"
                             onClick={() => alert('Susisiekite su administratoriumi dėl plano keitimo')}

@@ -37,12 +37,19 @@ export function AuthForm() {
     <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="w-full max-w-md">
         <div className="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-200">
-          <div className="bg-blue-600 px-8 py-10 text-center">
-            <h1 className="text-3xl font-bold text-white mb-4">
-              Veterinarinė apskaita
+          <div className="bg-gradient-to-br from-green-600 to-emerald-700 px-8 py-10 text-center">
+            <div className="flex justify-center mb-4">
+              <img 
+                src="/assets/gvet-logo.png" 
+                alt="GVET Logo" 
+                className="h-20 w-auto"
+              />
+            </div>
+            <h1 className="text-3xl font-bold text-white mb-2">
+              GVET
             </h1>
-            <p className="text-blue-100">
-              Veterinarijos Valdymo Sistema
+            <p className="text-green-100 text-sm">
+              Moderni veterinarinės apskaitos sistema ūkių veterinarams
             </p>
           </div>
 
@@ -170,13 +177,13 @@ export function AuthForm() {
           <div className="bg-gray-50 px-8 py-4 border-t border-gray-200">
             <div className="flex items-center justify-center gap-2 text-sm text-gray-600">
               <Stethoscope className="w-4 h-4" />
-              <span>Saugus veterinarijos atsargų valdymas</span>
+              <span>Gydymai, vaistai, gyvulių duomenys ir privalomi žurnalai vienoje platformoje</span>
             </div>
           </div>
         </div>
 
-        <div className="mt-6 text-center text-sm text-gray-600">
-          <p>© 2026 Veterinarinė apskaitos sistema v1.0.0</p>
+        <div className="mt-6 text-center text-sm text-gray-400">
+          <p>© 2026 GVET. Visos teisės saugomos.</p>
         </div>
       </div>
     </div>

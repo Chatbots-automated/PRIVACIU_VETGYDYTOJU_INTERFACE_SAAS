@@ -364,10 +364,11 @@ export function ClientRegistration() {
   // Show loading while validating code
   if (validating) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <div className="text-center">
-          <Loader className="w-12 h-12 text-blue-600 animate-spin mx-auto mb-4" />
-          <p className="text-gray-600 font-medium">Tikrinamas registracijos kodas...</p>
+          <img src="/assets/gvet-logo.png" alt="GVET" className="h-20 w-auto mx-auto mb-4 animate-pulse" />
+          <Loader className="w-12 h-12 text-green-500 animate-spin mx-auto mb-4" />
+          <p className="text-white font-medium">Tikrinamas registracijos kodas...</p>
         </div>
       </div>
     );
@@ -376,7 +377,7 @@ export function ClientRegistration() {
   // Show error if code is invalid
   if (!clientInfo && !validating) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+      <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 flex items-center justify-center p-4">
         <div className="bg-white rounded-xl shadow-lg border border-red-200 p-8 max-w-md w-full">
           <div className="flex items-center gap-4 mb-4">
             <div className="p-3 bg-red-50 rounded-lg">
@@ -387,7 +388,7 @@ export function ClientRegistration() {
             </div>
           </div>
           <p className="text-gray-600 mb-6">
-            {error || 'Registracijos kodas yra neteisingas arba pasibaigęs. Kreipkitės į administratorių dėl naujo kodo.'}
+            {error || 'Registracijos kodas yra neteisingas arba pasibaigęs. Kreipkitės į GVET pagalbos tarnybą.'}
           </p>
           <div className="space-y-3">
             <input
@@ -433,17 +434,17 @@ export function ClientRegistration() {
 
   // Show registration form
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 via-indigo-50 to-purple-50 flex items-center justify-center p-4">
+    <div className="min-h-screen bg-gradient-to-br from-slate-800 via-blue-900 to-slate-900 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-lg border border-gray-200 max-w-2xl w-full overflow-hidden">
         {/* Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 px-8 py-6">
+        <div className="bg-gradient-to-r from-green-600 to-emerald-700 px-8 py-6">
           <div className="flex items-center gap-4">
             <div className="p-3 bg-white rounded-lg">
-              <Building2 className="w-8 h-8 text-blue-600" />
+              <img src="/assets/gvet-logo.png" alt="GVET" className="w-10 h-10" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold text-white mb-1">Sveiki prisijungę</h1>
-              <p className="text-blue-100 text-sm">Sukurkite paskyrą, kad pradėtumėte naudotis sistema</p>
+              <h1 className="text-2xl font-bold text-white mb-1">Sveiki prisijungę į GVET</h1>
+              <p className="text-green-100 text-sm">Sukurkite paskyrą, kad pradėtumėte naudotis sistema</p>
             </div>
           </div>
         </div>
