@@ -7,12 +7,12 @@
   
   <!-- Homepage -->
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/</loc>
+    <loc>https://gvet.lt/</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>weekly</changefreq>
     <priority>1.0</priority>
     <image:image>
-      <image:loc>https://rvac-veterinarija.netlify.app/assets/gvet-logo.png</image:loc>
+      <image:loc>https://gvet.lt/assets/gvet-logo.png</image:loc>
       <image:title>GVET Logo</image:title>
       <image:caption>GVET - Veterinarinės Apskaitos Sistema</image:caption>
     </image:image>
@@ -20,7 +20,7 @@
   
   <!-- Login Page -->
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/login</loc>
+    <loc>https://gvet.lt/login</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -28,7 +28,7 @@
   
   <!-- Register Page -->
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/register</loc>
+    <loc>https://gvet.lt/register</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.8</priority>
@@ -36,49 +36,49 @@
   
   <!-- Main Application Routes (for logged-in users) -->
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/vetpraktika</loc>
+    <loc>https://gvet.lt/vetpraktika</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/veterinarija</loc>
+    <loc>https://gvet.lt/veterinarija</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/sandėlis</loc>
+    <loc>https://gvet.lt/sandėlis</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/gyvūnai</loc>
+    <loc>https://gvet.lt/gyvūnai</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/ataskaitos</loc>
+    <loc>https://gvet.lt/ataskaitos</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/apskaita</loc>
+    <loc>https://gvet.lt/apskaita</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.7</priority>
   </url>
   
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/admin</loc>
+    <loc>https://gvet.lt/admin</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>
     <priority>0.5</priority>
@@ -86,7 +86,7 @@
   
   <!-- Assets -->
   <url>
-    <loc>https://rvac-veterinarija.netlify.app/assets/gvet-logo.png</loc>
+    <loc>https://gvet.lt/assets/gvet-logo.png</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>yearly</changefreq>
     <priority>0.3</priority>

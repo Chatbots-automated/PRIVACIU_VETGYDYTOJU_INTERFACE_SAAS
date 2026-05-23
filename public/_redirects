@@ -7,7 +7,7 @@
 /api/*  https://vlfjmffbwrmblvlsbsnz.supabase.co/:splat  200
 
 # Force HTTPS (optional - Netlify does this by default)
-http://rvac-veterinarija.netlify.app/*  https://rvac-veterinarija.netlify.app/:splat  301!
+http://gvet.lt/*  https://gvet.lt/:splat  301!
 
 # Legacy URL redirects (if you have any old URLs to redirect)
 # /old-path  /new-path  301

@@ -22,7 +22,7 @@ Allow: *.svg
 Allow: *.webp
 
 # Sitemap location
-Sitemap: https://rvac-veterinarija.netlify.app/sitemap.xml
+Sitemap: https://gvet.lt/sitemap.xml
 
 # Crawl-delay for specific bots
 User-agent: Googlebot
