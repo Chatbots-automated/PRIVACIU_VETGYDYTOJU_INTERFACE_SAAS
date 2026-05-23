@@ -4651,7 +4651,7 @@ function VisitCreateModal({
               </div>
 
               {/* TEAT SELECTOR - Only for production animals */}
-              {(!animal.animal_type || animal.animal_type === 'produkcinis') && (
+              {animal && (!animal.animal_type || animal.animal_type === 'produkcinis') && (
                 <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
                   <h5 className="text-sm font-semibold text-gray-900 mb-2">Spenų būsena</h5>
                   <TeatSelector

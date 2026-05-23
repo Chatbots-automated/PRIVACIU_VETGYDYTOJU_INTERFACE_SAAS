@@ -23,14 +23,15 @@ import {
   ProductionAnimalMedicineUsageReport,
   MedicineBiocideStockBalanceReport,
   MedicineBiocideWriteOffActReport,
-  VeterinaryWorkCompletionActReport
+  VeterinaryWorkCompletionActReport,
+  BiocideAccountingJournalReport
 } from './journals/JournalReports';
 import { SearchableSelect } from './SearchableSelect';
 import { exportReportToExcel, getColumnsForReportType, getReportTitle } from '../lib/reportExport';
 
 import { useAuth } from '../contexts/AuthContext';
 
-type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal' | 'invoices' | 'treated_animal_registration' | 'production_animal_medicine' | 'stock_balance' | 'write_off_act' | 'work_completion_act';
+type ReportType = 'drug_journal' | 'treated_animals' | 'withdrawal' | 'invoices' | 'treated_animal_registration' | 'production_animal_medicine' | 'stock_balance' | 'write_off_act' | 'work_completion_act' | 'biocide_journal';
 
 const getCurrentMonthDates = () => {
   const now = new Date();
@@ -369,6 +370,23 @@ export function AllFarmsReports() {
           
           break;
         }
+
+        case 'biocide_journal': {
+          const clientId = requireClientId(user);
+          
+          let query = supabase.from('vw_biocide_accounting_journal').select('*').eq('client_id', clientId);
+          
+          if (dateFrom) query = query.gte('usage_date', dateFrom);
+          if (dateTo) query = query.lte('usage_date', dateTo);
+          if (filterProduct) query = query.eq('product_id', filterProduct);
+          if (filterFarm) query = query.eq('farm_id', filterFarm);
+          
+          const { data, error } = await query;
+          if (error) throw error;
+          
+          result = data || [];
+          break;
+        }
       }
 
       setData(result);
@@ -518,6 +536,17 @@ export function AllFarmsReports() {
           >
             <FileText className="w-4 h-4" />
             Darbų atlikimo aktas
+          </button>
+          <button
+            onClick={() => setReportType('biocide_journal')}
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-colors ${
+              reportType === 'biocide_journal'
+                ? 'bg-indigo-600 text-white'
+                : 'bg-indigo-50 text-indigo-700 hover:bg-indigo-100'
+            }`}
+          >
+            <FileText className="w-4 h-4" />
+            Biocidinių produktų žurnalas
           </button>
         </div>
 
@@ -748,6 +777,9 @@ export function AllFarmsReports() {
                 veterinaryProviderName={user?.full_name || ''}
                 performedByName={user?.full_name || ''}
               />
+            )}
+            {reportType === 'biocide_journal' && (
+              <BiocideAccountingJournalReport data={data} />
             )}
           </div>
         )}

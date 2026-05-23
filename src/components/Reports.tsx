@@ -1057,7 +1057,9 @@ export function Reports() {
         </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 mb-6">
-          {Object.entries(reportTypeInfo).map(([key, info]) => {
+          {Object.entries(reportTypeInfo)
+            .filter(([key]) => !['drug_journal', 'treated_animals', 'biocide_journal', 'insemination_journal'].includes(key))
+            .map(([key, info]) => {
             const Icon = info.icon;
             const isActive = reportType === key;
             return (

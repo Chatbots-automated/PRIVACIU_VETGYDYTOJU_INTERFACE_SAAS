@@ -349,6 +349,74 @@ export function transformToVeterinaryWorkCompletionAct(
 }
 
 // =====================================================================
+// Template 6: BIOCIDINIŲ PRODUKTŲ APSKAITOS ŽURNALAS
+// =====================================================================
+
+export function transformToBiocideAccountingJournal(
+  data: any[]
+): any {
+  // Group by product
+  const productGroups = new Map<string, any[]>();
+  
+  data.forEach(record => {
+    const key = `${record.product_name}_${record.unit}`;
+    if (!productGroups.has(key)) {
+      productGroups.set(key, []);
+    }
+    productGroups.get(key)!.push(record);
+  });
+
+  // Return first product (or empty if no data)
+  if (productGroups.size === 0) {
+    return {
+      productName: '-',
+      unit: '-',
+      rows: []
+    };
+  }
+
+  const [firstKey, firstRecords] = Array.from(productGroups.entries())[0];
+  const sortedRecords = firstRecords.sort((a, b) => {
+    const dateA = new Date(a.usage_date || a.receipt_date);
+    const dateB = new Date(b.usage_date || b.receipt_date);
+    return dateA.getTime() - dateB.getTime();
+  });
+
+  // Calculate running totals
+  let runningTotal = 0;
+  const rows = sortedRecords.map(record => {
+    runningTotal += parseFloat(record.quantity_received || 0) - parseFloat(record.quantity_used || 0);
+    
+    const documentInfo = [
+      record.document_title,
+      record.document_number,
+      record.document_date ? new Date(record.document_date).toLocaleDateString('lt-LT') : ''
+    ].filter(Boolean).join(', ');
+
+    return {
+      receiptDate: record.receipt_date ? new Date(record.receipt_date).toLocaleDateString('lt-LT') : '-',
+      documentInfo: documentInfo || '-',
+      quantityReceived: record.quantity_received ? parseFloat(record.quantity_received).toFixed(2) : '0',
+      manufacturingDate: record.manufacturing_date ? new Date(record.manufacturing_date).toLocaleDateString('lt-LT') : '-',
+      expiryDate: record.expiry_date ? new Date(record.expiry_date).toLocaleDateString('lt-LT') : '-',
+      batchNumber: record.batch_number || '-',
+      usageDate: record.usage_date ? new Date(record.usage_date).toLocaleDateString('lt-LT') : '-',
+      usagePurpose: record.usage_purpose || record.area_treated || '-',
+      workScope: record.notes || '-',
+      quantityUsed: record.quantity_used ? parseFloat(record.quantity_used).toFixed(2) : '0',
+      remaining: runningTotal.toFixed(2),
+      appliedBy: record.applied_by || '-'
+    };
+  });
+
+  return {
+    productName: sortedRecords[0]?.product_name || '-',
+    unit: sortedRecords[0]?.unit || '-',
+    rows
+  };
+}
+
+// =====================================================================
 // Helper Functions
 // =====================================================================
 

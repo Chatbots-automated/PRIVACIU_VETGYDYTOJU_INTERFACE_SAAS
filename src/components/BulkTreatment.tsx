@@ -64,6 +64,15 @@ export function BulkTreatment() {
 
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [showPricingModal, setShowPricingModal] = useState(false);
+  const [pricingSummary, setPricingSummary] = useState<{
+    totalAnimals: number;
+    totalMedicines: number;
+    medications: { name: string; qty: number; unit: string; unitPrice: number; totalPrice: number }[];
+    visitIds: string[];
+    suggestedTotal: number;
+  } | null>(null);
+  const [manualPrice, setManualPrice] = useState('');
 
   // Filters
   const [searchTerm, setSearchTerm] = useState('');
@@ -105,7 +114,7 @@ export function BulkTreatment() {
       supabase.from('stock_by_batch').select('*').eq('farm_id', selectedFarm.id).gt('on_hand', 0),
       // Warehouse batches
       supabase.from('warehouse_batches')
-        .select('id, client_id, farm_id, product_id, lot, expiry_date, qty_left, purchase_price, created_at, updated_at, products!inner(name, category, primary_pack_unit)')
+        .select('id, client_id, farm_id, product_id, lot, expiry_date, qty_left, purchase_price, unit_price, received_qty, created_at, updated_at, products!inner(name, category, primary_pack_unit)')
         .eq('client_id', clientId)
         .is('farm_id', null)
         .gt('qty_left', 0),
@@ -136,7 +145,8 @@ export function BulkTreatment() {
       expiry_date: b.expiry_date,
       on_hand: b.qty_left,
       purchase_price: b.purchase_price,
-      avg_price_before_discount: b.purchase_price,
+      unit_price: b.unit_price || (b.purchase_price && b.received_qty ? b.purchase_price / b.received_qty : 0),
+      avg_price_before_discount: b.unit_price || (b.purchase_price && b.received_qty ? b.purchase_price / b.received_qty : 0),
       product_name: b.products?.name,
       product_category: b.products?.category,
       unit: b.products?.primary_pack_unit,
@@ -369,6 +379,8 @@ export function BulkTreatment() {
 
       let successCount = 0;
       const errors: string[] = [];
+      const allVisitIds: string[] = [];
+      const medicationTotals = new Map<string, { name: string; qty: number; unit: string }>();
 
       for (const animal of selectedAnimals) {
         try {
@@ -464,6 +476,7 @@ export function BulkTreatment() {
                 client_id: clientId,
                 farm_id: selectedFarm.id,
                 animal_id: animal.id,
+                treatment_id: vaccineTreatment.id, // Link to treatment for journal display
                 product_id: vac.product_id,
                 batch_id: isWarehouseBatch ? null : vac.batch_id,
                 warehouse_batch_id: isWarehouseBatch ? vac.batch_id : null,
@@ -546,66 +559,35 @@ export function BulkTreatment() {
         if (visitError) {
           console.warn(`Failed to create visit for animal ${animal.tag_no}:`, visitError);
         } else if (visitData) {
-          // Create visit charges for services (procedures)
-          const visitCharges: any[] = [];
+          // Track visit ID for later pricing
+          allVisitIds.push(visitData.id);
           
-          for (const procedure of procedures) {
-            const price = servicePrices.get(procedure) || 0;
-            if (price > 0) {
-              visitCharges.push({
-                client_id: clientId,
-                farm_id: selectedFarm.id,
-                visit_id: visitData.id,
-                animal_id: animal.id,
-                charge_type: 'paslauga',
-                procedure_type: procedure,
-                quantity: 1,
-                unit_price: price,
-                total_price: price,
-                invoiced: false,
-              });
-            }
-          }
-
-          // Create visit charges for products used
+          // Track medication totals with price info
           for (const med of validMedications) {
             const product = products.find(p => p.id === med.product_id);
             const batch = batches.find(b => b.batch_id === med.batch_id);
-            const unitPrice = batch?.avg_price_before_discount || 0;
-            const qty = parseFloat(med.qty) || 0;
-            const totalPrice = unitPrice * qty;
-
-            if (product && qty > 0) {
-              visitCharges.push({
-                client_id: clientId,
-                farm_id: selectedFarm.id,
-                visit_id: visitData.id,
-                animal_id: animal.id,
-                charge_type: 'produktas',
-                product_id: product.id,
-                product_name: product.name,
-                quantity: qty,
-                unit_price: unitPrice,
-                total_price: totalPrice,
-                invoiced: false,
+            if (product) {
+              const qty = parseFloat(med.qty) || 0;
+              // Use unit_price or avg_price_before_discount (which is already per-unit price)
+              const unitPrice = batch ? (batch.unit_price || batch.avg_price_before_discount || 0) : 0;
+              const existing = medicationTotals.get(product.id) || { 
+                name: product.name, 
+                qty: 0, 
+                unit: med.unit,
+                unitPrice: unitPrice,
+                totalPrice: 0
+              };
+              medicationTotals.set(product.id, {
+                name: product.name,
+                qty: existing.qty + qty,
+                unit: med.unit,
+                unitPrice: unitPrice,
+                totalPrice: (existing.qty + qty) * unitPrice
               });
             }
           }
-
-          // Insert all visit charges
-          if (visitCharges.length > 0) {
-            console.log(`Creating ${visitCharges.length} visit charges for animal ${animal.tag_no}:`, visitCharges);
-            const { data: chargesData, error: chargesError } = await supabase
-              .from('visit_charges')
-              .insert(visitCharges)
-              .select();
-
-            if (chargesError) {
-              console.error(`Failed to create visit charges for animal ${animal.tag_no}:`, chargesError);
-            } else {
-              console.log(`Successfully created visit charges:`, chargesData);
-            }
-          }
+          
+          // Don't create visit_charges yet - will be created after manual price entry
         }
 
           successCount++;
@@ -627,30 +609,34 @@ export function BulkTreatment() {
 
       setSuccess(true);
       
-      // Show success notification with details
-      let message = `Sėkmingai išgydyta gyvūnų: ${successCount} iš ${selectedAnimals.length}`;
+      // Prepare medication summary
+      const medications = Array.from(medicationTotals.values());
+      const suggestedTotal = medications.reduce((sum, med) => sum + med.totalPrice, 0);
+      
+      setPricingSummary({
+        totalAnimals: successCount,
+        totalMedicines: medications.length,
+        medications,
+        visitIds: allVisitIds,
+        suggestedTotal
+      });
+      
+      // Don't pre-fill - let user enter only the work/service price
+      setManualPrice('');
+      
+      // Show errors if any
       if (errors.length > 0) {
-        message += `\n\nKlaidos (${errors.length}):\n`;
+        let message = `⚠️ Dėmesio: ${errors.length} gyvūnų nepavyko išgydyti:\n\n`;
         message += errors.slice(0, 5).join('\n');
         if (errors.length > 5) {
           message += `\n... ir dar ${errors.length - 5} klaidų`;
         }
         message += '\n\nTikėtina priežastis: nepakanka atsargų pasirinktoje serijoje.';
+        alert(message);
       }
-      alert(message);
       
-      setTimeout(() => {
-        setSuccess(false);
-        // Reset form
-        setSelectedAnimals([]);
-        setSelectedMedications([{ id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }]);
-        setFormData({
-          treatment_date: new Date().toISOString().split('T')[0],
-          vet_name: user?.full_name || user?.email || '',
-          notes: '',
-        });
-        loadData();
-      }, 2000);
+      // Show pricing modal for manual price entry
+      setShowPricingModal(true);
     } catch (error) {
       console.error('Error saving bulk treatment:', error);
       alert('Klaida išsaugant gydymus: ' + (error as any)?.message || 'Nežinoma klaida');
@@ -1115,6 +1101,185 @@ export function BulkTreatment() {
           </button>
         </div>
       </form>
+
+      {/* Pricing Summary Modal */}
+      {showPricingModal && pricingSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full max-h-[90vh] overflow-hidden">
+            {/* Header */}
+            <div className="bg-gradient-to-r from-green-600 to-emerald-600 p-6 text-white">
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 bg-white bg-opacity-20 rounded-full flex items-center justify-center">
+                  <Check className="w-7 h-7" />
+                </div>
+                <div>
+                  <h2 className="text-2xl font-bold">Masinis Gydymas Užbaigtas!</h2>
+                  <p className="text-green-100 text-sm">Sėkmingai išgydyta {pricingSummary.totalAnimals} gyvūnų</p>
+                </div>
+              </div>
+            </div>
+
+            {/* Content */}
+            <div className="p-6 overflow-y-auto max-h-[60vh]">
+              {/* Summary Cards */}
+              <div className="grid grid-cols-2 gap-4 mb-6">
+                <div className="bg-blue-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-blue-600 font-medium mb-1">Gyvūnų</div>
+                  <div className="text-3xl font-bold text-blue-900">{pricingSummary.totalAnimals}</div>
+                </div>
+                <div className="bg-purple-50 rounded-lg p-4 text-center">
+                  <div className="text-sm text-purple-600 font-medium mb-1">Vizitų sukurta</div>
+                  <div className="text-3xl font-bold text-purple-900">{pricingSummary.visitIds.length}</div>
+                </div>
+              </div>
+
+              {/* Medication Costs Summary (READ-ONLY) */}
+              <div className="mb-6 bg-blue-50 border-2 border-blue-200 rounded-lg p-4">
+                <h3 className="text-lg font-semibold text-blue-900 mb-3 flex items-center gap-2">
+                  <Syringe className="w-5 h-5" />
+                  Panaudoti produktai (savikaina)
+                </h3>
+                <div className="space-y-2">
+                  {pricingSummary.medications.map((med, index) => (
+                    <div key={index} className="bg-white rounded-lg p-3">
+                      <div className="font-medium text-gray-900 mb-2">{med.name}</div>
+                      <div className="grid grid-cols-3 gap-2 text-sm">
+                        <div>
+                          <div className="text-gray-600">Panaudota:</div>
+                          <div className="font-semibold text-gray-900">{med.qty?.toFixed(2) || '0.00'} {med.unit}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Vnt. kaina:</div>
+                          <div className="font-semibold text-gray-900">€{med.unitPrice?.toFixed(2) || '0.00'}</div>
+                        </div>
+                        <div>
+                          <div className="text-gray-600">Viso:</div>
+                          <div className="font-bold text-blue-600">€{med.totalPrice?.toFixed(2) || '0.00'}</div>
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                  <div className="flex justify-between items-center p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                    <div className="font-semibold text-blue-900">Produktų savikaina:</div>
+                    <div className="text-xl font-bold text-blue-900">€{pricingSummary.suggestedTotal.toFixed(2)}</div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Work/Service Price Entry */}
+              <div className="border-t-2 border-gray-200 pt-6">
+                <label className="block text-lg font-semibold text-gray-900 mb-2">
+                  Įveskite kainą už DARBĄ (paslaugą) visiems {pricingSummary.totalAnimals} vizitams (€):
+                </label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={manualPrice}
+                  onChange={(e) => setManualPrice(e.target.value)}
+                  className="w-full px-4 py-3 text-2xl font-bold border-2 border-green-300 rounded-lg focus:ring-2 focus:ring-green-500 focus:border-green-500 text-center"
+                  placeholder="0.00"
+                  autoFocus
+                />
+                <p className="text-sm text-gray-600 mt-2">
+                  * Ši suma bus padalinta tarp visų {pricingSummary.visitIds.length} vizitų kaip paslaugos mokestis
+                </p>
+                {manualPrice && parseFloat(manualPrice) > 0 && (
+                  <div className="mt-4 p-4 bg-green-50 border-2 border-green-200 rounded-lg">
+                    <div className="space-y-2">
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700">Produktų savikaina:</span>
+                        <span className="font-semibold">€{pricingSummary.suggestedTotal.toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-700">Už darbą:</span>
+                        <span className="font-semibold">€{parseFloat(manualPrice).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-bold border-t-2 border-green-300 pt-2">
+                        <span className="text-green-900">VISO už visus vizitus:</span>
+                        <span className="text-green-900">€{(pricingSummary.suggestedTotal + parseFloat(manualPrice)).toFixed(2)}</span>
+                      </div>
+                      <div className="flex justify-between text-sm text-blue-600">
+                        <span>Kaina vienam vizitui:</span>
+                        <span className="font-semibold">€{((pricingSummary.suggestedTotal + parseFloat(manualPrice)) / pricingSummary.visitIds.length).toFixed(2)}</span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Footer */}
+            <div className="bg-gray-50 p-4 flex justify-end gap-3 border-t border-gray-200">
+              <button
+                onClick={async () => {
+                  if (!manualPrice || parseFloat(manualPrice) <= 0) {
+                    alert('Prašome įvesti bendrą kainą');
+                    return;
+                  }
+
+                  try {
+                    const workPrice = parseFloat(manualPrice);
+                    const medicinePrice = pricingSummary.suggestedTotal;
+                    const totalPriceAllVisits = medicinePrice + workPrice;
+                    const pricePerVisit = totalPriceAllVisits / pricingSummary.visitIds.length;
+                    const workPricePerVisit = workPrice / pricingSummary.visitIds.length;
+                    const clientId = requireClientId(user);
+
+                    // Create visit charges for all visits (work/service charge only)
+                    // Medicine charges are already tracked via usage_items
+                    const visitCharges = pricingSummary.visitIds.map(visitId => ({
+                      client_id: clientId,
+                      farm_id: selectedFarm!.id,
+                      visit_id: visitId,
+                      animal_id: null, // Will be populated from visit
+                      charge_type: 'paslauga',
+                      procedure_type: 'Masinis gydymas',
+                      quantity: 1,
+                      unit_price: workPricePerVisit,
+                      total_price: workPricePerVisit,
+                      invoiced: false,
+                    }));
+
+                    const { error: chargesError } = await supabase
+                      .from('visit_charges')
+                      .insert(visitCharges);
+
+                    if (chargesError) {
+                      console.error('Failed to create visit charges:', chargesError);
+                      alert('Klaida išsaugant kainas: ' + chargesError.message);
+                      return;
+                    }
+
+                    alert(`✅ Sėkmingai išsaugota! Produktai: €${medicinePrice.toFixed(2)} + Darbas: €${workPrice.toFixed(2)} = Viso: €${totalPriceAllVisits.toFixed(2)}`);
+
+                    setShowPricingModal(false);
+                    setSuccess(false);
+                    setManualPrice('');
+                    // Reset form
+                    setSelectedAnimals([]);
+                    setSelectedMedications([{ id: '1', product_id: '', batch_id: '', qty: '', unit: 'ml', purpose: 'treatment', category: 'medicines' }]);
+                    setFormData({
+                      treatment_date: new Date().toISOString().split('T')[0],
+                      vet_name: user?.full_name || user?.email || '',
+                      notes: '',
+                    });
+                    loadData();
+                  } catch (error: any) {
+                    console.error('Error saving prices:', error);
+                    alert('Klaida: ' + error.message);
+                  }
+                }}
+                disabled={!manualPrice || parseFloat(manualPrice) <= 0}
+                className="px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                <Check className="w-5 h-5" />
+                Išsaugoti kainas
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

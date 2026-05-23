@@ -3,12 +3,14 @@ import { ProductionAnimalMedicineUsageJournal } from './ProductionAnimalMedicine
 import { MedicineBiocideStockBalance } from './MedicineBiocideStockBalance';
 import { MedicineBiocideWriteOffAct } from './MedicineBiocideWriteOffAct';
 import { VeterinaryWorkCompletionAct } from './VeterinaryWorkCompletionAct';
+import { BiocideAccountingJournal } from './BiocideAccountingJournal';
 import {
   transformToTreatedAnimalRegistrationJournal,
   transformToProductionAnimalMedicineUsageJournal,
   transformToMedicineBiocideStockBalance,
   transformToMedicineBiocideWriteOffAct,
-  transformToVeterinaryWorkCompletionAct
+  transformToVeterinaryWorkCompletionAct,
+  transformToBiocideAccountingJournal
 } from '../../utils/journalAdapters';
 import { Download, Printer } from 'lucide-react';
 import jsPDF from 'jspdf';
@@ -700,6 +702,138 @@ export function VeterinaryWorkCompletionActReport({
         </button>
       </div>
       <VeterinaryWorkCompletionAct data={journalData} />
+    </div>
+  );
+}
+
+// =====================================================================
+// 6. BIOCIDE ACCOUNTING JOURNAL REPORT
+// =====================================================================
+
+interface BiocideAccountingJournalReportProps {
+  data: any[];
+}
+
+export function BiocideAccountingJournalReport({ data }: BiocideAccountingJournalReportProps) {
+  const journalData = transformToBiocideAccountingJournal(data);
+
+  const handlePrint = () => {
+    window.print();
+  };
+
+  const handlePdfExport = () => {
+    const doc = new jsPDF('l', 'mm', 'a4');
+    
+    // Title
+    doc.setFontSize(14);
+    doc.setFont('helvetica', 'bold');
+    doc.text(toAscii('BIOCIDINIU PRODUKTU APSKAITOS ZURNALAS'), doc.internal.pageSize.getWidth() / 2, 15, { align: 'center' });
+    
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(toAscii(`Sugeneruota: ${new Date().toLocaleDateString('lt-LT')}`), doc.internal.pageSize.getWidth() / 2, 22, { align: 'center' });
+
+    // Product info
+    doc.setFontSize(8);
+    doc.text(toAscii(`Biocidinio produkto pavadinimas: ${journalData.productName}`), 14, 30);
+    doc.text(toAscii(`Pirmine pakuote (mato vnt.): ${journalData.unit}`), 14, 35);
+    doc.setFontSize(7);
+    doc.text(toAscii('Isakymas paskelbtas: Zin. 2012, Nr. 65-3326'), 14, 40);
+
+    // Prepare table data
+    const tableData = journalData.rows.map((row: any) => [
+      toAscii(row.receiptDate),
+      toAscii(row.documentInfo),
+      toAscii(row.quantityReceived),
+      toAscii(row.manufacturingDate),
+      toAscii(row.expiryDate),
+      toAscii(row.batchNumber),
+      toAscii(row.usageDate),
+      toAscii(row.usagePurpose),
+      toAscii(row.workScope),
+      toAscii(row.quantityUsed),
+      toAscii(row.remaining),
+      toAscii(row.appliedBy)
+    ]);
+
+    autoTable(doc, {
+      startY: 45,
+      head: [[
+        toAscii('Gavimo\ndata'),
+        toAscii('Dokumento\npavadinimas,\nnumeris, data'),
+        toAscii('Gautas\nkiekis'),
+        toAscii('Pagaminimo\ndata'),
+        toAscii('Tinkamumo\nnaudoti laikas'),
+        toAscii('Serija,\npartija'),
+        toAscii('Panaudojimo\ndata'),
+        toAscii('Panaudojimo\npaskirtis'),
+        toAscii('Darbu\napimtis'),
+        toAscii('Sunaudotas\nkiekis'),
+        toAscii('Likutis'),
+        toAscii('Naudojusio\nasmens\nvardas, pavarde')
+      ]],
+      body: tableData,
+      styles: { 
+        fontSize: 6,
+        cellPadding: 1,
+        lineColor: [0, 0, 0],
+        lineWidth: 0.1
+      },
+      headStyles: { 
+        fillColor: [220, 241, 250],
+        textColor: [0, 0, 0],
+        fontStyle: 'bold',
+        halign: 'center',
+        valign: 'middle',
+        lineWidth: 0.1,
+        lineColor: [0, 0, 0],
+        minCellHeight: 12
+      },
+      columnStyles: {
+        0: { cellWidth: 20, halign: 'center' },
+        1: { cellWidth: 35 },
+        2: { cellWidth: 18, halign: 'right' },
+        3: { cellWidth: 20, halign: 'center' },
+        4: { cellWidth: 20, halign: 'center' },
+        5: { cellWidth: 20, halign: 'center' },
+        6: { cellWidth: 20, halign: 'center' },
+        7: { cellWidth: 30 },
+        8: { cellWidth: 25 },
+        9: { cellWidth: 18, halign: 'right' },
+        10: { cellWidth: 18, halign: 'right' },
+        11: { cellWidth: 30 }
+      },
+      margin: { left: 14, right: 14 },
+      theme: 'grid'
+    });
+
+    // Footer
+    const finalY = (doc as any).lastAutoTable.finalY || 45;
+    doc.setFontSize(7);
+    doc.text(toAscii('DIREKTORIUS JONAS MILIUS'), 14, finalY + 10);
+
+    doc.save(`Biocidiniu-produktu-apskaitos-zurnalas-${new Date().toISOString().split('T')[0]}.pdf`);
+  };
+
+  return (
+    <div>
+      <div className="no-print mb-4 flex justify-end gap-3">
+        <button
+          onClick={handlePrint}
+          className="flex items-center gap-2 px-4 py-2 bg-gray-600 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        >
+          <Printer className="w-5 h-5" />
+          Spausdinti
+        </button>
+        <button
+          onClick={handlePdfExport}
+          className="flex items-center gap-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+        >
+          <Download className="w-5 h-5" />
+          Eksportuoti PDF
+        </button>
+      </div>
+      <BiocideAccountingJournal data={journalData} />
     </div>
   );
 }

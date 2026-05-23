@@ -4,6 +4,7 @@ export { ProductionAnimalMedicineUsageJournal } from './ProductionAnimalMedicine
 export { MedicineBiocideStockBalance } from './MedicineBiocideStockBalance';
 export { MedicineBiocideWriteOffAct } from './MedicineBiocideWriteOffAct';
 export { VeterinaryWorkCompletionAct } from './VeterinaryWorkCompletionAct';
+export { BiocideAccountingJournal } from './BiocideAccountingJournal';
 
 // Export report wrapper components
 export {
@@ -11,5 +12,6 @@ export {
   ProductionAnimalMedicineUsageReport,
   MedicineBiocideStockBalanceReport,
   MedicineBiocideWriteOffActReport,
-  VeterinaryWorkCompletionActReport
+  VeterinaryWorkCompletionActReport,
+  BiocideAccountingJournalReport
 } from './JournalReports';
