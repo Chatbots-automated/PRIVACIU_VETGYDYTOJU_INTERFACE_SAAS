@@ -42,7 +42,7 @@ export function AuthForm() {
               <img 
                 src="/assets/gvet-logo.png" 
                 alt="GVET Logo" 
-                className="h-20 w-auto"
+                className="h-32 w-auto"
               />
             </div>
             <h1 className="text-3xl font-bold text-white mb-2">

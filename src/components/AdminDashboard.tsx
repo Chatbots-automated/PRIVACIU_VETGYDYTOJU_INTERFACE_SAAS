@@ -247,6 +247,16 @@ export function AdminDashboard() {
       const subscriptionEndDate = new Date(Date.now() + formData.subscription_days * 24 * 60 * 60 * 1000)
         .toISOString().split('T')[0];
 
+      // Map subscription days to plan type
+      let planType: 'plan_7d' | 'plan_30d' | 'plan_180d';
+      if (formData.subscription_days <= 7) {
+        planType = 'plan_7d';
+      } else if (formData.subscription_days <= 90) {
+        planType = 'plan_30d';
+      } else {
+        planType = 'plan_180d';
+      }
+
       // Create client
       const { data: clientData, error: clientError } = await supabase
         .from('clients')
@@ -259,7 +269,7 @@ export function AdminDashboard() {
           contact_phone: formData.contact_phone || null,
           address: formData.address || null,
           city: formData.city || null,
-          subscription_plan: `custom_${formData.subscription_days}d`,
+          subscription_plan: planType,
           subscription_status: 'active',
           max_farms: 999999, // unlimited
           max_users: 999999, // unlimited
@@ -460,12 +470,24 @@ export function AdminDashboard() {
 
   const getSubscriptionBadgeColor = (plan: string) => {
     switch (plan) {
+      case 'plan_7d': return 'bg-green-100 text-green-700';
+      case 'plan_30d': return 'bg-blue-100 text-blue-700';
+      case 'plan_180d': return 'bg-purple-100 text-purple-700';
       case 'trial': return 'bg-gray-100 text-gray-700';
       case 'starter': return 'bg-blue-100 text-blue-700';
       case 'professional': return 'bg-purple-100 text-purple-700';
       case 'enterprise': return 'bg-amber-100 text-amber-700';
       case 'komanda': return 'bg-indigo-100 text-indigo-700';
       default: return 'bg-gray-100 text-gray-700';
+    }
+  };
+  
+  const getSubscriptionPlanDisplayName = (plan: string) => {
+    switch (plan) {
+      case 'plan_7d': return '7 Day Trial';
+      case 'plan_30d': return '30 Day Plan';
+      case 'plan_180d': return '180 Day Plan';
+      default: return plan;
     }
   };
 
@@ -545,7 +567,7 @@ export function AdminDashboard() {
 
         {/* Platform Stats Cards */}
         {platformStats && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6 mb-8">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-6 gap-6 mb-8">
             <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
               <div className="flex items-center justify-between mb-4">
                 <div className="p-3 bg-blue-50 rounded-lg">
@@ -597,8 +619,140 @@ export function AdminDashboard() {
               <p className="text-sm text-gray-600 mb-1">Monthly Revenue</p>
               <p className="text-3xl font-bold text-gray-900">€{platformStats.monthly_revenue}</p>
             </div>
+
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+              <div className="flex items-center justify-between mb-4">
+                <div className="p-3 bg-red-50 rounded-lg">
+                  <Calendar className="w-6 h-6 text-red-600" />
+                </div>
+                {clients.some(c => calculateDaysRemaining(c.subscription_end_date) <= 0) && (
+                  <AlertTriangle className="w-5 h-5 text-red-500" />
+                )}
+              </div>
+              <p className="text-sm text-gray-600 mb-1">Subscriptions</p>
+              <div className="space-y-1">
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-red-600 font-medium">Expired:</span>
+                  <span className="text-2xl font-bold text-red-600">
+                    {clients.filter(c => calculateDaysRemaining(c.subscription_end_date) <= 0).length}
+                  </span>
+                </div>
+                <div className="flex items-center justify-between">
+                  <span className="text-sm text-amber-600 font-medium">Expiring ≤7d:</span>
+                  <span className="text-2xl font-bold text-amber-600">
+                    {clients.filter(c => {
+                      const days = calculateDaysRemaining(c.subscription_end_date);
+                      return days > 0 && days <= 7;
+                    }).length}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
         )}
+
+        {/* Payment Alerts - Expired & Expiring Subscriptions */}
+        {(() => {
+          const expiredClients = clients.filter(c => calculateDaysRemaining(c.subscription_end_date) <= 0);
+          const expiringClients = clients.filter(c => {
+            const days = calculateDaysRemaining(c.subscription_end_date);
+            return days > 0 && days <= 7;
+          });
+
+          if (expiredClients.length === 0 && expiringClients.length === 0) return null;
+
+          return (
+            <div className="space-y-4 mb-6">
+              {expiredClients.length > 0 && (
+                <div className="bg-red-50 border-l-4 border-red-500 rounded-lg p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-red-100 rounded-lg">
+                      <AlertTriangle className="w-6 h-6 text-red-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-red-900 mb-2">
+                        {expiredClients.length} Expired Subscription{expiredClients.length > 1 ? 's' : ''}
+                      </h3>
+                      <div className="space-y-2">
+                        {expiredClients.map(client => {
+                          const daysExpired = Math.abs(calculateDaysRemaining(client.subscription_end_date));
+                          return (
+                            <div key={client.id} className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm">
+                              <div>
+                                <p className="font-semibold text-gray-900">{client.name}</p>
+                                <p className="text-sm text-red-600">
+                                  Expired {daysExpired} day{daysExpired !== 1 ? 's' : ''} ago
+                                  {client.subscription_end_date && (
+                                    <span className="text-gray-500 ml-2">
+                                      ({new Date(client.subscription_end_date).toLocaleDateString('lt-LT')})
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedClient(client);
+                                  setShowDetailsModal(true);
+                                }}
+                                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors text-sm font-medium"
+                              >
+                                Add Payment
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {expiringClients.length > 0 && (
+                <div className="bg-amber-50 border-l-4 border-amber-500 rounded-lg p-5">
+                  <div className="flex items-start gap-4">
+                    <div className="p-2 bg-amber-100 rounded-lg">
+                      <Calendar className="w-6 h-6 text-amber-600" />
+                    </div>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold text-amber-900 mb-2">
+                        {expiringClients.length} Subscription{expiringClients.length > 1 ? 's' : ''} Expiring Soon
+                      </h3>
+                      <div className="space-y-2">
+                        {expiringClients.map(client => {
+                          const daysRemaining = calculateDaysRemaining(client.subscription_end_date);
+                          return (
+                            <div key={client.id} className="flex items-center justify-between bg-white rounded-lg p-3 shadow-sm">
+                              <div>
+                                <p className="font-semibold text-gray-900">{client.name}</p>
+                                <p className="text-sm text-amber-600">
+                                  {daysRemaining} day{daysRemaining !== 1 ? 's' : ''} remaining
+                                  {client.subscription_end_date && (
+                                    <span className="text-gray-500 ml-2">
+                                      (Expires: {new Date(client.subscription_end_date).toLocaleDateString('lt-LT')})
+                                    </span>
+                                  )}
+                                </p>
+                              </div>
+                              <button
+                                onClick={() => {
+                                  setSelectedClient(client);
+                                  setShowDetailsModal(true);
+                                }}
+                                className="px-4 py-2 bg-amber-600 text-white rounded-lg hover:bg-amber-700 transition-colors text-sm font-medium"
+                              >
+                                Extend Now
+                              </button>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        })()}
 
         {/* Search Bar */}
         <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-4 mb-6">
@@ -649,7 +803,7 @@ export function AdminDashboard() {
                       <td className="px-6 py-4">
                         <div className="space-y-2">
                           <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${getSubscriptionBadgeColor(client.subscription_plan)}`}>
-                            {client.subscription_plan}
+                            {getSubscriptionPlanDisplayName(client.subscription_plan)}
                           </span>
                           {client.subscription_end_date && (
                             <div>
