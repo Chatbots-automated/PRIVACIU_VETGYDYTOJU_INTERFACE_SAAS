@@ -1,17 +1,13 @@
-# Netlify Redirects
-# https://docs.netlify.com/routing/redirects/
+# Netlify SPA Redirects for GVET
 
-# SPA fallback - must be last
+# Redirect all non-file requests to index.html for SPA routing
 /*    /index.html   200
 
-# Redirect old URLs (if any)
-# /old-path    /new-path    301
+# API Redirects (if needed)
+/api/*  https://vlfjmffbwrmblvlsbsnz.supabase.co/:splat  200
 
-# API proxy (if needed in future)
-# /api/*    https://api.example.com/:splat    200
+# Force HTTPS (optional - Netlify does this by default)
+http://rvac-veterinarija.netlify.app/*  https://rvac-veterinarija.netlify.app/:splat  301!
 
-# Force HTTPS (already handled by Netlify but can be explicit)
-# http://*    https://:splat    301!
-
-# Redirect trailing slashes
-# /path/    /path    301!
+# Legacy URL redirects (if you have any old URLs to redirect)
+# /old-path  /new-path  301

@@ -1,58 +1,59 @@
-# Additional headers for specific files
-# This file supplements netlify.toml headers
+# Security and SEO Headers for GVET
 
-/*.html
-  X-UA-Compatible: IE=edge
-  Cache-Control: no-cache
-
-/*.js
+/*
+  # Security Headers
+  X-Frame-Options: SAMEORIGIN
+  X-Content-Type-Options: nosniff
+  X-XSS-Protection: 1; mode=block
+  Referrer-Policy: strict-origin-when-cross-origin
+  Permissions-Policy: geolocation=(), microphone=(), camera=(), payment=()
+  
+  # Cache Control for static assets
   Cache-Control: public, max-age=31536000, immutable
+  
+  # CORS Headers
+  Access-Control-Allow-Origin: *
+  Access-Control-Allow-Methods: GET, POST, PUT, DELETE, OPTIONS
+  Access-Control-Allow-Headers: Content-Type, Authorization
+  
+  # Link Headers for Preconnect
+  Link: <https://vlfjmffbwrmblvlsbsnz.supabase.co>; rel=preconnect
+  Link: <https://n8n-up8s.onrender.com>; rel=preconnect
 
+/index.html
+  Cache-Control: public, max-age=0, must-revalidate
+  
+/manifest.json
+  Cache-Control: public, max-age=86400
+  Content-Type: application/manifest+json
+  
+/robots.txt
+  Cache-Control: public, max-age=86400
+  Content-Type: text/plain
+  
+/sitemap.xml
+  Cache-Control: public, max-age=86400
+  Content-Type: application/xml
+  
+/assets/*
+  Cache-Control: public, max-age=31536000, immutable
+  
+/assets/gvet-logo.png
+  Cache-Control: public, max-age=31536000, immutable
+  Content-Type: image/png
+  
 /*.css
   Cache-Control: public, max-age=31536000, immutable
-
-/*.woff
+  Content-Type: text/css
+  
+/*.js
   Cache-Control: public, max-age=31536000, immutable
-  Access-Control-Allow-Origin: *
-
+  Content-Type: application/javascript
+  
 /*.woff2
   Cache-Control: public, max-age=31536000, immutable
-  Access-Control-Allow-Origin: *
-
-/*.ttf
+  Content-Type: font/woff2
+  
+/*.woff
   Cache-Control: public, max-age=31536000, immutable
-  Access-Control-Allow-Origin: *
-
-/*.eot
-  Cache-Control: public, max-age=31536000, immutable
-  Access-Control-Allow-Origin: *
-
-/*.svg
-  Cache-Control: public, max-age=604800
-
-/*.jpg
-  Cache-Control: public, max-age=604800
-
-/*.jpeg
-  Cache-Control: public, max-age=604800
-
-/*.png
-  Cache-Control: public, max-age=604800
-
-/*.webp
-  Cache-Control: public, max-age=604800
-
-/*.gif
-  Cache-Control: public, max-age=604800
-
-/manifest.json
-  Content-Type: application/manifest+json
-  Cache-Control: public, max-age=604800
-
-/robots.txt
-  Content-Type: text/plain
-  Cache-Control: public, max-age=3600
-
-/sitemap.xml
-  Content-Type: application/xml
-  Cache-Control: public, max-age=3600
+  Content-Type: font/woff

@@ -679,7 +679,7 @@ export function SubscriptionProfile({ isOpen, onClose }: SubscriptionProfileProp
                 Turite klausimų apie prenumeratą ar norite pakeisti planą?
               </p>
               <p className="text-xs text-gray-600">
-                Susisiekite su mumis: <a href="mailto:support@example.com" className="text-blue-600 hover:underline">support@example.com</a>
+                Susisiekite su mumis: <a href="mailto:gratasgedraitis@gmail.com" className="text-blue-600 hover:underline">gratasgedraitis@gmail.com</a>
               </p>
             </div>
           </div>
