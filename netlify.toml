@@ -8,6 +8,13 @@
 [build.environment]
   NODE_VERSION = "18"
   NPM_VERSION = "9"
+  
+  # Supabase Configuration (safe for client-side use)
+  VITE_SUPABASE_URL = "https://vlfjmffbwrmblvlsbsnz.supabase.co"
+  VITE_SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZsZmptZmZid3JtYmx2bHNic256Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzcwNTY1ODMsImV4cCI6MjA5MjYzMjU4M30.9qKqv0WwRON_b3FyaZOVVYMSS-HAGdIzTtSygsT8PEI"
+  
+  # NOTE: VITE_SUPABASE_SERVICE_ROLE_KEY is NOT included here for security reasons
+  # Service role keys should only be used server-side and added via Netlify UI as a secret
 
 # SPA Redirect Rule
 [[redirects]]
