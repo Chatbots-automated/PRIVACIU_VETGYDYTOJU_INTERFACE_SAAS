@@ -87,11 +87,11 @@ export const SEOConfigs = {
     description: 'Užsiregistruokite GVET sistemoje ir pradėkite naudotis profesionalia veterinarinės apskaitos sistema. 7 dienų nemokamas bandomasis laikotarpis.',
     url: 'https://gvet.lt/register'
   },
-  vetpraktika: {
-    title: 'Veterinarijos Praktika | GVET Sistema',
-    description: 'Valdykite veterinarijos praktiką su GVET. Gyvūnų gydymo įrašai, vizitai, sveikatos istorija ir vizitų kainodara.',
-    keywords: 'veterinarijos praktika, gyvūnų gydymas, vizitai, gydymo istorija, veterinarijos įrašai',
-    url: 'https://gvet.lt/vetpraktika'
+  apskaita: {
+    title: 'Sandėlio Valdymas ir Apskaita | GVET Sistema',
+    description: 'GVET sandėlio valdymo modulis - bendras vaistų sandėlis, pajamavimas, atsargų valdymas ir bendros visos praktikos ataskaitos.',
+    keywords: 'sandėlio valdymas, vaistų apskaita, bendras sandėlis, pajamavimas, atsargos',
+    url: 'https://gvet.lt/apskaita'
   },
   veterinarija: {
     title: 'Gydymo Modulis | GVET Veterinarinė Sistema',
@@ -117,10 +117,10 @@ export const SEOConfigs = {
     keywords: 'privalomi žurnalai, VMVT žurnalai, gydomų gyvūnų registras, vaistų žurnalas, išlaukų ataskaita',
     url: 'https://gvet.lt/ataskaitos'
   },
-  accounting: {
-    title: 'Apskaita ir Finansai | GVET Sistema',
-    description: 'GVET apskaitos modulis - sąskaitų generavimas, mokėjimai, finansinės ataskaitos, darbo aktai.',
+  finances: {
+    title: 'Finansai | GVET Sistema',
+    description: 'GVET finansų modulis - sąskaitų generavimas, mokėjimai, finansinės ataskaitos, darbo aktai.',
     keywords: 'veterinarijos apskaita, sąskaitos, mokėjimai, finansai, darbo aktai',
-    url: 'https://gvet.lt/apskaita'
+    url: 'https://gvet.lt/finansai'
   }
 };

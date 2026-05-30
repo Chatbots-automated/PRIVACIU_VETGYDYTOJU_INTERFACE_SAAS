@@ -13,7 +13,7 @@ import { ClientRegistration } from './components/ClientRegistration';
 import { SignatureVerification } from './components/SignatureVerification';
 import { Building2 } from 'lucide-react';
 
-type Module = 'veterinarija' | 'klientai' | 'vetpraktika' | null;
+type Module = 'veterinarija' | 'klientai' | 'apskaita' | null;
 
 interface Notification {
   id: string;
@@ -215,7 +215,7 @@ function App() {
     );
   }
 
-  if (selectedModule === 'vetpraktika') {
+  if (selectedModule === 'apskaita') {
     return (
       <RealtimeProvider>
         <FarmProvider>

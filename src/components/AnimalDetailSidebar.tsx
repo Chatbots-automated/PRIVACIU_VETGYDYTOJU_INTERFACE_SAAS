@@ -2282,6 +2282,7 @@ function VisitCreateModal({
             is_course: med.is_course || false,
             course_days: med.course_days?.toString() || '',
             teat: med.teat || '',
+            administration_route: med.administration_route || '',
           })),
         });
 
@@ -2381,6 +2382,7 @@ function VisitCreateModal({
             is_course: med.is_course || false,
             course_days: med.course_days?.toString() || '',
             teat: med.teat || '',
+            administration_route: med.administration_route || '',
           })),
         });
       }
@@ -2700,7 +2702,7 @@ function VisitCreateModal({
     }
   };
 
-  const allProcedures: VisitProcedure[] = ['Apžiūra', 'Profilaktika', 'Gydymas', 'Vakcina', 'Sinchronizacijos protokolas', 'Nagai', 'Kita'];
+  const allProcedures: VisitProcedure[] = ['Apžiūra', 'Profilaktika', 'Gydymas', 'Sinchronizacijos protokolas', 'Kita'];
 
   const toggleProcedure = (proc: VisitProcedure) => {
     const isAdding = !formData.procedures.includes(proc);
@@ -2787,6 +2789,8 @@ function VisitCreateModal({
       return;
     }
 
+    // DEPRECATED: Vakcina and Nagai removed from procedures list but kept for backwards compatibility
+    /*
     if (formData.procedures.includes('Vakcina') && vaccinationData.vaccines.length === 0) {
       showNotification('Vakcinai reikia pasirinkti bent vieną produktą', 'error');
       setLoading(false);
@@ -2798,6 +2802,7 @@ function VisitCreateModal({
       setLoading(false);
       return;
     }
+    */
 
     if (formData.procedures.includes('Profilaktika') && preventionData.products.length === 0) {
       showNotification('Profilaktikai reikia pasirinkti bent vieną produktą', 'error');
@@ -4494,7 +4499,7 @@ function VisitCreateModal({
                         </div>
 
                         {/* Administration Route Buttons - Only show if product has withdrawal periods and animal is production type */}
-                        {(!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
+                        {animal && (!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat) && (
                           <div className="space-y-2">
                             <label className="block text-xs font-medium text-gray-700">Būdas *</label>
                             <div className="flex flex-wrap gap-1.5">
@@ -4527,7 +4532,7 @@ function VisitCreateModal({
                           </div>
                         )}
 
-                        {(!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat || med.administration_route) && (
+                        {animal && (!animal.animal_type || animal.animal_type === 'produkcinis') && selectedProduct && (selectedProduct.withdrawal_days_milk || selectedProduct.withdrawal_days_meat || med.administration_route) && (
                           <div className="text-xs bg-amber-50 border-2 border-amber-300 rounded px-3 py-2">
                             <div className="flex items-center gap-1 mb-1">
                               <AlertCircle className="w-4 h-4 text-amber-600" />
@@ -4666,7 +4671,7 @@ function VisitCreateModal({
               <div>
                 <div className="space-y-3">
                   {/* WITHDRAWAL CALCULATION PREVIEW - Only for production animals */}
-                  {(!animal.animal_type || animal.animal_type === 'produkcinis') && ((treatmentData.medications.length > 0 && treatmentData.medications.some(m => m.product_id)) || treatmentData.courseMedicationSchedule) && (
+                  {animal && (!animal.animal_type || animal.animal_type === 'produkcinis') && ((treatmentData.medications.length > 0 && treatmentData.medications.some(m => m.product_id)) || treatmentData.courseMedicationSchedule) && (
                     <div className="bg-amber-50 border-2 border-amber-300 rounded-lg p-4 space-y-3">
                       <h5 className="font-bold text-amber-900 flex items-center gap-2">
                         <AlertCircle className="w-5 h-5" />
@@ -5452,6 +5457,27 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<any[]>([]);
   const [clientVatInfo, setClientVatInfo] = useState<ClientVatInfo | null>(clientVatInfoProp || null);
+  const [animal, setAnimal] = useState<Animal | null>(null);
+
+  // Load animal data
+  useEffect(() => {
+    const loadAnimal = async () => {
+      try {
+        const { data, error } = await supabase
+          .from('animals')
+          .select('*')
+          .eq('id', animalId)
+          .single();
+
+        if (!error && data) {
+          setAnimal(data);
+        }
+      } catch (error) {
+        console.error('Error loading animal data in VisitDetailModal:', error);
+      }
+    };
+    loadAnimal();
+  }, [animalId]);
 
   // Load clientVatInfo if not provided as prop
   useEffect(() => {
@@ -5613,6 +5639,7 @@ function VisitDetailModal({ visit, animalId, animalName, onClose, onSuccess, onP
       <VisitCreateModal
         animalId={animalId}
         animalName={animalName}
+        animal={animal || undefined}
         visitToEdit={visit}
         onClose={() => setShowEditMode(false)}
         onSuccess={() => {

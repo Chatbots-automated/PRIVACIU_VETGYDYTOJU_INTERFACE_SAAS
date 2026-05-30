@@ -464,7 +464,7 @@ export function VisitsModern() {
               <option value="Apžiūra">Apžiūra</option>
               <option value="Profilaktika">Profilaktika</option>
               <option value="Gydymas">Gydymas</option>
-              <option value="Vakcina">Vakcina</option>
+              <option value="Sinchronizacijos protokolas">Sinchronizacijos protokolas</option>
               <option value="Kita">Kita</option>
             </select>
           </div>

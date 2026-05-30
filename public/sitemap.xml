@@ -36,13 +36,6 @@
   
   <!-- Main Application Routes (for logged-in users) -->
   <url>
-    <loc>https://gvet.lt/vetpraktika</loc>
-    <lastmod>2026-05-23</lastmod>
-    <changefreq>monthly</changefreq>
-    <priority>0.7</priority>
-  </url>
-  
-  <url>
     <loc>https://gvet.lt/veterinarija</loc>
     <lastmod>2026-05-23</lastmod>
     <changefreq>monthly</changefreq>

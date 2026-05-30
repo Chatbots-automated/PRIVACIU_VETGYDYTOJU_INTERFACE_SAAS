@@ -103,7 +103,7 @@ export function ProductUsageAnalysis() {
 
       // Fetch all lookup data upfront (MUCH faster than individual queries)
       console.log('📚 Loading lookup data...');
-      // CRITICAL FIX: Products can belong to the farm OR the vetpraktika module (farm_id can be NULL)
+      // CRITICAL FIX: Products can belong to the farm OR the apskaita module (farm_id can be NULL)
       // We need to get products that are used in batches for this farm
       const farmBatchProductIds = await supabase
         .from('batches')

@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { SubscriptionProfile } from './SubscriptionProfile';
 
 interface ModuleSelectorProps {
-  onSelectModule: (module: 'veterinarija' | 'klientai' | 'vetpraktika') => void;
+  onSelectModule: (module: 'veterinarija' | 'klientai' | 'apskaita') => void;
 }
 
 export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
@@ -169,7 +169,7 @@ export function ModuleSelector({ onSelectModule }: ModuleSelectorProps) {
           </button>
 
           <button
-            onClick={() => onSelectModule('vetpraktika')}
+            onClick={() => onSelectModule('apskaita')}
             className="group bg-white rounded-2xl shadow-lg hover:shadow-2xl transition-all duration-200 overflow-hidden border-2 border-gray-200 hover:border-slate-400 text-left transform hover:scale-105"
           >
             <div className="bg-gradient-to-r from-slate-700 to-gray-800 p-8 text-center">
