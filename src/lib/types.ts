@@ -246,11 +246,26 @@ export interface StockByProduct {
 export type VisitStatus = 'Planuojamas' | 'Vykdomas' | 'Baigtas' | 'Atšauktas' | 'Neįvykęs';
 export type VisitProcedure = 'Apžiūra' | 'Profilaktika' | 'Gydymas' | 'Sinchronizacijos protokolas' | 'Kita';
 
+export interface ServicePrice {
+  id: string;
+  client_id: string;
+  vet_user_id: string | null;
+  procedure_type: string;
+  base_price: number;
+  description: string | null;
+  active: boolean;
+  is_custom: boolean;
+  service_name: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface AnimalVisit {
   id: string;
   animal_id: string;
   visit_datetime: string;
   procedures: VisitProcedure[];
+  custom_services: string[];
   temperature: number | null;
   temperature_measured_at: string | null;
   status: VisitStatus;

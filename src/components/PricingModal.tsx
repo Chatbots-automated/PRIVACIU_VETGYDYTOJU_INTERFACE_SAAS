@@ -14,6 +14,7 @@ interface PricingModalProps {
     animal_id: string;
     farm_id: string;
     procedures: string[];
+    custom_services?: string[];
     visit_datetime: string;
   };
   animalName?: string;
@@ -95,15 +96,31 @@ export function PricingModal({ isOpen, onClose, visitData, animalName = '', prod
 
       if (error) throw error;
 
-      // Create service charges for each procedure
-      const charges: ServiceCharge[] = visitData.procedures.map(proc => {
-        const defaultPrice = prices?.find(p => p.procedure_type === proc);
-        return {
+      const charges: ServiceCharge[] = [];
+
+      // Add charges for standard procedures
+      visitData.procedures.forEach(proc => {
+        const defaultPrice = prices?.find(p => p.procedure_type === proc && !p.is_custom);
+        charges.push({
           procedure_type: proc,
           unit_price: defaultPrice?.base_price || 0,
           description: defaultPrice?.description || ''
-        };
+        });
       });
+
+      // Add charges for custom services
+      if (visitData.custom_services && visitData.custom_services.length > 0) {
+        visitData.custom_services.forEach(serviceId => {
+          const customService = prices?.find(p => p.id === serviceId && p.is_custom);
+          if (customService) {
+            charges.push({
+              procedure_type: customService.service_name || customService.procedure_type,
+              unit_price: customService.base_price || 0,
+              description: customService.description || ''
+            });
+          }
+        });
+      }
 
       setServiceCharges(charges);
     } catch (error) {

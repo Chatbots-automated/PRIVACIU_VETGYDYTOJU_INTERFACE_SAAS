@@ -460,12 +460,14 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           animal_id,
           total_price,
           charge_type,
+          procedure_type,
           invoiced,
           created_at,
           animal_visits!inner (
             id,
             visit_datetime,
             procedures,
+            custom_services,
             farm_id
           ),
           animals (
@@ -496,9 +498,11 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
           visit_id: charge.visit_id,
           animal_id: charge.animal_id,
           total_price: parseFloat(charge.total_price) || 0,
+          procedure_type: charge.procedure_type,
           animal_visits: {
             visit_datetime: charge.animal_visits?.visit_datetime,
-            procedures: charge.animal_visits?.procedures || []
+            procedures: charge.animal_visits?.procedures || [],
+            custom_services: charge.animal_visits?.custom_services || []
           },
           animals: charge.animals
         };
@@ -664,7 +668,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
       const servicesData = unpaidCharges.map(charge => ({
         'Data': new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
         'Gyvūnas': charge.animals?.tag_no || '-',
-        'Procedūros': (charge.animal_visits.procedures || []).join(', '),
+        'Procedūros': charge.procedure_type || (charge.animal_visits.procedures || []).join(', ') || '-',
         'Aprašymas': charge.description || '-',
         'Suma (€)': charge.total_price.toFixed(2)
       }));
@@ -815,7 +819,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         const chargesData = unpaidCharges.map(charge => [
           new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
           charge.animals?.tag_no || '-',
-          toAscii((charge.animal_visits.procedures || []).join(', ')),
+          toAscii(charge.procedure_type || (charge.animal_visits.procedures || []).join(', ') || '-'),
           toAscii(charge.description || '-'),
           `EUR ${charge.total_price.toFixed(2)}`
         ]);
@@ -947,7 +951,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
         const chargesData = unpaidCharges.map(charge => [
           new Date(charge.animal_visits.visit_datetime).toLocaleDateString('lt-LT'),
           charge.animals?.tag_no || '-',
-          toAscii((charge.animal_visits.procedures || []).join(', ')),
+          toAscii(charge.procedure_type || (charge.animal_visits.procedures || []).join(', ') || '-'),
           `EUR ${charge.total_price.toFixed(2)}`
         ]);
 
@@ -1340,7 +1344,7 @@ export function FarmDetailAnalytics({ farmId, farmName, farmCode, onBack }: Farm
                         {charge.animals?.tag_no || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm text-gray-700">
-                        {charge.animal_visits.procedures?.join(', ') || '-'}
+                        {charge.procedure_type || charge.animal_visits.procedures?.join(', ') || '-'}
                       </td>
                       <td className="px-4 py-3 text-sm">
                         <span className="px-2 py-1 bg-blue-100 text-blue-700 rounded text-xs font-medium">

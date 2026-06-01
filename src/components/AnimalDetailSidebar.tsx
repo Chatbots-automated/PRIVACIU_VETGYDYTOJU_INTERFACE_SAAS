@@ -2013,6 +2013,7 @@ function VisitCreateModal({
   const [formData, setFormData] = useState({
     visit_datetime: visitToEdit?.visit_datetime.slice(0, 16) || new Date().toISOString().slice(0, 16),
     procedures: visitToEdit?.procedures || [] as VisitProcedure[],
+    custom_services: visitToEdit?.custom_services || [] as string[],
     temperature: visitToEdit?.temperature?.toString() || '',
     temperature_measured_at: visitToEdit?.temperature_measured_at?.slice(0, 16) || new Date().toISOString().slice(0, 16),
     status: visitToEdit?.status || 'Planuojamas' as VisitStatus,
@@ -2061,6 +2062,12 @@ function VisitCreateModal({
   const [batches, setBatches] = useState<any[]>([]);
   const [stockLevels, setStockLevels] = useState<Record<string, number>>({});
   const [users, setUsers] = useState<Array<{ id: string; full_name: string }>>([]);
+  const [customServices, setCustomServices] = useState<Array<{
+    id: string;
+    service_name: string;
+    base_price: number;
+    description: string;
+  }>>([]);
 
   // Treatment form data
   const [treatmentData, setTreatmentData] = useState({
@@ -2537,6 +2544,40 @@ function VisitCreateModal({
       console.log('⚠️ VisitModal: No batches found, products empty');
       setProducts([]);
     }
+
+    // Load custom services
+    await loadCustomServices();
+  };
+
+  const loadCustomServices = async () => {
+    if (!user) return;
+    
+    const clientId = requireClientId(user);
+
+    try {
+      const { data, error } = await supabase
+        .from('service_prices')
+        .select('id, service_name, base_price, description, procedure_type')
+        .eq('client_id', clientId)
+        .eq('vet_user_id', user.id)
+        .eq('is_custom', true)
+        .eq('active', true)
+        .order('service_name');
+
+      if (error) throw error;
+
+      const services = (data || []).map(s => ({
+        id: s.id,
+        service_name: s.service_name || s.procedure_type,
+        base_price: s.base_price,
+        description: s.description || ''
+      }));
+
+      setCustomServices(services);
+      console.log('📋 Loaded custom services:', services.length);
+    } catch (error) {
+      console.error('Error loading custom services:', error);
+    }
   };
 
   const handleCreateDisease = async () => {
@@ -2766,8 +2807,8 @@ function VisitCreateModal({
       hasTreatmentMeds: treatmentData.medications.length > 0
     });
 
-    if (formData.procedures.length === 0) {
-      showNotification('Pasirinkite bent vieną procedūrą', 'error');
+    if (formData.procedures.length === 0 && formData.custom_services.length === 0) {
+      showNotification('Pasirinkite bent vieną procedūrą arba paslaugą', 'error');
       setLoading(false);
       return;
     }
@@ -2820,6 +2861,7 @@ function VisitCreateModal({
           .update({
             visit_datetime: formData.visit_datetime,
             procedures: formData.procedures,
+            custom_services: formData.custom_services,
             temperature: formData.temperature ? parseFloat(formData.temperature) : null,
             temperature_measured_at: formData.procedures.includes('Temperatūra') && formData.temperature ? formData.temperature_measured_at : null,
             status: autoComplete ? 'Baigtas' : formData.status,
@@ -2907,6 +2949,7 @@ function VisitCreateModal({
               animal_id: animalId,
               visit_datetime: formData.visit_datetime,
               procedures: formData.procedures,
+              custom_services: formData.custom_services,
               temperature: formData.temperature ? parseFloat(formData.temperature) : null,
               temperature_measured_at: formData.procedures.includes('Temperatūra') && formData.temperature ? formData.temperature_measured_at : null,
               status: formData.status,
@@ -3251,6 +3294,7 @@ function VisitCreateModal({
                   animal_id: animalId,
                   visit_datetime: `${daySchedule.date}T10:00:00`,
                   procedures: ['Gydymas'],
+                  custom_services: formData.custom_services,
                   status: 'Planuojamas', // Always planned for future dates
                   notes: `Pakartotinis gydymas (${treatmentData.disease_id ? diseases.find(d => d.id === treatmentData.disease_id)?.name || '' : 'liga nenurodyta'})\nVaistai: ${medicationNames}\n\n⚠️ Įveskite vaistų kiekį prieš užbaigiant vizitą`,
                   vet_name: formData.vet_name || null,
@@ -3836,6 +3880,7 @@ function VisitCreateModal({
             animal_id: animalId,
             visit_datetime: formData.next_visit_date,
             procedures: formData.procedures,
+            custom_services: formData.custom_services,
             status: 'Planuojamas',
             notes: `Pakartotinis vizitas po: ${formData.procedures.join(', ')}`,
             vet_name: formData.vet_name,
@@ -4051,6 +4096,7 @@ function VisitCreateModal({
             animal_id: animalId,
             farm_id: selectedFarm?.id || '',
             procedures: formData.procedures,
+            custom_services: formData.custom_services,
             visit_datetime: visitData.visit_datetime
           },
           animalName: animalName || '',
@@ -4135,6 +4181,47 @@ function VisitCreateModal({
               ))}
             </div>
           </div>
+
+          {/* Custom Services Section */}
+          {customServices.length > 0 && (
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                Paslaugos
+              </label>
+              <p className="text-xs text-gray-500 mb-2">
+                Pasirinkite papildomas paslaugas (pvz., Cezario pjūvis)
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {customServices.map(service => (
+                  <button
+                    key={service.id}
+                    type="button"
+                    onClick={() => {
+                      const isSelected = formData.custom_services.includes(service.id);
+                      if (isSelected) {
+                        setFormData({
+                          ...formData,
+                          custom_services: formData.custom_services.filter(id => id !== service.id)
+                        });
+                      } else {
+                        setFormData({
+                          ...formData,
+                          custom_services: [...formData.custom_services, service.id]
+                        });
+                      }
+                    }}
+                    className={`px-4 py-2 rounded-lg font-medium transition-colors ${
+                      formData.custom_services.includes(service.id)
+                        ? 'bg-green-600 text-white'
+                        : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                    }`}
+                  >
+                    {service.service_name} (€{service.base_price.toFixed(2)})
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
 
           <div>

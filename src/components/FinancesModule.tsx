@@ -11,7 +11,9 @@ import {
   Clock,
   XCircle,
   Settings,
-  TrendingUp
+  TrendingUp,
+  Trash2,
+  Lock
 } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useAuth } from '../contexts/AuthContext';
@@ -58,6 +60,8 @@ interface ServicePrice {
   base_price: number;
   description: string;
   active: boolean;
+  is_custom: boolean;
+  service_name: string | null;
 }
 
 interface FinancesModuleProps {
@@ -82,6 +86,13 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
   
   // Modal state
   const [selectedInvoiceId, setSelectedInvoiceId] = useState<string | null>(null);
+  
+  // Custom service creation state
+  const [newCustomService, setNewCustomService] = useState({
+    name: '',
+    price: '',
+    description: ''
+  });
   
   useEffect(() => {
     loadFarms();
@@ -566,7 +577,8 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
           .update({
             base_price: price.base_price,
             description: price.description,
-            active: price.active
+            active: price.active,
+            service_name: price.service_name
           })
           .eq('id', price.id);
 
@@ -581,7 +593,9 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
             procedure_type: price.procedure_type,
             base_price: price.base_price,
             description: price.description,
-            active: true
+            active: true,
+            is_custom: price.is_custom || false,
+            service_name: price.service_name
           });
 
         if (error) throw error;
@@ -593,6 +607,46 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
       console.error('Error saving price:', error);
       alert('Klaida išsaugant kainą: ' + (error as Error).message);
     }
+  };
+
+  const deleteServicePrice = async (priceId: string) => {
+    if (!user) return;
+    
+    if (!confirm('Ar tikrai norite ištrinti šią paslaugą?')) return;
+
+    try {
+      const { error } = await supabase
+        .from('service_prices')
+        .delete()
+        .eq('id', priceId);
+
+      if (error) throw error;
+
+      loadServicePrices();
+      alert('Paslauga ištrinta sėkmingai!');
+    } catch (error) {
+      console.error('Error deleting service price:', error);
+      alert('Klaida trinant paslaugą: ' + (error as Error).message);
+    }
+  };
+
+  const createCustomService = async () => {
+    if (!newCustomService.name || !newCustomService.price) {
+      alert('Įveskite paslaugos pavadinimą ir kainą');
+      return;
+    }
+
+    await saveServicePrice({
+      procedure_type: newCustomService.name.toLowerCase().replace(/\s+/g, '_'),
+      service_name: newCustomService.name,
+      base_price: parseFloat(newCustomService.price),
+      description: newCustomService.description,
+      is_custom: true,
+      active: true
+    });
+
+    // Reset form
+    setNewCustomService({ name: '', price: '', description: '' });
   };
 
   const toggleChargeSelection = (chargeId: string) => {
@@ -647,31 +701,35 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
             <Euro className="w-8 h-8 text-blue-600" />
             Finansai
           </h1>
-          <p className="text-gray-600 mt-2">Paslaugų apskaita ir sąskaitų faktūrų generavimas</p>
-        </div>
-
-        {/* Farm Selector */}
-        <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
-          <label className="block text-sm font-medium text-gray-700 mb-2">
-            Pasirinkite ūkį
-          </label>
-          <select
-            value={selectedFarmId || ''}
-            onChange={(e) => setSelectedFarmId(e.target.value)}
-            className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-          >
-            {farms.map(farm => (
-              <option key={farm.id} value={farm.id}>
-                {farm.name} {farm.contact_person ? `- ${farm.contact_person}` : ''}
-              </option>
-            ))}
-          </select>
-          {preselectedFarm && (
-            <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
-              ℹ️ Ūkis pasirinktas iš analitikos. Galite generuoti sąskaitą už paslaugas.
-            </div>
+          {currentTab !== 'pricing' && (
+            <p className="text-gray-600 mt-2">Paslaugų apskaita ir sąskaitų faktūrų generavimas</p>
           )}
         </div>
+
+        {/* Farm Selector - Only show for unpaid and invoices tabs */}
+        {currentTab !== 'pricing' && (
+          <div className="bg-white rounded-lg shadow-sm p-4 mb-6">
+            <label className="block text-sm font-medium text-gray-700 mb-2">
+              Pasirinkite ūkį
+            </label>
+            <select
+              value={selectedFarmId || ''}
+              onChange={(e) => setSelectedFarmId(e.target.value)}
+              className="w-full md:w-96 px-4 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+            >
+              {farms.map(farm => (
+                <option key={farm.id} value={farm.id}>
+                  {farm.name} {farm.contact_person ? `- ${farm.contact_person}` : ''}
+                </option>
+              ))}
+            </select>
+            {preselectedFarm && (
+              <div className="mt-2 p-2 bg-blue-50 border border-blue-200 rounded text-sm text-blue-800">
+                ℹ️ Ūkis pasirinktas iš analitikos. Galite generuoti sąskaitą už paslaugas.
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Tabs */}
         <div className="bg-white rounded-lg shadow-sm mb-6">
@@ -960,82 +1018,257 @@ export function FinancesModule({ preselectedFarm }: FinancesModuleProps) {
             {/* Pricing Management Tab */}
             {currentTab === 'pricing' && (
               <div>
-                <div className="mb-6">
-                  <h3 className="text-lg font-semibold text-gray-900 mb-2">Mano paslaugų kainos</h3>
-                  <p className="text-sm text-gray-600">
-                    Nustatykite savo standartines kainas procedūroms. Jos bus naudojamos automatiškai įkainojant vizitus.
+                {/* System Services Section */}
+                <div className="mb-8">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Lock className="w-5 h-5 text-gray-400" />
+                    <h3 className="text-lg font-semibold text-gray-900">Sisteminės paslaugos</h3>
+                  </div>
+                  <p className="text-sm text-gray-600 mb-4">
+                    Standartinės procedūros. Kainų redagavimas įjungtas, bet pašalinti negalima.
                   </p>
-                </div>
 
-                {loading ? (
-                  <p className="text-gray-500">Kraunama...</p>
-                ) : (
-                  <div className="space-y-4">
-                    {['Gydymas', 'Vakcina', 'Profilaktika', 'Apžiūra', 'Konsultacija', 'Diagnostika'].map(procType => {
-                      const existing = servicePrices.find(p => p.procedure_type === procType);
-                      return (
-                        <div key={procType} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
-                          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Procedūra
-                              </label>
-                              <input
-                                type="text"
-                                value={procType}
-                                readOnly
-                                className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700"
-                              />
-                            </div>
-                            <div>
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Bazinė kaina (€)
-                              </label>
-                              <input
-                                type="number"
-                                step="0.01"
-                                defaultValue={existing?.base_price || 0}
-                                onBlur={(e) => {
-                                  const price = parseFloat(e.target.value) || 0;
-                                  saveServicePrice({
-                                    id: existing?.id,
-                                    procedure_type: procType,
-                                    base_price: price,
-                                    description: existing?.description || '',
-                                    active: true
-                                  });
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                              />
-                            </div>
-                            <div className="md:col-span-2">
-                              <label className="block text-sm font-medium text-gray-700 mb-1">
-                                Aprašymas
-                              </label>
-                              <input
-                                type="text"
-                                defaultValue={existing?.description || ''}
-                                placeholder="Papildoma informacija"
-                                onBlur={(e) => {
-                                  if (existing) {
+                  {loading ? (
+                    <p className="text-gray-500">Kraunama...</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {['Gydymas', 'Vakcina', 'Profilaktika', 'Apžiūra', 'Konsultacija', 'Diagnostika'].map(procType => {
+                        const existing = servicePrices.find(p => p.procedure_type === procType && !p.is_custom);
+                        return (
+                          <div key={procType} className="bg-gray-50 rounded-lg p-4 border border-gray-200">
+                            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Procedūra
+                                </label>
+                                <div className="flex items-center gap-2">
+                                  <input
+                                    type="text"
+                                    value={procType}
+                                    readOnly
+                                    className="w-full px-3 py-2 bg-white border border-gray-300 rounded-md text-gray-700"
+                                  />
+                                  <Lock className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                                </div>
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Bazinė kaina (€)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={existing?.base_price || 0}
+                                  onBlur={(e) => {
+                                    const price = parseFloat(e.target.value) || 0;
                                     saveServicePrice({
-                                      id: existing.id,
+                                      id: existing?.id,
                                       procedure_type: procType,
-                                      base_price: existing.base_price,
-                                      description: e.target.value,
-                                      active: existing.active
+                                      base_price: price,
+                                      description: existing?.description || '',
+                                      active: true,
+                                      is_custom: false,
+                                      service_name: null
                                     });
-                                  }
-                                }}
-                                className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
-                              />
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Aprašymas
+                                </label>
+                                <input
+                                  type="text"
+                                  defaultValue={existing?.description || ''}
+                                  placeholder="Papildoma informacija"
+                                  onBlur={(e) => {
+                                    if (existing) {
+                                      saveServicePrice({
+                                        id: existing.id,
+                                        procedure_type: procType,
+                                        base_price: existing.base_price,
+                                        description: e.target.value,
+                                        active: existing.active,
+                                        is_custom: false,
+                                        service_name: null
+                                      });
+                                    }
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                                />
+                              </div>
                             </div>
                           </div>
-                        </div>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Custom Services Section */}
+                <div>
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h3 className="text-lg font-semibold text-gray-900">Mano asmeninės paslaugos</h3>
+                      <p className="text-sm text-gray-600 mt-1">
+                        Sukurkite savo paslaugas (pvz., "Cezario pjūvis", "Ultragarsas"). Jos bus prieinamos vizitų registracijoje.
+                      </p>
+                    </div>
                   </div>
-                )}
+
+                  {/* Create New Custom Service Form */}
+                  <div className="bg-blue-50 border-2 border-blue-200 rounded-lg p-4 mb-6">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Plus className="w-5 h-5 text-blue-600" />
+                      <h4 className="font-semibold text-blue-900">Sukurti naują paslaugą</h4>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Paslaugos pavadinimas *
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomService.name}
+                          onChange={(e) => setNewCustomService({ ...newCustomService, name: e.target.value })}
+                          placeholder="pvz., Cezario pjūvis"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Kaina (€) *
+                        </label>
+                        <input
+                          type="number"
+                          step="0.01"
+                          value={newCustomService.price}
+                          onChange={(e) => setNewCustomService({ ...newCustomService, price: e.target.value })}
+                          placeholder="150.00"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">
+                          Aprašymas
+                        </label>
+                        <input
+                          type="text"
+                          value={newCustomService.description}
+                          onChange={(e) => setNewCustomService({ ...newCustomService, description: e.target.value })}
+                          placeholder="Papildoma informacija"
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      <div className="flex items-end">
+                        <button
+                          onClick={createCustomService}
+                          className="w-full px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 transition-colors flex items-center justify-center gap-2"
+                        >
+                          <Plus className="w-4 h-4" />
+                          Sukurti
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* List of Custom Services */}
+                  {loading ? (
+                    <p className="text-gray-500">Kraunama...</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {servicePrices.filter(p => p.is_custom).length === 0 ? (
+                        <div className="text-center py-8 bg-gray-50 rounded-lg border-2 border-dashed border-gray-300">
+                          <p className="text-gray-500">Dar nesukūrėte jokių asmeninių paslaugų</p>
+                          <p className="text-sm text-gray-400 mt-1">Naudokite formą aukščiau, kad sukurtumėte pirmąją</p>
+                        </div>
+                      ) : (
+                        servicePrices.filter(p => p.is_custom).map(service => (
+                          <div key={service.id} className="bg-white rounded-lg p-4 border-2 border-green-200">
+                            <div className="grid grid-cols-1 md:grid-cols-5 gap-4 items-center">
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Paslaugos pavadinimas
+                                </label>
+                                <input
+                                  type="text"
+                                  defaultValue={service.service_name || service.procedure_type}
+                                  onBlur={(e) => {
+                                    saveServicePrice({
+                                      id: service.id,
+                                      procedure_type: service.procedure_type,
+                                      service_name: e.target.value,
+                                      base_price: service.base_price,
+                                      description: service.description,
+                                      active: service.active,
+                                      is_custom: true
+                                    });
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Kaina (€)
+                                </label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  defaultValue={service.base_price}
+                                  onBlur={(e) => {
+                                    const price = parseFloat(e.target.value) || 0;
+                                    saveServicePrice({
+                                      id: service.id,
+                                      procedure_type: service.procedure_type,
+                                      service_name: service.service_name,
+                                      base_price: price,
+                                      description: service.description,
+                                      active: service.active,
+                                      is_custom: true
+                                    });
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+                                />
+                              </div>
+                              <div className="md:col-span-2">
+                                <label className="block text-sm font-medium text-gray-700 mb-1">
+                                  Aprašymas
+                                </label>
+                                <input
+                                  type="text"
+                                  defaultValue={service.description || ''}
+                                  placeholder="Papildoma informacija"
+                                  onBlur={(e) => {
+                                    saveServicePrice({
+                                      id: service.id,
+                                      procedure_type: service.procedure_type,
+                                      service_name: service.service_name,
+                                      base_price: service.base_price,
+                                      description: e.target.value,
+                                      active: service.active,
+                                      is_custom: true
+                                    });
+                                  }}
+                                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-green-500"
+                                />
+                              </div>
+                              <div className="flex justify-end">
+                                <button
+                                  onClick={() => deleteServicePrice(service.id)}
+                                  className="px-3 py-2 bg-red-100 text-red-700 rounded-md hover:bg-red-200 transition-colors flex items-center gap-2"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                  Ištrinti
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>

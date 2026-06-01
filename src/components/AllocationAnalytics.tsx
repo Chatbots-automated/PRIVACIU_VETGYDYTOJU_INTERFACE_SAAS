@@ -39,6 +39,8 @@ interface FarmAnalytics {
   /** Pre-discount value (sąskaitos logika) — may be null until migration applied */
   total_value_allocated_before_discount?: number | null;
   last_allocation_date: string | null;
+  service_charges_total?: number;
+  service_charges_count?: number;
 }
 
 interface ProductAnalytics {
@@ -142,6 +144,44 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
       console.log('Products analytics response:', productsRes);
       console.log('History response:', historyRes);
 
+      // Load service charges per farm
+      const { data: serviceChargesData, error: serviceChargesError } = await supabase
+        .from('visit_charges')
+        .select(`
+          farm_id,
+          total_price
+        `)
+        .eq('client_id', clientId)
+        .eq('charge_type', 'paslauga')
+        .eq('invoiced', false);
+
+      console.log('Service charges response:', serviceChargesData, serviceChargesError);
+
+      // Aggregate service charges by farm
+      const serviceChargesByFarm = new Map<string, { total: number; count: number }>();
+      if (serviceChargesData) {
+        serviceChargesData.forEach(charge => {
+          const existing = serviceChargesByFarm.get(charge.farm_id) || { total: 0, count: 0 };
+          serviceChargesByFarm.set(charge.farm_id, {
+            total: existing.total + (parseFloat(charge.total_price as any) || 0),
+            count: existing.count + 1
+          });
+        });
+      }
+
+      // Merge service charges with farm analytics
+      if (farmsRes.data) {
+        const enrichedFarmAnalytics = farmsRes.data.map(farm => {
+          const serviceCharges = serviceChargesByFarm.get(farm.farm_id) || { total: 0, count: 0 };
+          return {
+            ...farm,
+            service_charges_total: serviceCharges.total,
+            service_charges_count: serviceCharges.count
+          };
+        });
+        setFarmAnalytics(enrichedFarmAnalytics);
+      }
+
       // If the view returns errors or empty, let's also check the raw tables
       if (!farmsRes.data || farmsRes.data.length === 0 || farmsRes.data.every(f => f.total_allocations === 0)) {
         console.log('View returned zeros or empty, checking raw tables...');
@@ -162,7 +202,6 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
         console.log('Raw batches with invoices sample:', rawBatches, batchError);
       }
 
-      if (farmsRes.data) setFarmAnalytics(farmsRes.data);
       if (productsRes.data) setProductAnalytics(productsRes.data);
       if (historyRes.data) setAllocationHistory(historyRes.data);
     } catch (error) {
@@ -182,10 +221,9 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
         'Paskirstymų skaičius': farm.total_allocations,
         'Unikalių produktų': farm.unique_products,
         'Bendras kiekis': farm.total_qty_allocated,
-        'Bendra vertė be nuol. (EUR)': farm.total_value_allocated_before_discount != null
-          ? Number(farm.total_value_allocated_before_discount).toFixed(2)
-          : '-',
-        'Bendra vertė su nuol. (EUR)': farm.total_value_allocated?.toFixed(2) || '0.00',
+        'Produktų vertė (EUR)': farm.total_value_allocated?.toFixed(2) || '0.00',
+        'Paslaugų mokesčiai (EUR)': farm.service_charges_total?.toFixed(2) || '0.00',
+        'Bendra suma (EUR)': ((farm.total_value_allocated || 0) + (farm.service_charges_total || 0)).toFixed(2),
         'Paskutinis paskirstymas': farm.last_allocation_date ? new Date(farm.last_allocation_date).toLocaleDateString('lt-LT') : '-',
       }));
       const worksheet = XLSX.utils.json_to_sheet(exportData);
@@ -390,10 +428,13 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
                     Produktų
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vertė be nuol.
+                    Produktų vertė
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Vertė su nuol.
+                    Paslaugos
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Bendra suma
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                     Paskutinis paskirstymas
@@ -430,17 +471,27 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
                       <span className="font-medium text-gray-900">{farm.unique_products || 0}</span>
                     </td>
                     <td className="px-6 py-4">
-                      <span className="font-medium text-slate-700">
-                        {farm.total_value_allocated_before_discount != null
-                          ? `€${Number(farm.total_value_allocated_before_discount).toFixed(2)}`
-                          : '—'}
-                      </span>
-                    </td>
-                    <td className="px-6 py-4">
                       <span className="font-medium text-green-600">
                         {farm.total_value_allocated != null
                           ? `€${Number(farm.total_value_allocated).toFixed(2)}`
                           : '€0.00'}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-medium text-orange-600">
+                        {farm.service_charges_total
+                          ? `€${farm.service_charges_total.toFixed(2)}`
+                          : '€0.00'}
+                      </span>
+                      {farm.service_charges_count > 0 && (
+                        <div className="text-xs text-gray-500">
+                          {farm.service_charges_count} mok.
+                        </div>
+                      )}
+                    </td>
+                    <td className="px-6 py-4">
+                      <span className="font-bold text-blue-700">
+                        €{((farm.total_value_allocated || 0) + (farm.service_charges_total || 0)).toFixed(2)}
                       </span>
                     </td>
                     <td className="px-6 py-4">
@@ -614,9 +665,16 @@ export function AllocationAnalytics({ onNavigateToFinances }: { onNavigateToFina
                 <Euro className="w-6 h-6 text-purple-600" />
               </div>
               <div>
-                <p className="text-sm text-gray-600">Bendra paskirstyta vertė</p>
+                <p className="text-sm text-gray-600">Bendra vertė (produktai + paslaugos)</p>
                 <p className="text-2xl font-bold text-gray-900">
-                  €{farmAnalytics.reduce((sum, f) => sum + (f.total_value_allocated || 0), 0).toFixed(2)}
+                  €{farmAnalytics.reduce((sum, f) => 
+                    sum + (f.total_value_allocated || 0) + (f.service_charges_total || 0), 0
+                  ).toFixed(2)}
+                </p>
+                <p className="text-xs text-gray-500 mt-1">
+                  Produktai: €{farmAnalytics.reduce((sum, f) => sum + (f.total_value_allocated || 0), 0).toFixed(2)}
+                  {' • '}
+                  Paslaugos: €{farmAnalytics.reduce((sum, f) => sum + (f.service_charges_total || 0), 0).toFixed(2)}
                 </p>
               </div>
             </div>
