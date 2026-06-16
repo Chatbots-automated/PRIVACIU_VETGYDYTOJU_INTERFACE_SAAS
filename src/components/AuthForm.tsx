@@ -184,6 +184,16 @@ export function AuthForm() {
 
         <div className="mt-6 text-center text-sm text-gray-400">
           <p>© 2026 GVET. Visos teisės saugomos.</p>
+          <p className="mt-2">
+            <a 
+              href="/privatumo-politika" 
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-gray-400 hover:text-gray-200 underline transition-colors"
+            >
+              Privatumo politika
+            </a>
+          </p>
         </div>
       </div>
     </div>

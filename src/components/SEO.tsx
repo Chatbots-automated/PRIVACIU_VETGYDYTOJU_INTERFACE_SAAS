@@ -122,5 +122,11 @@ export const SEOConfigs = {
     description: 'GVET finansų modulis - sąskaitų generavimas, mokėjimai, finansinės ataskaitos, darbo aktai.',
     keywords: 'veterinarijos apskaita, sąskaitos, mokėjimai, finansai, darbo aktai',
     url: 'https://gvet.lt/finansai'
+  },
+  privacy: {
+    title: 'Privatumo Politika | GVET',
+    description: 'GVET privatumo politika. Informacija apie asmens duomenų tvarkymą, GDPR reikalavimus ir Jūsų teises naudojantis GVET sistema.',
+    keywords: 'privatumo politika, GDPR, asmens duomenys, duomenų apsauga, GVET privatumas',
+    url: 'https://gvet.lt/privatumo-politika'
   }
 };

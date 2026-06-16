@@ -11,6 +11,7 @@ import { VetpraktikaModule } from './components/VetpraktikaModule';
 import { AdminDashboard } from './components/AdminDashboard';
 import { ClientRegistration } from './components/ClientRegistration';
 import { SignatureVerification } from './components/SignatureVerification';
+import { PrivacyPolicy } from './components/PrivacyPolicy';
 import { Building2 } from 'lucide-react';
 
 type Module = 'veterinarija' | 'klientai' | 'apskaita' | null;
@@ -161,6 +162,11 @@ function App() {
   // Signature verification page - accessible without login
   if (window.location.pathname.startsWith('/verify-signature/')) {
     return <SignatureVerification />;
+  }
+
+  // Privacy policy page - accessible without login
+  if (window.location.pathname === '/privatumo-politika') {
+    return <PrivacyPolicy />;
   }
 
   // Registration page - accessible without login

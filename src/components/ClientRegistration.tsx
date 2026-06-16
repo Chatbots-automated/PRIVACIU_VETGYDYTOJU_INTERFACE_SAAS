@@ -821,7 +821,15 @@ export function ClientRegistration() {
 
             {/* Terms */}
             <p className="text-xs text-gray-500 text-center mt-6">
-              Kurdami paskyrą sutinkate su naudojimosi sąlygomis ir privatumo politika
+              Kurdami paskyrą sutinkate su naudojimosi sąlygomis ir{' '}
+              <a 
+                href="/privatumo-politika" 
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-blue-600 hover:text-blue-800 underline"
+              >
+                privatumo politika
+              </a>
             </p>
             </>
           )}
