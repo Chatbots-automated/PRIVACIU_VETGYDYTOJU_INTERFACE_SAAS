@@ -21,8 +21,8 @@ export function PrivacyPolicy() {
             <p className="text-gray-700 leading-relaxed mb-4">Jūsų asmens duomenų valdytojas:</p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
               <p className="text-gray-900 font-semibold mb-2">GVET</p>
-              <p className="text-gray-700">El. paštas: info@gvet.lt</p>
-              <p className="text-gray-700">Telefonas: +370 XXX XXXXX</p>
+              <p className="text-gray-700">El. paštas: gratasgedraitis@gmail.com</p>
+              <p className="text-gray-700">Telefonas: +37061175707</p>
               <p className="text-gray-700">Adresas: Lietuva</p>
             </div>
             <p className="text-gray-700 leading-relaxed mb-6">
@@ -135,7 +135,7 @@ export function PrivacyPolicy() {
               <li>pateikti skundą Valstybinei duomenų apsaugos inspekcijai.</li>
             </ul>
             <p className="text-gray-700 leading-relaxed mb-6">
-              Norėdami pasinaudoti šiomis teisėmis, susisiekite el. paštu: info@gvet.lt
+              Norėdami pasinaudoti šiomis teisėmis, susisiekite el. paštu: gratasgedraitis@gmail.com
             </p>
 
             <h2 className="text-2xl font-bold text-gray-900 mt-8 mb-4">10. Slapukai ir analitika</h2>
@@ -173,8 +173,8 @@ export function PrivacyPolicy() {
               Dėl klausimų apie šią privatumo politiką arba Jūsų asmens duomenų tvarkymą susisiekite:
             </p>
             <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 mb-6">
-              <p className="text-gray-700">El. paštas: info@gvet.lt</p>
-              <p className="text-gray-700">Telefonas: +370 XXX XXXXX</p>
+              <p className="text-gray-700">El. paštas: gratasgedraitis@gmail.com</p>
+              <p className="text-gray-700">Telefonas: +37061175707</p>
             </div>
           </div>
         </div>
